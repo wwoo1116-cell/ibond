@@ -465,15 +465,15 @@
 </div>
 <div class="setup" id="setup" hidden><div class="box">
   <h1>K-Bond 라이브</h1>
-  <p>책은 내 PC 에서 돕니다. 이 화면이 그 서버를 부르려면 주소와 토큰이 필요합니다.
-     둘 다 이 브라우저에만 저장되고 어디로도 보내지 않습니다.</p>
+  <p>책은 내 PC 에서 돕니다. 지금 그 서버에 닿지 않습니다 —
+     PC 가 꺼져 있거나 주소가 다릅니다. 아래 값은 이 브라우저에만 저장됩니다.</p>
   <label for="sBase">서버 주소</label>
   <input id="sBase" placeholder="https://xxxxx.ts.net/kbond" autocomplete="off" spellcheck="false">
-  <label for="sTok">토큰</label>
-  <input id="sTok" type="password" placeholder="토큰" autocomplete="off">
+  <label for="sTok">토큰 <span style="font-weight:500;color:var(--ink5)">(없으면 비워 두세요)</span></label>
+  <input id="sTok" type="password" placeholder="비워 두어도 됩니다" autocomplete="off">
   <button class="go" id="sGo">연결</button>
   <div class="err" id="sErr"></div>
-  <div class="hint">주소 끝의 <b>/kbond</b> 까지 넣습니다. 서버가 꺼져 있으면 연결되지 않습니다.</div>
+  <div class="hint">주소 끝의 <b>/kbond</b> 까지 넣습니다. 기본값으로 돌리려면 비우고 연결하세요.</div>
 </div></div>
 <div class="toasts" id="toasts"></div>
 <div class="dpanel" id="dpanel" hidden>
@@ -500,6 +500,11 @@ const $ = id => document.getElementById(id);
  *   상대주소로 나가고 토큰도 안 붙는다.
  */
 const LSK = {base:"kbond.base", tok:"kbond.tok"};
+/* ★기본 백엔드 주소 [OWNER 2026-09-03] — 링크만 열면 바로 책이 서야 한다(트레이더 피드백용).
+ * 이 주소를 리포에 두는 것은 [OWNER] 가 «토큰 빼고 Funnel 유지» 를 고른 것과 같은 결정이다:
+ * 문턱은 CORS 하나뿐이고, 주소는 이미 사실상 공개다(인증서 투명성 로그에 도메인이 남는다).
+ * 되돌리려면 이 상수를 비우면 첫 진입에서 다시 묻는다. */
+const DEFAULT_API = "https://e110430.tailc7b701.ts.net/kbond";
 let API = "", TOK = "";
 try { API = localStorage.getItem(LSK.base) || ""; TOK = localStorage.getItem(LSK.tok) || ""; } catch(e){}
 API = API.replace(/\/+$/, "");
@@ -2068,23 +2073,35 @@ function connect(){
   es.addEventListener("hb",()=>{ lastHb=Date.now(); });
   es.onerror=()=>{ es.close(); setTimeout(connect,3000); };
 }
-/* ★기동 순서: 주소가 없으면 «같은 출처에 서버가 있는가» 를 먼저 본다.
-   로컬(:8301)이면 있으므로 그대로 뜨고, Vercel 이면 없으므로 설정 화면을 낸다. */
+/* ★기동 순서 — 사람이 아무것도 안 해도 뜨는 것이 기본이다.
+     1. 저장된 주소가 있으면 그것 (설정에서 직접 넣은 사람)
+     2. 없으면 «같은 출처» 에 서버가 있는가 — 로컬(:8301)에서 연 경우다
+     3. 없으면 기본 주소(DEFAULT_API) — Vercel 에서 연 경우다
+     4. 그것도 안 닿으면 그때만 설정 화면 (백엔드 PC 가 꺼져 있는 것이다) */
 function boot(){
   if(API){ connect(); backfill(); return; }
   fetch(api("/health"),{cache:"no-store"})
     .then(r=>r.ok ? r.json() : Promise.reject())
     .then(()=>{ connect(); backfill(); })
-    .catch(()=>showSetup(""));
+    .catch(()=>{
+      if(!DEFAULT_API){ showSetup(""); return; }
+      API = DEFAULT_API;
+      fetch(api("/health"),{cache:"no-store"})
+        .then(r=>r.ok ? r.json() : Promise.reject())
+        .then(()=>{ connect(); backfill(); render(); })
+        .catch(()=>{ API=""; showSetup("백엔드에 닿지 않습니다. PC 가 켜져 있어야 합니다."); });
+    });
 }
 $("sGo").addEventListener("click",()=>{
-  const base=$("sBase").value.trim().replace(/\/+$/,""), tok=$("sTok").value.trim();
+  let base=$("sBase").value.trim().replace(/\/+$/,"");
+  const tok=$("sTok").value.trim();
+  if(!base){ base = DEFAULT_API; }          /* 비우면 기본값으로 되돌린다 */
   if(!/^https?:\/\//.test(base)){ $("sErr").textContent="주소는 https:// 로 시작해야 합니다."; return; }
   $("sErr").textContent="확인 중…";
   fetch(base+"/health"+(tok?`?t=${encodeURIComponent(tok)}`:""),{cache:"no-store"})
     .then(r=>r.ok?r.json():Promise.reject(r.status))
     .then(d=>{
-      /* 토큰이 틀리면 /health 는 {ok:true} 만 준다 — 상세가 오는지로 가른다 */
+      /* 토큰을 넣었는데 상세가 안 오면 그 토큰이 틀린 것이다(서버가 토큰을 안 쓰면 상세가 온다) */
       if(d && d.uptime_s===undefined && tok){ $("sErr").textContent="토큰이 맞지 않습니다."; return; }
       try { localStorage.setItem(LSK.base, base); localStorage.setItem(LSK.tok, tok); } catch(e){}
       location.reload();

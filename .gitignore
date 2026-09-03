@@ -20,3 +20,5 @@ prev_day_*.json
 *.bak*
 __pycache__/
 .vercel
+
+.vercel
