@@ -1,0 +1,22 @@
+# 이 리포에는 «화면» 만 있다. 아래는 백엔드의 것이고 절대 올라오면 안 된다.
+# (딜러 국번표·은어 사전·발행사 등급표·원장이 거기 있다)
+kbond_live.py
+parse_kbond_logs.py
+enrich_kbond_quotes.py
+kbond_legs.py
+kbond_fills.py
+kbond_catcall.py
+kbond_daily_update.py
+kbond_kis.py
+verify_v4.py
+test_*.py
+issuer_ratings.json
+*.xlsx
+*.parquet
+*.parquet.*
+prev_day_*.json
+.kbond_token
+*.log
+*.bak*
+__pycache__/
+.vercel
