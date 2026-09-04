@@ -212,7 +212,10 @@ def heat_cells(snap, T, mode="def"):
             if r.get("mpd") and snap.get("mp_date") and \
                     r["mpd"] != str(snap["mp_date"])[:10]:
                 stale = True
-            cells.setdefault(f"{row}|{b}", []).append((r["mid"] - r["mp"]) * 100)
+            # ★키는 «종별|등급|버킷» 세 조각으로 통일한다. 국고·통안은 등급이
+            #   없어서 예전엔 두 조각으로 넣었는데, 화면(HMROWS 의 rt=None)은
+            #   `미상` 을 끼워 세 조각으로 찾는다 — 그래서 두 행이 늘 비어 있었다.
+            cells.setdefault(f"{row}|미상|{b}", []).append((r["mid"] - r["mp"]) * 100)
     for e in cr_alive(snap, T, mode):
         if e.get("ttm") is None or e.get("bpe") is None:
             continue
