@@ -1806,7 +1806,12 @@ DEV_ORIGINS = ("http://localhost:8301", "http://127.0.0.1:8301",
 #   이고(Vercel 이 붙인 접미사), 접미사 없는 `ibond.vercel.app` 은 **남의 것이다**
 #   (2026-09-03 확인: 200 을 주는 다른 사이트). 그걸 물면 그 사이트가 방문자 브라우저로
 #   이 API 를 부를 수 있게 된다 — 토큰이 막긴 하지만 문턱을 하나 헐 이유가 없다.
-DEFAULT_ORIGIN_REGEX = r"\Ahttps://ibond-[a-z0-9-]+\.vercel\.app\Z"
+# ★2026-09-04: 새 React 화면의 Vercel 프로젝트(kbond-web)를 함께 받는다.
+#   ⚠ibond 쪽 접미사 요구(`ibond-…`)는 그대로 둔다 — 접미사 없는
+#     `ibond.vercel.app` 은 **남의 것**이라 열어 주면 안 된다.
+#     kbond-web 은 우리 프로젝트라 접미사 없는 주소도 우리 것이다.
+DEFAULT_ORIGIN_REGEX = (
+    r"\Ahttps://(ibond-[a-z0-9-]+|kbond-web(-[a-z0-9-]+)?)\.vercel\.app\Z")
 # 토큰 · 오리진은 환경변수로 뺀다 — 도메인이 정해지는 날 코드를 고치지 않기 위해서다.
 TOKEN = os.getenv("KBOND_TOKEN", "").strip()
 _n_401 = {"tok": 0, "origin": 0}
