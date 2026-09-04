@@ -117,19 +117,32 @@ export default function Page() {
     };
   }, [conn, ttl]);
 
-  /* 서버 시각. 옛 화면의 큰 시계 자리다 — 리플레이면 동결 시각에서 흐른다. */
+  /* 서버 시각. 옛 화면의 큰 시계 자리다.
+   *
+   * ★기준점은 «하트비트가 실어 보내는 서버 시각» 이다. 옛 판이 그렇게 한다
+   *   (kbond_live.py: 「시계와 생존 신호를 겸한다」).
+   * ★책의 T 를 기준 삼으면 안 된다. 책은 원본이 바뀔 때만 다시 서므로, 장이
+   *   끝나 메신저가 조용해지면 T 가 그 시각에 붙박인다 — 초록불이 켜진 채로
+   *   15분 전 시각을 보여 주게 된다(2026-09-04 실측: 옛 화면 17:29:29 대
+   *   새 화면 17:13:39).
+   * ★첫 하트비트는 최대 15초 뒤에 오니, 그때까지는 책의 T 로 시작한다.
+   */
+  const anchor = useRef<{ s: number; at: number } | null>(null);
   const T = ref?.T;
   useEffect(() => {
-    if (T == null) return;
-    const t0 = Date.now();
+    if (T != null && !anchor.current) anchor.current = { s: T, at: Date.now() };
+  }, [T]);
+  useEffect(() => {
     const tick = () => {
-      const s = T + Math.floor((Date.now() - t0) / 1000);
+      const a = anchor.current;
+      if (!a) return;
+      const s = a.s + Math.floor((Date.now() - a.at) / 1000);
       setClock(`${p2(Math.floor(s / 3600) % 24)}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`);
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [T]);
+  }, []);
 
   /* 관심 종목 알림. 켠 뒤에 «새로» 들어온 행만 본다 — 켜는 순간 하루치가
      한꺼번에 울리면 안 된다. 권한이 없으면 조용히 아무것도 안 한다. */
@@ -182,8 +195,20 @@ export default function Page() {
         /* 한 프레임이 깨져도 다음 프레임이 온다 */
       }
     };
-    es.addEventListener('hb', () => {
+    es.addEventListener('hb', (ev) => {
       lastBeat.current = Date.now();
+      /* 하트비트는 서버의 «지금» 을 싣는다 — 시계를 여기에 다시 건다. */
+      try {
+        const { now } = JSON.parse((ev as MessageEvent).data) as { now?: string };
+        if (now) {
+          const [hh, mm, ss] = now.split(':').map(Number);
+          if (Number.isFinite(hh) && Number.isFinite(mm) && Number.isFinite(ss)) {
+            anchor.current = { s: hh * 3600 + mm * 60 + ss, at: Date.now() };
+          }
+        }
+      } catch {
+        /* 한 박자 깨져도 다음 하트비트가 온다 */
+      }
     });
     es.onerror = () => es.close();
     const tick = setInterval(() => {
