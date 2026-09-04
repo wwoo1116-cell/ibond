@@ -1,0 +1,18 @@
+# 파이썬
+__pycache__/
+*.pyc
+
+# 손으로 뜬 백업 — 이제 git 이 그 일을 한다
+*.bak
+*.bak-*
+
+# 실행 산출물
+*.log
+*.out
+.pytest_cache/
+.impeccable/
+
+# 원장·파생물은 여기 없다(Projects\data\kbond). 실수로 들어오면 막는다
+*.parquet
+*.csv
+*.bak.html

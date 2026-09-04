@@ -1,0 +1,617 @@
+<title>K-Bond 은어 질문지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=Nanum+Gothic+Coding:wght@400;700&display=swap">
+
+<style>
+  :root {
+    --ground:      #FBFBFC;
+    --surface:     #FFFFFF;
+    --surface-alt: #F2F4F7;
+    --ink:         #171A1F;
+    --ink-soft:    #3D444F;
+    --muted:       #626A77;
+    --rule:        #E1E5EA;
+    --rule-strong: #C8CFD8;
+    --accent:      #0E5A66;
+    --accent-soft: #E4F0F2;
+    --ask:         #7E6113;
+    --ask-soft:    #FBF3DC;
+    --solved:      #2C6141;
+    --solved-soft: #E6F2EA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #12151A;
+      --surface:     #191D24;
+      --surface-alt: #1F242C;
+      --ink:         #E9ECF0;
+      --ink-soft:    #C3CAD4;
+      --muted:       #98A1AE;
+      --rule:        #272D36;
+      --rule-strong: #3A424E;
+      --accent:      #63C2CE;
+      --accent-soft: #12323A;
+      --ask:         #E0BA55;
+      --ask-soft:    #2A2413;
+      --solved:      #7FC49B;
+      --solved-soft: #16291F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #12151A;
+    --surface:     #191D24;
+    --surface-alt: #1F242C;
+    --ink:         #E9ECF0;
+    --ink-soft:    #C3CAD4;
+    --muted:       #98A1AE;
+    --rule:        #272D36;
+    --rule-strong: #3A424E;
+    --accent:      #63C2CE;
+    --accent-soft: #12323A;
+    --ask:         #E0BA55;
+    --ask-soft:    #2A2413;
+    --solved:      #7FC49B;
+    --solved-soft: #16291F;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans KR", -apple-system, "Malgun Gothic", sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.72;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 50rem;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.5rem;
+  }
+
+  code, .mono, pre { font-family: "Nanum Gothic Coding", ui-monospace, Consolas, monospace; }
+
+  /* ── 머리 ─────────────────────────────────────────── */
+  header { display: flex; flex-direction: column; gap: 1rem; }
+  .eyebrow {
+    font-size: .75rem; font-weight: 600; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  h1 {
+    margin: 0; font-size: clamp(1.9rem, 4.4vw, 2.6rem);
+    font-weight: 600; letter-spacing: -.02em; line-height: 1.24;
+    text-wrap: balance;
+  }
+  .lede { margin: 0; color: var(--ink-soft); font-size: 1.05rem; max-width: 44rem; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: .5rem 1.5rem;
+    padding-top: 1rem; border-top: 1px solid var(--rule);
+    font-size: .82rem; color: var(--muted);
+  }
+  .meta b { color: var(--ink-soft); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* ── 요약표 ───────────────────────────────────────── */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  thead th {
+    text-align: left; padding: .7rem .9rem; background: var(--surface-alt);
+    font-weight: 600; font-size: .76rem; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--rule-strong); white-space: nowrap;
+  }
+  tbody td { padding: .65rem .9rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; font-family: "Nanum Gothic Coding", monospace;
+           font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-soft); }
+  td.term { font-family: "Nanum Gothic Coding", monospace; font-weight: 700; white-space: nowrap; }
+  .qref { color: var(--ask); font-weight: 600; white-space: nowrap; }
+
+  /* ── 절 ───────────────────────────────────────────── */
+  section { display: flex; flex-direction: column; gap: 1.4rem; }
+  .sec-head { display: flex; flex-direction: column; gap: .4rem; }
+  .sec-tag {
+    font-family: "Nanum Gothic Coding", monospace; font-size: .78rem;
+    font-weight: 700; color: var(--ask); letter-spacing: .06em;
+  }
+  h2 { margin: 0; font-size: 1.45rem; font-weight: 600; letter-spacing: -.012em; text-wrap: balance; }
+  .sec-sub { margin: 0; color: var(--muted); font-size: .92rem; }
+
+  /* ── 낱말 카드 ────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 1.3rem 1.4rem; display: flex; flex-direction: column; gap: 1rem;
+  }
+  /* 답이 끝난 카드는 잉크를 한 단계 낮춰 배경으로 물러나게 한다 */
+  .card.solved { background: var(--surface-alt); border-color: var(--rule); }
+  .card.solved .word { color: var(--ink-soft); }
+  .card-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem 1rem; }
+  .word {
+    font-family: "Nanum Gothic Coding", monospace; font-size: 1.3rem;
+    font-weight: 700; letter-spacing: -.01em;
+  }
+  .count {
+    font-family: "Nanum Gothic Coding", monospace; font-size: .82rem;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .chip {
+    font-size: .72rem; font-weight: 600; letter-spacing: .04em;
+    padding: .15rem .5rem; border-radius: 2px;
+    background: var(--ask-soft); color: var(--ask);
+  }
+  .chip.ok { background: var(--solved-soft); color: var(--solved); }
+  .chip.info { background: var(--accent-soft); color: var(--accent); }
+
+  .kv { display: grid; grid-template-columns: 5.5rem 1fr; gap: .45rem .9rem; font-size: .93rem; }
+  .kv dt {
+    font-size: .76rem; font-weight: 600; letter-spacing: .05em;
+    color: var(--muted); padding-top: .25rem; text-transform: uppercase;
+  }
+  .kv dd { margin: 0; color: var(--ink-soft); }
+  @media (max-width: 34rem) { .kv { grid-template-columns: 1fr; gap: .15rem; } .kv dt { padding-top: .5rem; } }
+
+  pre {
+    margin: 0; padding: .9rem 1rem; background: var(--surface-alt);
+    border: 1px solid var(--rule); border-radius: 2px;
+    font-size: .82rem; line-height: 1.85; color: var(--ink-soft);
+    overflow-x: auto; white-space: pre; word-break: normal;
+  }
+
+  .ask {
+    background: var(--ask-soft); border-radius: 2px;
+    padding: .9rem 1.05rem; display: flex; flex-direction: column; gap: .5rem;
+  }
+  .ask-label {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ask);
+  }
+  .ask p { margin: 0; font-size: .96rem; color: var(--ink); }
+  .ask ul { margin: 0; padding-left: 1.1rem; font-size: .95rem; color: var(--ink); }
+  .ask li { margin: .2rem 0; }
+  .answer {
+    margin-top: .35rem; border-bottom: 1px dashed var(--rule-strong);
+    height: 1.6rem;
+  }
+
+  .note {
+    font-size: .88rem; color: var(--muted);
+    border-left: 2px solid var(--rule-strong); padding-left: .85rem;
+  }
+  .note b { color: var(--ink-soft); font-weight: 600; }
+
+  hr.div { border: none; border-top: 1px solid var(--rule); margin: 0; }
+
+  footer { font-size: .84rem; color: var(--muted); display: flex; flex-direction: column; gap: .5rem; }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 11pt; }
+    .wrap { padding: 0; gap: 2rem; max-width: none; }
+    .card { break-inside: avoid; page-break-inside: avoid; }
+    section { break-inside: avoid-page; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">K-Bond 메신저 로그 · 파싱 레인</div>
+    <h1>트레이더께 여쭙는 은어 질문지</h1>
+    <p class="lede">
+      2024-02 ~ 2026-09 블커본드·막무가내 두 방의 로그 833만 행을 구조화하면서,
+      데이터만으로는 뜻을 정할 수 없었던 표현을 모았습니다.
+      한 줄 답이면 각각 수만 행이 살아납니다.
+      <b>질문 B(국고 은어 다섯)는 2026-09-02 에 데이터로 풀려서, 이제 맞는지 확인만 받으면 됩니다.</b>
+    </p>
+    <div class="meta">
+      <span>대상 <b>8,331,933</b>행</span>
+      <span>기간 <b>2024-02-14 ~ 2026-09-01</b></span>
+      <span>여쭐 항목 <b>5</b>묶음</span>
+      <span>걸린 행 <b>약 40만</b></span><span>이 중 <b>10만</b>은 확인만</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>한 장 요약</h2>
+      <p class="sec-sub">급하시면 이 표만 보셔도 됩니다. 아래는 근거와 실물입니다. <b>국고 은어 다섯(B)은 2026-09-02 에 데이터로 풀려서, 이제 확인만 받으면 됩니다.</b></p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>표현</th><th class="num">행수</th><th>지금 아는 것</th><th>모르는 것</th><th>질문</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="term">수반</td><td class="num">176,706</td><td><b>수수료 반값</b>으로 확인됐습니다. 표준 수수료는 액면 1만원당 0.1원(<code>수10</code>=10전=<code>수0.1</code>원)</td><td>—</td><td class="qref">A</td></tr>
+          <tr><td class="term">국당</td><td class="num">55,285</td><td><b>국민주택 1종 당월물</b> (오프셋 +15.4bp)</td><td>맞는지 확인만</td><td class="qref">B</td></tr>
+          <tr><td class="term">국전</td><td class="num">32,327</td><td><b>국민주택 1종 전월물</b> (+15.8bp)</td><td>맞는지 확인만</td><td class="qref">B</td></tr>
+          <tr><td class="term">국딱</td><td class="num">7,649</td><td><b>그날 입찰된 국고채</b> — 낙찰금리에 98~100% 붙음</td><td>당일이 입찰일인지 발행일인지</td><td class="qref">B</td></tr>
+          <tr><td class="term">국전전</td><td class="num">3,722</td><td><b>국민주택 1종 전전월물</b> (+15.7bp)</td><td>맞는지 확인만</td><td class="qref">B</td></tr>
+          <tr><td class="term">국전당</td><td class="num">211</td><td><b>국민주택 1종</b> (교체 상대 100%가 국주)</td><td>사다리의 어느 칸인지</td><td class="qref">B</td></tr>
+          <tr><td class="term">민은</td><td class="num">181</td><td>교체 호가 괄호 안에만 나옴</td><td>뜻, 그리고 어느 숫자가 실행가</td><td class="qref">C</td></tr>
+          <tr><td class="term">쩜3 · 쩜8</td><td class="num">2,334</td><td>민평 옆에 붙는 소수</td><td>끝전인지 스프레드인지</td><td class="qref">D</td></tr>
+          <tr><td class="term">동 · 동통</td><td class="num">94,220</td><td>말미 전송 표식으로 보고 무시 중</td><td>맞는지</td><td class="qref">E</td></tr>
+          <tr><td class="term">대치</td><td class="num">2,632</td><td>양방 호가 뒤에 붙음</td><td>맞는지</td><td class="qref">E</td></tr>
+          <tr><td class="term">예담</td><td class="num">918</td><td>잔존 1~2개월 단기물</td><td>무슨 채권</td><td class="qref">E</td></tr>
+          <tr><td class="term">이자채</td><td class="num">3,772</td><td>국고채 이자분리채로 추정</td><td>맞는지</td><td class="qref">E</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section>
+    <div class="sec-head">
+      <div class="sec-tag">질문 A</div>
+      <h2>수반</h2>
+      <p class="sec-sub">풀렸습니다 — 답을 그대로 적어 둡니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">수반</span>
+        <span class="count">176,706행</span>
+        <span class="chip ok">수수료 반값</span>
+      </div>
+      <dl class="kv">
+        <dt>쓰임</dt>
+        <dd>호가 문장 <b>맨 뒤</b>에 <code>(수반)</code> 또는 <code>수반</code> 으로 붙습니다.
+            크레딧 163,203 · 통안 5,873 행.</dd>
+        <dt>배제</dt>
+        <dd>발신자가 436명이라 특정 데스크 이름은 아닙니다.</dd>
+      </dl>
+      <pre>24.5.22(수) 국민은행 (민 3.675 끝.04) 팔자(수반)
+24.5.10(금) 하나캐피탈352-3(지)(민3.726/끝.19/AA-) 팔자(수반)
+24.4.16통 팔자 수반
+24.2.19(월) 현대커머셜348-2 (민3.718 끝33 AA-) 민+0.5원 3.567 팔자(수반)
+24.5.10 한투캐63 (민4.824/.5원/평일/쿠폰1.851) +1원 4.803팔자(수반)</pre>
+      <div class="ask">
+        <div class="ask-label">답 (확인됨)</div>
+        <p><b>수수료 반값</b>입니다. 같은 로그의 <code>(수수10전)</code>·<code>(수0.1원)</code>
+           표기로 표준 수수료가 액면 1만원당 0.1원(=10전)임도 확인됐습니다 —
+           수반이면 그 절반입니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section>
+    <div class="sec-head">
+      <div class="sec-tag">질문 B</div>
+      <h2>국고 은어 다섯 — 데이터로 풀렸습니다</h2>
+      <p class="sec-sub">2026-09-02 에 답이 나왔습니다. 이제 <b>맞는지 확인만</b> 받으면 됩니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">국당 · 국전 · 국전전 · 국전당</span>
+        <span class="count">합 91,545행</span>
+        <span class="chip ok">국민주택채권 1종</span>
+      </div>
+
+      <dl class="kv">
+        <dt>답</dt>
+        <dd><b>국민주택채권 1종의 당월 / 전월 / 전전월물</b>입니다.
+            앞서 「국고」로 보았던 것이 틀렸습니다.</dd>
+        <dt>근거 1</dt>
+        <dd>축약호가를 국고 5년 지표물과 견주면 <b>+15.4 / +15.8 / +15.7bp</b> 에
+            정확히 뭉칩니다. 그런데 문면에 <code>국주</code>라고 적힌 호가 3,689행의
+            중심이 <b>+15.7bp</b> 로 같습니다. 같은 물건입니다.</dd>
+        <dt>근거 2</dt>
+        <dd><code>국전당</code>은 21행 <b>전부</b>가 국주와 짝을 이룹니다
+            (<code>국주 23-12, 24-01, 24-02 팔고 국전당 사자</code>).
+            나머지 셋은 70~100%가 자기들끼리 굴리고, 인접 칸이 1bp 차입니다.</dd>
+        <dt>근거 3</dt>
+        <dd>월 단위로 당월/전월 사다리가 도는 물건은 <b>국민주택 1종뿐</b>입니다.
+            국고 지표물은 분기마다 바뀌어서, 한 분기 안에서는 당월과 전월이
+            같은 종목이 되어 서로 교체할 수가 없습니다.</dd>
+      </dl>
+
+      <pre>국당팔고 국전사자  -0.5교체
+국전전 93 팔고 국당 94 사자 교체
+국전 사고  국주23-11 팔자  교체 매매
+국주 23-12, 24-01, 24-02 팔고, 국전당사자 관심</pre>
+
+      <div class="ask">
+        <div class="ask-label">여쭐 것 (확인)</div>
+        <ul>
+          <li>국당 / 국전 / 국전전 = 국민주택 1종 <b>당월 / 전월 / 전전월</b>이 맞습니까?</li>
+          <li><b>국전당</b>은 사다리의 어느 칸입니까? 표본이 211행뿐이라 데이터로는 못 정했습니다.<br><span style="color:var(--muted)">통안에서 <code>구통</code>과 <code>구통당</code>이 같은 칸이었으니 <code>국전당</code>도 <code>국전</code>과 같은 전월물이 아닐까 짐작만 하고 있습니다.</span></li>
+        </ul>
+        <div class="answer"></div>
+        <div class="answer"></div>
+      </div>
+
+      <p class="note">
+        <b>값은 아직 못 붙입니다.</b> 국민주택 민평이 저희 DB 에 없습니다
+        (국고 166종 · 통안 183종 · 분리채 317종뿐). 어디서 받을 수 있는지 아시면
+        9만여 행에 금리가 들어갑니다.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">국딱</span>
+        <span class="count">7,649행</span>
+        <span class="chip ok">그날 입찰된 국고채</span>
+      </div>
+
+      <dl class="kv">
+        <dt>답</dt>
+        <dd><b>만기가 아니라 「상태」였습니다.</b> 그날 입찰된 국고채를 가리킵니다.
+            30년 입찰일에는 30년, 5년 입찰일에는 5년입니다.
+            통안의 <code>통딱</code>과 같은 문법이고 「딱」이 당일을 뜻합니다.</dd>
+        <dt>근거</dt>
+        <dd>국딱이 나온 날이 <b>24일뿐인데 그 24일이 전부 입찰일</b>입니다.
+            국고채는 입찰일마다 만기가 하나만 열리는데, 국딱 호가가
+            <b>그날 낙찰금리에 그대로 붙습니다</b> — 2년 98.1% · 3년 99.2% ·
+            5년 99.8% · 10년 98.9% · 20년 98.4% · 30년 98.6%.</dd>
+        <dt>바로잡음</dt>
+        <dd>앞서 「국딱 = 30년물」로 보았는데, 그건 <b>교체 호가만 보고</b> 잰
+            것이었습니다. 국딱 교체 호가 1,293개 중 1,265개가 30년 입찰일에
+            몰려 있었을 뿐입니다.</dd>
+      </dl>
+
+      <pre>국딱 37사자
+국딱 팔고 24-8 사는 교체 -0.1bp 100억 관심
+국딱 355 36 셋 팔자</pre>
+
+      <div class="ask">
+        <div class="ask-label">여쭐 것 (확인)</div>
+        <ul>
+          <li>국딱 = <b>그날 입찰된 국고채</b>가 맞습니까? 만기를 안 가리는 게 맞습니까?</li>
+          <li>입찰 <b>당일</b>을 말합니까, 아니면 <b>발행일</b>을 말합니까?
+              (통안 <code>통딱</code>은 「오늘 발행·내일 인수」였습니다)</li>
+        </ul>
+        <div class="answer"></div>
+        <div class="answer"></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section>
+    <div class="sec-head">
+      <div class="sec-tag">질문 C</div>
+      <h2>교체 호가에 숫자가 둘</h2>
+      <p class="sec-sub">어느 쪽이 실제 거래 스프레드인지 못 정하고 있습니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">민은 · 스플 · 반대</span>
+        <span class="count">두 숫자 병기 407행 · 교체 호가 전체 38,594행</span>
+        <span class="chip">해석 미상</span>
+      </div>
+      <dl class="kv">
+        <dt>확인됨</dt>
+        <dd>교체 호가의 bp 는 <b>두 종목의 수익률 차이</b>이지 민평 대비 마진이 아닙니다
+            (신형 − 구형, 실측 94%).</dd>
+        <dt>막힌 곳</dt>
+        <dd>한 줄에 숫자가 둘일 때 어느 쪽이 실행가인지 모릅니다.
+            지금은 <b>앞의 것</b>을 쓰고 뒤는 버리고 있습니다.</dd>
+      </dl>
+      <pre>24-1 375- 19-4 43 435+ 5.75빕 교체 가능  민은 5.9빕
+22-8 34팔고 23-1 345사는 교체 0.5비피 스플(전일 1.3비피)
+19-4 팔고 23-6 사는 4빕 교체 / 반대 4.5빕
+20-7 팔고 21-5 사자 교체가능(민은 역전 10.7)
+23-10 사고 23-4 팔자 교체가능(민은 -1)</pre>
+      <div class="ask">
+        <div class="ask-label">여쭐 것</div>
+        <ul>
+          <li><b>「민은」</b>이 무슨 뜻입니까? (민평 기준 스프레드입니까?)</li>
+          <li>앞 숫자와 「민은 ○빕」 중 <b>실제 거래되는 쪽</b>은 어느 것입니까?</li>
+          <li><b>「반대 4.5빕」</b>은 반대 방향으로 교체할 때의 값입니까?</li>
+        </ul>
+        <div class="answer"></div>
+        <div class="answer"></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section>
+    <div class="sec-head">
+      <div class="sec-tag">질문 D</div>
+      <h2>부호 없는 원, 그리고 「쩜」</h2>
+      <p class="sec-sub">크기는 아는데 방향을 못 정하는 값이 2,334행 남았습니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">쩜3 · 쩜8 · 0.9원</span>
+        <span class="count">2,334행</span>
+        <span class="chip">방향 미상</span>
+      </div>
+      <dl class="kv">
+        <dt>확인됨</dt>
+        <dd>부호가 <b>있는</b> 원은 방향이 분명합니다 — <code>+n원</code>은 금리 −1.7bp,
+            <code>−n원</code>은 +2.6bp (31만 건).</dd>
+        <dt>해결됨</dt>
+        <dd><code>당팔 0.8원</code> 류는 결제일 스위치의 가격 조정으로 판정했습니다
+            (<code>당사선팔 100억 <b>1일</b> 1.05</code> 의 「1일」이 결정타).</dd>
+        <dt>막힌 곳</dt>
+        <dd>그 밖의 부호 없는 원 2,334행. 특히 <code>쩜3</code> 같은 표기가
+            민평 단가의 <b>끝전</b>인지 별도 스프레드인지 모릅니다.</dd>
+      </dl>
+      <pre>25.01.22  비씨카드 (민 3.709   쩜3  수) 팔자
+26.1.9 신한카드2158(민 2.941, 금, 쩜8원) 팔자
+26.3.20 산금(민 2.494, 금, 쩜5원) 민평 팔자
+24.10.12 산금채 민3.598, 끝전0.70 팔자
+27.10.25 롯데건설 (민4.942/.4원/평일/a) 5.50팔자//사자찾습니다</pre>
+      <div class="ask">
+        <div class="ask-label">여쭐 것</div>
+        <ul>
+          <li><b>「쩜3」</b>은 「끝전 0.3원」과 같은 말입니까?</li>
+          <li>부호 없이 <code>0.9원</code>만 적으면 <b>비싸게</b>입니까 <b>싸게</b>입니까,
+              아니면 그때그때 문맥입니까?</li>
+        </ul>
+        <div class="answer"></div>
+        <div class="answer"></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section>
+    <div class="sec-head">
+      <div class="sec-tag">질문 E</div>
+      <h2>짧은 확인 넷</h2>
+      <p class="sec-sub">이미 그렇게 처리하고 있는데, 맞는지만 확인받으면 됩니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">동 · 동통</span>
+        <span class="count">94,220행</span>
+        <span class="chip">가정 확인</span>
+      </div>
+      <pre>26.2.5 하나은행(~E29) [민 3.643] (.38) / 오버6 팔자 동
+구구통 335 + 동
+25.7.17 하나은행 팔자 /민 3.631 (끝전 .54) 오바5팔자  동통</pre>
+      <div class="ask">
+        <div class="ask-label">여쭐 것</div>
+        <p>말미의 <b>「동」·「동통」</b>을 <b>전송·통보 표식</b>으로 보고 종목 판정에서 빼고 있습니다.
+           맞습니까? (처음엔 「동통」을 통안 은어로 잘못 넣어 7만 행의 섹터를 틀렸습니다.)</p>
+        <div class="answer"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">대치</span>
+        <span class="count">2,632행</span>
+        <span class="chip">가정 확인</span>
+      </div>
+      <pre>25.9.1 하나채 (민 3.63, .45) +6팔자 // +7 대치
+26.4.7(화) 한전[민3.751/.28원] 팔자  언더5 / 언더3 대치
+현대캐피탈1798-6 (…) 팔자 -0.5원 3.712% 수반 / -1원 사자 대치</pre>
+      <div class="ask">
+        <div class="ask-label">여쭐 것</div>
+        <p><b>「대치」</b>가 <b>반대편에 서 있는 호가</b>(내 호가가 아니라 상대방 것)를 뜻합니까?</p>
+        <div class="answer"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">예담</span>
+        <span class="count">918행</span>
+        <span class="chip">뜻 미상</span>
+      </div>
+      <pre>24.3-4월 예담 사자
+24.3-4월 공사 전단 / 예담 사자
+잔존 1~2개월 예담 사자</pre>
+      <div class="ask">
+        <div class="ask-label">여쭐 것</div>
+        <p><b>「예담」</b>이 무슨 채권입니까? 잔존 1~2개월짜리로 부르는 걸 보면 단기물 같습니다.</p>
+        <div class="answer"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="word">이자채</span>
+        <span class="count">3,772행</span>
+        <span class="chip">가정 확인</span>
+      </div>
+      <pre>3409 이자채 팔자
+2803 이자채 팔자
+280910 이자채 민 3.447 ... 팔자</pre>
+      <div class="ask">
+        <div class="ask-label">여쭐 것</div>
+        <p><b>「이자채」</b>가 국고채 원금·이자 <b>분리채권의 이자 조각</b>이 맞습니까?
+           앞의 숫자(<code>3409</code>)는 <b>만기 연월</b>입니까?</p>
+        <div class="answer"></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section>
+    <div class="sec-head">
+      <h2>참고 — 이미 푼 것</h2>
+      <p class="sec-sub">여기는 답 안 하셔도 됩니다. 위 질문의 배경으로만 보시면 됩니다.</p>
+    </div>
+
+    <div class="card solved">
+      <div class="card-top">
+        <span class="word">통안 은어</span>
+        <span class="chip ok">해독 완료</span>
+        <span class="count">한국경제 2014-10-20 기사 + 실측 96~99%</span>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>은어</th><th>뜻</th><th class="num">행수</th></tr></thead>
+          <tbody>
+            <tr><td class="term">통당</td><td>통안 2년물 <b>당월</b> 발행(지표)</td><td class="num">192,739</td></tr>
+            <tr><td class="term">구통</td><td>2년물 <b>전월</b> 발행</td><td class="num">116,523</td></tr>
+            <tr><td class="term">구구통</td><td>2년물 <b>전전월</b> = <code>1.5년통</code></td><td class="num">31,756</td></tr>
+            <tr><td class="term">삼통</td><td><b>3년물</b> 당월 발행</td><td class="num">101,039</td></tr>
+            <tr><td class="term">구삼통 · 구구삼통</td><td>3년물 전월 · 전전월</td><td class="num">43,476</td></tr>
+            <tr><td class="term">통딱 · 삼딱</td><td>오늘 발행돼 내일 인수 가능한 것</td><td class="num">6,086</td></tr>
+            <tr><td class="term">1년통</td><td>잔존 1년짜리 2년물 (1년물 신규가 아님)</td><td class="num">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">
+        문법은 두 조각입니다 — <b>「구」 = 舊(한 단계 이전, 반복 가능)</b>,
+        <b>「삼」 = 3년물</b>. 딜러가 <code>구구통(25.7.2통) 495-</code> 처럼
+        은어와 만기를 함께 적은 행 87건이 결정적 단서였습니다.
+      </p>
+    </div>
+
+    <div class="card solved">
+      <div class="card-top">
+        <span class="word">기사에서 확인한 것</span>
+        <span class="chip ok">출처 있음</span>
+      </div>
+      <dl class="kv">
+        <dt>통당</dt><dd>통화안정채권의 가장 최근월 발행물</dd>
+        <dt>구통당</dt><dd>직전월 발행물</dd>
+        <dt>통딱</dt><dd>오늘 발행됐지만 내일에야 인수 가능한 통안</dd>
+        <dt>구딱</dt><dd>어제의 통딱</dd>
+        <dt>당팔선사</dt><dd>당일 팔고 선네고 해서 사는 거래</dd>
+        <dt>선네고</dt><dd>결제일을 하루 앞서 거래하는 것</dd>
+      </dl>
+      <p class="note">한국경제 2014-10-20 「통딱·당팔선사·구딱… 채권 참 어렵네요」</p>
+    </div>
+
+    <div class="card solved">
+      <div class="card-top">
+        <span class="word">그 밖</span>
+        <span class="chip ok">처리 완료</span>
+      </div>
+      <dl class="kv">
+        <dt>짜툴 · 자툴 · 짜투리</dt>
+        <dd>자투리로 보고 <code>OddLot</code> 로 처리 중 (79,171행)</dd>
+        <dt>동금리</dt>
+        <dd>두 다리를 같은 금리로 교체 (4,163행)</dd>
+        <dt>롯카 · 한투캐 · 중벤공</dt>
+        <dd>발행체 축약 — 롯데카드 · 한국투자캐피탈 · 중소벤처기업진흥공단</dd>
+        <dt>오버 · 언더</dt>
+        <dd>민평 대비 bp. 오버는 금리 상승 98.1% (49.9만행)</dd>
+      </dl>
+    </div>
+  </section>
+
+  <footer>
+    <hr class="div">
+    <p>2026-09-02 기준 · 본표 8,331,933행 · 대상 방 블커본드 · 막무가내</p>
+    <p>답을 주시면 각 항목이 어느 종목·어느 값으로 확정되는지 다시 정리해 드리겠습니다.</p>
+  </footer>
+
+</div>

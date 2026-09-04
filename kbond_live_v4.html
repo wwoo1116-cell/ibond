@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>K-Bond 라이브 호가창</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  /* ── 블룸버그 터미널 문법 [OWNER 2026-09-03 「블룸버그 터미널 문법」] ──
+     검정 바탕 · 앰버 라벨 · 흰 값 · 1px 회색 경계 · 반경 0 · 그림자 0.
+     여백 최소, 화면은 표로 채운다. 색은 «상태와 등락»에만.
+     숫자는 고정폭(IBM Plex Mono)+tabular-nums, 한글은 Pretendard 로 폴백. */
+  :root {
+    --bg:#000000; --raise:#0A0A0A;
+    --line:#242424; --line-hi:#3A3A3A;
+    --hdr:#0A1B2E;
+    --amber:#FF9E1B; --amber-d:#8A5A12;
+    --fg:#E6E6E6; --muted:#9A9A9A; --dim:#6A6A6A;
+    --cyan:#3FB6E8; --sel:#123A63;
+    --ask:#FF5A5A; --bid:#4EE07E;
+    --up:#4EE07E; --dn:#FF5A5A;
+    --ask-w:rgba(255,90,90,.16); --bid-w:rgba(78,224,126,.16);
+    --row:16px;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body {
+    background:var(--bg); color:var(--fg);
+    font-family:"IBM Plex Mono", Consolas, "SF Mono", Menlo,
+                "Pretendard Variable", Pretendard, "Malgun Gothic", monospace;
+    font-size:11.5px; line-height:var(--row); -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  button { font:inherit; color:inherit; background:none; border:none; cursor:pointer;
+    font-variant-numeric:tabular-nums; }
+  select { background:#000; color:var(--fg); border:1px solid var(--line);
+    font:inherit; font-size:11px; padding:0 1px; height:15px; border-radius:0; }
+  button:focus-visible, select:focus-visible { outline:1px solid var(--amber); }
+  .num { font-variant-numeric:tabular-nums; }
+  .up { color:var(--up); } .dn { color:var(--dn); } .amb { color:var(--amber); }
+  .cy { color:var(--cyan); } .dm { color:var(--dim); }
+
+  /* ── 명령줄 ── */
+  .cmd { flex:none; height:24px; display:flex; align-items:center;
+    border-bottom:1px solid var(--line-hi); background:var(--hdr); padding:0 6px;
+    white-space:nowrap; overflow:hidden; }
+  .cmd .brand { color:var(--amber); font-weight:600; letter-spacing:.05em; }
+  .cmd .go { color:var(--dim); margin:0 12px 0 4px; }
+  .cmd .cat { padding:0 9px; height:24px; color:var(--muted); border-right:1px solid #16283D; }
+  .cmd .cat:first-of-type { border-left:1px solid #16283D; }
+  .cmd .cat:hover { color:var(--fg); }
+  .cmd .cat.on { background:var(--amber); color:#000; font-weight:600; }
+  .cmd .cat .c { color:var(--dim); margin-left:5px; font-size:10px; }
+  .cmd .cat.on .c { color:#5A3806; }
+  .cmd .instr { margin-left:12px; padding:0 8px; height:18px; line-height:16px;
+    border:1px solid var(--amber-d); }
+  .cmd .instr:hover { border-color:var(--amber); }
+  .cmd .instr .car { color:var(--amber); margin-left:8px; }
+  .cmd .rt { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .cmd .st { color:var(--bid); font-weight:600; }
+  .cmd .st.bad { color:var(--dn); }
+  .cmd .rep { color:#000; background:var(--amber); padding:0 5px; font-weight:600; }
+
+  .dd { position:absolute; z-index:40; top:24px; left:220px; width:440px; max-height:72vh;
+    overflow-y:auto; background:#050505; border:1px solid var(--amber-d); display:none; }
+  .dd.open { display:block; }
+  .dd .g { background:var(--hdr); color:var(--amber); padding:0 6px; height:var(--row);
+    position:sticky; top:0; }
+  .dd .row { display:flex; gap:8px; width:100%; text-align:left; padding:0 6px;
+    height:var(--row); align-items:center; }
+  .dd .row:hover, .dd .row.on { background:var(--sel); }
+  .dd .nm { flex:1; overflow:hidden; text-overflow:ellipsis; }
+  .dd .sm { color:var(--dim); }
+  .dd .v { width:5.4em; text-align:right; }
+
+  /* ── 통계 스트립 ── */
+  .stat { flex:none; height:38px; display:flex; align-items:stretch;
+    border-bottom:1px solid var(--line-hi); overflow:hidden; }
+  .stat .c { padding:1px 9px; border-right:1px solid var(--line);
+    display:flex; flex-direction:column; justify-content:center; min-width:0; }
+  .stat .k { color:var(--amber); font-size:10px; line-height:12px; }
+  .stat .v { font-size:13px; line-height:17px; font-weight:500; white-space:nowrap; }
+  .stat .v.b { font-size:16px; }
+  .stat .v .s { font-size:11px; color:var(--dim); }
+
+  /* ── 패널 격자 ── */
+  .grid { flex:1 1 0; min-height:0; display:grid;
+    grid-template-columns:minmax(340px,1.22fr) 340px minmax(280px,1fr);
+    grid-template-rows:1fr 1fr; }
+  .grid2 { flex:none; height:150px; display:grid;
+    grid-template-columns:1.4fr 1fr 336px; border-top:1px solid var(--line-hi); }
+  section.p { border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+    display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .grid2 section.p { border-bottom:none; }
+  section.p:last-child { border-right:none; }
+  #pA { grid-column:1; grid-row:1 / span 2; }
+  #pB { grid-column:2; grid-row:1; }
+  #pC { grid-column:2; grid-row:2; }
+  #pD { grid-column:3; grid-row:1; }
+  #pE { grid-column:3; grid-row:2; }
+  .ph { flex:none; height:17px; background:var(--hdr); display:flex; align-items:center;
+    gap:8px; padding:0 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .ph .t { color:var(--amber); font-weight:600; letter-spacing:.03em; }
+  .ph .s { color:var(--dim); overflow:hidden; text-overflow:ellipsis; }
+  .ph .r { margin-left:auto; color:var(--muted); display:flex; gap:6px; align-items:center; }
+  .ph .warn { color:#000; background:var(--amber); padding:0 4px; }
+  .pb { flex:1 1 0; min-height:0; overflow:auto; }
+  .pb.nos { overflow:hidden; }
+
+  /* 고정 레이아웃 — 숫자 열은 폭을 못 박고, 이름 열만 남는 폭을 가져간다.
+     [OWNER 2026-09-03 「숫자·타이포·정렬」] 자릿수가 흔들리면 표가 아니다. */
+  table { width:100%; border-collapse:collapse; table-layout:fixed;
+    -webkit-user-select:none; user-select:none; }
+  thead th { position:sticky; top:0; z-index:2; background:#0A0A0A; color:var(--amber);
+    font-weight:400; font-size:10.5px; height:15px; padding:0 5px; text-align:right;
+    border-bottom:1px solid var(--line); white-space:nowrap; }
+  th.l, td.l { text-align:left; }
+  td { height:var(--row); padding:0 5px; text-align:right; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; max-width:0; }
+  tbody tr:nth-child(even) td { background:rgba(255,255,255,.02); }
+  tbody tr.sel td { background:var(--sel); }
+  tbody tr.clk { cursor:pointer; }
+  tbody tr.clk:hover td { background:#15293A; }
+  td.i { color:var(--dim); width:2.4em; }
+  td.d { color:var(--dim); } td.m { color:var(--muted); } td.c { color:var(--cyan); }
+  .empty { color:var(--dim); padding:6px; text-align:left; }
+  .bench { color:#000; background:var(--amber); padding:0 3px; font-size:9.5px; }
+  .tag { color:var(--amber); border:1px solid var(--amber-d); padding:0 3px; font-size:9.5px; }
+  .est { opacity:.5; }
+  @keyframes fl { from { background:#3A2E08; } to { background:transparent; } }
+  .fl td { animation:fl .8s ease-out; }
+  @media (prefers-reduced-motion: reduce) { .fl td { animation:none; } }
+
+  .lad tr.ask td.y { color:var(--ask); } .lad tr.bid td.y { color:var(--bid); }
+  .lad tr.ask td { background:linear-gradient(to left, var(--ask-w) calc(var(--d,0)*1%), transparent 0); }
+  .lad tr.bid td { background:linear-gradient(to left, var(--bid-w) calc(var(--d,0)*1%), transparent 0); }
+  .lad tr.sp td { background:#0E0E0E !important; color:var(--amber);
+    border-top:1px solid var(--line-hi); border-bottom:1px solid var(--line-hi); }
+  .bB { color:var(--bid); } .bS { color:var(--ask); } .bN { color:var(--muted); }
+  .ask-t { color:var(--ask); } .bid-t { color:var(--bid); }
+  .bar { display:block; height:9px; background:var(--amber-d); }
+
+  canvas { display:block; width:100%; height:100%; }
+  .foot { flex:none; height:18px; line-height:18px; padding:0 6px; color:var(--dim);
+    font-size:10px; border-top:1px solid var(--line); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; background:#050505; }
+</style></head><body>
+
+<div class="cmd">
+  <span class="brand">KBOND</span><span class="go">&lt;GO&gt;</span>
+  <button class="cat" data-k="ktb">국고<span class="c" id="cKtb"></span></button>
+  <button class="cat" data-k="msb">통안<span class="c" id="cMsb"></span></button>
+  <button class="cat" data-k="nhb">국민주택<span class="c" id="cNhb"></span></button>
+  <button class="cat" data-k="cr">크레딧<span class="c" id="cCr"></span></button>
+  <button class="instr" id="instr">—<span class="car">▼</span></button>
+  <span class="rt">
+    <span class="rep" id="rep" hidden>REPLAY</span>
+    <span class="dm" id="age"></span>
+    <span class="st" id="state">LIVE</span>
+    <span id="clk">--:--:--</span>
+  </span>
+</div>
+<div class="dd" id="dd" role="listbox"></div>
+
+<div class="stat" id="stat"></div>
+
+<div class="grid">
+  <section class="p" id="pA">
+    <div class="ph"><span class="t" id="hA">보드</span><span class="s" id="sA"></span>
+      <span class="r" id="rA"></span></div>
+    <div class="pb"><table id="tA"><thead id="thA"></thead><tbody id="tbA"></tbody></table></div>
+  </section>
+  <section class="p" id="pB">
+    <div class="ph"><span class="t" id="hB">호가</span><span class="s" id="sB"></span>
+      <span class="r">
+        <select id="agg" title="호가 집계 단위"><option value="0" selected>원호가</option><option value="0.5">0.5bp</option><option value="1">1bp</option><option value="2.5">2.5bp</option></select>
+        <select id="ttl" title="표시 범위(최우선·스프레드는 항상 최신 기준)"><option value="def" selected>활성</option><option value="half">타이트</option><option value="inf">세션</option></select>
+      </span></div>
+    <div class="pb"><table id="tB"><thead id="thB"></thead><tbody id="tbB"></tbody></table></div>
+  </section>
+  <section class="p" id="pC">
+    <div class="ph"><span class="t" id="hC">체결</span><span class="s" id="sC"></span>
+      <span class="r" id="rC"></span></div>
+    <div class="pb"><table id="tC"><thead id="thC"></thead><tbody id="tbC"></tbody></table></div>
+  </section>
+  <section class="p" id="pD">
+    <div class="ph"><span class="t" id="hD">시세</span><span class="s" id="sD"></span>
+      <span class="r" id="rD"></span></div>
+    <div class="pb nos"><canvas id="cvD"></canvas></div>
+  </section>
+  <section class="p" id="pE">
+    <div class="ph"><span class="t" id="hE">심도</span><span class="s" id="sE"></span>
+      <span class="r" id="rE"></span></div>
+    <div class="pb nos"><canvas id="cvE"></canvas></div>
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="p" id="pF">
+    <div class="ph"><span class="t">체결 테이프</span><span class="s">누가 · 무엇을 · 어느 방향</span>
+      <span class="r" id="rF"></span></div>
+    <div class="pb"><table><thead id="thF"></thead><tbody id="tbF"></tbody></table></div>
+  </section>
+  <section class="p" id="pG">
+    <div class="ph"><span class="t">매수 니즈</span><span class="s">범주 콜</span>
+      <span class="r" id="rG"></span></div>
+    <div class="pb"><table><thead id="thG"></thead><tbody id="tbG"></tbody></table></div>
+  </section>
+  <section class="p" id="pH">
+    <div class="ph"><span class="t" id="hH">지표 커브</span><span class="s" id="sH"></span>
+      <span class="r" id="rH"></span></div>
+    <div class="pb"><table><thead id="thH"></thead><tbody id="tbH"></tbody></table></div>
+  </section>
+</div>
+
+<p class="foot" id="foot"></p>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const CATS = [["ktb","국고"],["msb","통안"],["nhb","국민주택"],["cr","크레딧"]];
+const CLSORD = ["은행채","여전채","공사채","회사채","증권채","지방채","기타"];
+const RTORD  = ["AAA","AA+","AA0","AA-","A+","A0","A-","BBB+","BBB0","BBB-","BBB","미상"];
+const NHBORD = ["국당","국전","국전전","국전당"];
+
+let SNAP=null, cat="ktb", sel={ktb:null,msb:null,nhb:null,cr:"ALL"};
+let ttlMode="def", aggBp=0, prevSig={}, srvNow=0, lastHb=0, lastData=0;
+let hov=null, geoD=null;
+
+const pad2 = n => String(n).padStart(2,"0");
+const hms  = t => `${pad2(Math.floor(t/3600))}:${pad2(Math.floor(t%3600/60))}:${pad2(t%60)}`;
+const hm   = t => `${pad2(Math.floor(t/3600))}:${pad2(Math.floor(t%3600/60))}`;
+const ageT = a => a<60 ? a+"s" : a<3600 ? Math.floor(a/60)+"m" : Math.floor(a/3600)+"h";
+const n3   = v => (v==null||isNaN(v)) ? "" : Number(v).toFixed(3);
+const nbp  = v => (v==null||isNaN(v)) ? "" : (v>0?"+":"")+Number(v).toFixed(1);
+const esc  = s => String(s==null?"":s).replace(/[&<>"]/g, c =>
+                  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cls3 = (v,inv) => v==null ? "" : (inv? (v<0?"dn":v>0?"up":"") : (v<0?"up":v>0?"dn":""));
+
+/* 시계는 서버가 정본이다(리플레이 검증에서도 같은 코드가 돈다). */
+const nowSec = () => srvNow ? Math.floor(srvNow+(Date.now()-lastData)/1000)
+  : (d=>d.getHours()*3600+d.getMinutes()*60+d.getSeconds())(new Date());
+
+/* ── 불변식 (v2.5 검증분 — 절대 뒤집지 말 것) ────────────────────────────
+   1. 원화 관행: 오퍼 금리 < 비드 금리. 최우선 오퍼 = 오퍼 중 «최고» 금리,
+      최우선 비드 = 비드 중 «최저» 금리. 스프레드 = 비드 − 오퍼 >= 0.
+   2. 무크로스: 크로스 쌍 중 «오래된» 쪽 제거.
+   3. 최우선·스프레드는 항상 최신 기준. 수명 토글은 표시 필터일 뿐.
+   4. 집계 보수 방향: 오퍼 = 구간 최저 수익률, 비드 = 최고.
+   5. 누적 Σ 은 최우선에서 바깥으로.
+   6. 사다리 = 한 행 한 방향, 위 오퍼(낮은 금리) · 아래 비드(높은 금리).
+   7. 값을 지어내지 않는다 — 기준이 없으면 복원하지 않는다.               */
+function ttlFor(kind){ if(ttlMode==="inf") return Infinity;
+  const b = kind==="credit" ? 7200 : 1800; return ttlMode==="half" ? b/2 : b; }
+const alive = (e,kind,T) => T-e.t <= ttlFor(kind);
+function binOf(y,side){ if(!aggBp) return y; const e=aggBp/100;
+  return side==="S" ? Math.floor(y/e+1e-9)*e : Math.ceil(y/e-1e-9)*e; }
+function uncross(rows){
+  let asks=rows.filter(e=>e.s==="S"), bids=rows.filter(e=>e.s==="B");
+  for(let g=0; g<200; g++){
+    if(!asks.length||!bids.length) break;
+    let ba=asks[0]; for(const e of asks) if(e.y>ba.y||(e.y===ba.y&&e.t>ba.t)) ba=e;
+    let bb=bids[0]; for(const e of bids) if(e.y<bb.y||(e.y===bb.y&&e.t>bb.t)) bb=e;
+    if(ba.y<bb.y) break;
+    if(ba.t<=bb.t) asks=asks.filter(e=>e!==ba); else bids=bids.filter(e=>e!==bb);
+  }
+  return [asks,bids];
+}
+function bestOf(aE,bE){
+  let fa=null,fb=null;
+  for(const e of aE) if(!fa||e.y>fa.y||(e.y===fa.y&&e.t>fa.t)) fa=e;
+  for(const e of bE) if(!fb||e.y<fb.y||(e.y===fb.y&&e.t>fb.t)) fb=e;
+  return [fa,fb];
+}
+
+/* ── 카테고리 메타 ───────────────────────────────────────────────────── */
+function meta(){
+  if(cat==="msb") return {src:SNAP.msb||[], names:SNAP.msb_names||{}, ten:SNAP.msb_kind||{},
+    mp:SNAP.msb_mp||{}, fills:SNAP.mfills||{}, bench:SNAP.msb_bench||[],
+    alias:SNAP.msb_alias||{}, matSelf:true};
+  if(cat==="nhb") return {src:SNAP.nhb||[], names:{}, ten:{},
+    mp:SNAP.nhb_mp||{}, fills:SNAP.nhb_fills||{}, bench:[],
+    alias:SNAP.nhb_label||{}, matSelf:false};
+  return {src:SNAP.ktb||[], names:SNAP.names||{}, ten:SNAP.tenors||{},
+    mp:SNAP.mp||{}, fills:SNAP.kfills||{}, bench:SNAP.bench||[],
+    alias:{}, mats:SNAP.mats||{}, matSelf:false};
+}
+const isCr = () => cat==="cr";
+function nameOf(c,M){ return M.names[c] || c; }
+function matOf(c,M){ return M.matSelf ? c : (M.mats ? (M.mats[c]||"") : ""); }
+function tenOf(c,M){ return cat==="nhb" ? "5y" : (M.ten[c]||""); }
+
+/* 종목 행 — 국고 · 통안 · 국민주택 공통 */
+function bondRows(T){
+  const M=meta(), by=new Map(), all=new Map();
+  for(const e of M.src){
+    all.set(e.code,(all.get(e.code)||0)+1);
+    if(!alive(e,"ktb",T)) continue;
+    /* ★레벨을 모르는 호가도 «종목» 으로는 세운다. 국민주택의 «국주25-12 (민4.130)
+       팔자» 처럼 수준을 안 적는 행이 있다 — 사다리에서는 빼고 보드에는 남긴다. */
+    if(!by.has(e.code)) by.set(e.code,[]);
+    by.get(e.code).push(e);
+  }
+  const codes=new Set([...by.keys(), ...Object.keys(M.fills)]);
+  const rows=[...codes].map(c=>{
+    const q=(by.get(c)||[]).filter(e=>e.y!=null);
+    const [aE,bE]=uncross(q);
+    const [fa,fb]=bestOf(aE,bE);
+    const h=(SNAP.hist||{})[c]||[];
+    return {c, fa, fb, mp:M.mp[c], mat:matOf(c,M), ten:tenOf(c,M),
+            nm:nameOf(c,M), alias:M.alias[c], bench:M.bench.includes(c),
+            fill:M.fills[c], n:all.get(c)||0, hn:h.length,
+            nq:(by.get(c)||[]).length, npx:q.length,
+            mpd:(SNAP.msb_mpd||{})[c],
+            mid:(fa&&fb)?(fa.y+fb.y)/2:(h.length?h[h.length-1][1]:null)};
+  });
+  if(cat==="nhb") rows.sort((a,b)=>{
+    const ia=NHBORD.indexOf(a.c), ib=NHBORD.indexOf(b.c);
+    return (ia<0?99:ia)-(ib<0?99:ib) || String(a.c).localeCompare(String(b.c)); });
+  else rows.sort((a,b)=>String(a.mat||"9999").localeCompare(String(b.mat||"9999")));
+  return rows;
+}
+
+/* 크레딧 — 오퍼와 버킷(종별 x 등급) */
+const crAlive = T => (SNAP.credit||[]).filter(e=>alive(e,"credit",T));
+const bkey = e => (e.cls||"기타")+"|"+(e.rt||"미상");
+function crBuckets(T){
+  const m=new Map();
+  for(const e of crAlive(T)){
+    const k=bkey(e);
+    if(!m.has(k)) m.set(k,{k, cls:e.cls||"기타", rt:e.rt||"미상", est:e.rt_src==="집계",
+                           n:0, bps:[], ytms:[], ttms:[], mb:0});
+    const b=m.get(k); b.n++; b.bps.push(e.bp);
+    if(e.ytm!=null) b.ytms.push(e.ytm);
+    if(e.ttm!=null) b.ttms.push(e.ttm);
+    b.mb += (e.mb||0)>0 ? 1 : 0;
+  }
+  const arr=[...m.values()];
+  arr.sort((a,b)=> (CLSORD.indexOf(a.cls)+99)%199 - (CLSORD.indexOf(b.cls)+99)%199
+    || RTORD.indexOf(a.rt)-RTORD.indexOf(b.rt));
+  return arr;
+}
+const med = a => { if(!a.length) return null; const s=[...a].sort((x,y)=>x-y);
+  return s[Math.floor(s.length/2)]; };
+function crSel(T){
+  const all=crAlive(T);
+  return sel.cr==="ALL" ? all : all.filter(e=>bkey(e)===sel.cr);
+}
+function crNeeds(T){
+  const rows=(SNAP.baskets||[]).filter(e=>alive(e,"credit",T));
+  if(sel.cr==="ALL") return rows;
+  const [c,r]=sel.cr.split("|");
+  return rows.filter(b=>{
+    const secs=new Set(String(b.sec||"전체").split("|"));
+    const okS = secs.has("전체") || secs.has(c);
+    const okR = !b.rt || r==="미상" || String(b.rt).indexOf(r)>=0
+      || (String(b.rt).indexOf("이상")>=0 && RTORD.indexOf(r)>=0
+          && RTORD.indexOf(r) <= RTORD.indexOf(String(b.rt).replace("이상","").trim()));
+    return okS && okR;
+  });
+}
+
+/* ── 선택 유지 ── */
+function ensureSel(T){
+  if(isCr()){
+    const bs=crBuckets(T);
+    if(sel.cr!=="ALL" && !bs.some(b=>b.k===sel.cr)) sel.cr="ALL";
+    return {rows:[],bks:bs};
+  }
+  const rows=bondRows(T);
+  if(!sel[cat] || !rows.some(r=>r.c===sel[cat])){
+    let top=null;
+    for(const r of rows) if(!top || r.hn>top.hn || (r.hn===top.hn && r.n>top.n)) top=r;
+    sel[cat]=(top||{}).c||null;
+  }
+  return {rows,bks:[]};
+}
+
+/* ── 명령줄 ──────────────────────────────────────────────────────────── */
+function renderCmd(T,rows,bks){
+  /* 보드 행수와 같은 셈법: 살아 있는 호가가 있거나 오늘 체결이 있는 종목 */
+  const cnt=c=>{
+    if(c==="cr") return crAlive(T).length;
+    const src=c==="ktb"?SNAP.ktb:c==="msb"?SNAP.msb:SNAP.nhb;
+    const fl=c==="ktb"?SNAP.kfills:c==="msb"?SNAP.mfills:SNAP.nhb_fills;
+    const k=new Set((src||[]).filter(e=>alive(e,"ktb",T)&&e.y!=null).map(e=>e.code));
+    for(const c2 of Object.keys(fl||{})) k.add(c2);
+    return k.size;
+  };
+  $("cKtb").textContent=cnt("ktb"); $("cMsb").textContent=cnt("msb");
+  $("cNhb").textContent=cnt("nhb"); $("cCr").textContent=cnt("cr");
+  for(const b of document.querySelectorAll(".cat")) b.classList.toggle("on", b.dataset.k===cat);
+
+  let lab;
+  if(isCr()){
+    if(sel.cr==="ALL") lab="크레딧 전체";
+    else { const [c,r]=sel.cr.split("|"); lab=c+" "+r; }
+  } else {
+    const r=rows.find(x=>x.c===sel[cat]);
+    lab = r ? (r.nm + (r.alias?" ("+r.alias+")":"") + (r.ten?" · "+r.ten.toUpperCase():"")) : "—";
+  }
+  $("instr").innerHTML=esc(lab)+'<span class="car">▼</span>';
+
+  let h="";
+  if(isCr()){
+    h+='<div class="g">등급 버킷 — 종별 × 등급</div>';
+    h+=`<button class="row${sel.cr==="ALL"?" on":""}" data-b="ALL">`+
+       `<span class="nm">크레딧 전체</span><span class="v">${crAlive(T).length}건</span></button>`;
+    let last=null;
+    for(const b of bks){
+      if(b.cls!==last){ h+=`<div class="g">${esc(b.cls)}</div>`; last=b.cls; }
+      const m=med(b.bps);
+      h+=`<button class="row${sel.cr===b.k?" on":""}" data-b="${esc(b.k)}">`+
+         `<span class="nm${b.est?" est":""}">${esc(b.rt)}</span>`+
+         `<span class="sm">${b.n}건</span>`+
+         `<span class="v">${m==null?"":nbp(m)+"bp"}</span></button>`;
+    }
+  } else {
+    h+=`<div class="g">${cat==="ktb"?"국고":cat==="msb"?"통안":"국민주택"} 종목 — ${rows.length}종</div>`;
+    for(const r of rows){
+      const d=(r.mid!=null&&r.mp!=null)?(r.mid-r.mp)*100:null;
+      h+=`<button class="row${sel[cat]===r.c?" on":""}" data-c="${esc(r.c)}">`+
+         `<span class="nm">${esc(r.nm)}${r.bench?' <span class="bench">지표</span>':""}`+
+         `${r.alias?' <span class="sm">'+esc(r.alias)+'</span>':""}</span>`+
+         `<span class="sm">${esc(r.ten||"")}</span>`+
+         `<span class="v ${cls3(d)}">${d==null?"":nbp(d)}</span></button>`;
+    }
+  }
+  $("dd").innerHTML=h;
+}
+
+/* ── 통계 스트립 ─────────────────────────────────────────────────────── */
+function cell(k,v,c,big){ return `<div class="c"><span class="k">${k}</span>`+
+  `<span class="v${big?" b":""} ${c||""}">${v}</span></div>`; }
+function renderStat(T,rows,bks){
+  let h="";
+  if(isCr()){
+    const off=crSel(T), bps=off.map(e=>e.bp), yt=off.map(e=>e.ytm).filter(v=>v!=null);
+    const tt=off.map(e=>e.ttm).filter(v=>v!=null);
+    const nd=crNeeds(T), hit=off.filter(e=>(e.mb||0)>0).length;
+    h+=cell("버킷", esc(sel.cr==="ALL"?"크레딧 전체":sel.cr.replace("|"," ")), "", true);
+    h+=cell("오퍼", off.length+'<span class="s"> 건</span>');
+    h+=cell("민평대비 최저 / 최고", bps.length?nbp(Math.min(...bps))+" / "+nbp(Math.max(...bps)):"—");
+    h+=cell("민평대비 중앙", bps.length?nbp(med(bps))+'<span class="s"> bp</span>':"—");
+    h+=cell("YTM 중앙", yt.length?n3(med(yt)):"—");
+    h+=cell("잔존", tt.length?Math.min(...tt).toFixed(1)+" ~ "+Math.max(...tt).toFixed(1)+'<span class="s"> Y</span>':"—");
+    h+=cell("수요 매칭 오퍼", hit+'<span class="s"> / '+off.length+"</span>", hit?"up":"");
+    h+=cell("활성 니즈", nd.length+'<span class="s"> 건</span>');
+    h+=cell("호가 참여", new Set(off.map(e=>e.d)).size+'<span class="s"> 개사</span>');
+  } else {
+    const M=meta(), r=rows.find(x=>x.c===sel[cat])||{};
+    const st=(SNAP.stats||{})[sel[cat]];
+    const d=(r.mid!=null&&r.mp!=null)?(r.mid-r.mp)*100:null;
+    const sp=(r.fa&&r.fb)?(r.fb.y-r.fa.y)*100:null;
+    const fd=(r.fill&&r.mp!=null)?(r.fill.y-r.mp)*100:null;
+    const nq=M.src.filter(e=>e.code===sel[cat]&&alive(e,"ktb",T)).length;
+    h+=cell("최신 mid", r.mid!=null?n3(r.mid):"—", cls3(d), true);
+    h+=cell("전일 민평", r.mp!=null?n3(r.mp):"—","m");
+    h+=cell("민평 대비", d==null?"—":nbp(d)+'<span class="s"> bp</span>', cls3(d));
+    h+=cell("오퍼 (최우선)", r.fa?n3(r.fa.y):"—","ask-t");
+    h+=cell("비드 (최우선)", r.fb?n3(r.fb.y):"—","bid-t");
+    h+=cell("스프레드", sp==null?"—":sp.toFixed(1)+'<span class="s"> bp</span>',"amb");
+    h+=cell("당일 고 / 저", st?n3(st.hi)+" / "+n3(st.lo):"—");
+    h+=cell("시가 대비", st?nbp((st.last-st.open)*100)+'<span class="s"> bp</span>':"—",
+            st?cls3((st.last-st.open)):"");
+    h+=cell("당일 체결", r.fill?n3(r.fill.y)+(fd!=null?'<span class="s"> '+nbp(fd)+"</span>":""):"—", cls3(fd));
+    h+=cell("살아있는 호가", nq+'<span class="s"> 건</span>');
+    h+=cell("호가 참여", new Set(M.src.filter(e=>alive(e,"ktb",T)).map(e=>e.k||e.d)).size+'<span class="s"> 개사</span>');
+  }
+  h+=cell("오늘 메시지", (SNAP.n_msg||0).toLocaleString()+
+        '<span class="s"> · 확인 '+(SNAP.n_ack||0)+"</span>","m");
+  $("stat").innerHTML=h;
+}
+
+/* ── 표 조립 헬퍼 ────────────────────────────────────────────────────── */
+function head(cols){ return "<tr>"+cols.map(c=>{
+  const [t,w,l]=Array.isArray(c)?c:[c,null,false];
+  return `<th class="${l?"l":""}"${w?` style="width:${w}"`:""}>${t}</th>`; }).join("")+"</tr>"; }
+function flash(key,sig){
+  const f = prevSig[key]!==undefined && prevSig[key]!==sig ? " fl" : "";
+  prevSig[key]=sig; return f;
+}
+
+/* ── A: 보드 ─────────────────────────────────────────────────────────── */
+function renderA(T,rows,bks){
+  if(isCr()){
+    const off=crSel(T).slice().sort((a,b)=>(a.ttm??99)-(b.ttm??99));
+    $("hA").textContent="크레딧 오퍼";
+    $("sA").textContent=(sel.cr==="ALL"?"전체":sel.cr.replace("|"," "))+" · 잔존 순";
+    $("rA").textContent=off.length+"건";
+    $("thA").innerHTML=head([["#","26px"],["종목",null,true],["종별","48px"],
+      ["등급","42px"],["잔존","44px"],["만기","66px"],["전일민평","56px"],
+      ["vs민평","50px"],["YTM","54px"],["수량","42px"],["딜러","96px",true],
+      ["나이","36px"]]);
+    $("tbA").innerHTML = off.length ? off.map((e,i)=>{
+      const f=flash("A|"+e.d+"|"+e.n, String(e.t));
+      const tt=e.ttm==null?"":(e.ttm<1?Math.round(e.ttm*12)+"M":e.ttm.toFixed(1)+"Y");
+      return `<tr class="${f}" title="${esc(e.d)} · ${hms(e.t)}">`+
+        `<td class="i">${i+1}</td><td class="l">${esc(e.n)}</td>`+
+        `<td class="d">${esc(e.cls||"")}</td>`+
+        `<td class="${e.rt_src==="집계"?"d est":"m"}">${esc(e.rt||"")}</td>`+
+        `<td>${tt}</td><td class="d">${esc(e.matd?e.matd.slice(2):"")}</td>`+
+        `<td class="m">${n3(e.mp)}</td>`+
+        `<td class="${cls3(e.bp,true)}">${nbp(e.bp)}</td>`+
+        `<td>${n3(e.ytm)}</td><td class="d">${e.a??""}</td>`+
+        `<td class="l d">${esc(e.d)}</td><td class="d">${ageT(T-e.t)}</td></tr>`;
+    }).join("") : `<tr><td colspan="12" class="empty">살아 있는 오퍼가 없습니다</td></tr>`;
+    return;
+  }
+  const M=meta();
+  $("hA").textContent = cat==="ktb"?"국고 전 종목":cat==="msb"?"통안 전 종목":"국민주택";
+  $("sA").textContent = rows.length+"종 · 만기 순";
+  $("rA").textContent = "호가 참여 "+
+    new Set(M.src.filter(e=>alive(e,"ktb",T)).map(e=>e.k||e.d)).size+"개사";
+  $("thA").innerHTML=head([["#","26px"],["종목",null,true],["연물","36px"],
+    ["만기","70px"],["전일민평","58px"],["오퍼","54px"],["비드","54px"],
+    ["SPD","40px"],["체결","54px"],["Δbp","44px"],["건","32px"],["갱신","38px"]]);
+  $("tbA").innerHTML = rows.length ? rows.map((r,i)=>{
+    const sig=`${r.fa?r.fa.t+":"+r.fa.y:""}|${r.fb?r.fb.t+":"+r.fb.y:""}|${r.fill?r.fill.t:""}`;
+    const f=flash("A|"+r.c,sig);
+    const sp=(r.fa&&r.fb)?((r.fb.y-r.fa.y)*100).toFixed(1):"";
+    const fd=(r.fill&&r.mp!=null)?(r.fill.y-r.mp)*100:null;
+    const d=(r.mid!=null&&r.mp!=null)?(r.mid-r.mp)*100:null;
+    const last=Math.max(r.fa?r.fa.t:0, r.fb?r.fb.t:0, r.fill?r.fill.t:0);
+    const stale=!!(r.mpd && SNAP.mp_date && r.mpd!==String(SNAP.mp_date).slice(0,10));
+    return `<tr class="clk${r.c===sel[cat]?" sel":""}${f}" data-c="${esc(r.c)}">`+
+      `<td class="i">${i+1}</td>`+
+      `<td class="l">${esc(r.nm)}${r.bench?' <span class="bench">지표</span>':""}`+
+      `${r.alias?' <span class="dm">'+esc(r.alias)+"</span>":""}`+
+      `${(r.nq&&!r.npx)?' <span class="dm">레벨 미상</span>':""}</td>`+
+      `<td class="d">${esc(r.ten||"")}</td><td class="d">${esc(String(r.mat||"").slice(2))}</td>`+
+      `<td class="m${stale?" est":""}"`+
+      `${r.mpd?` title="민평 일자 ${esc(r.mpd)}"`:""}>${n3(r.mp)}</td>`+
+      `<td class="ask-t">${r.fa?n3(r.fa.y):""}</td>`+
+      `<td class="bid-t">${r.fb?n3(r.fb.y):""}</td>`+
+      `<td class="amb">${sp}</td>`+
+      `<td class="${cls3(fd)}">${r.fill?n3(r.fill.y):""}</td>`+
+      /* 민평이 그날 것이 아니면 «전일 대비» 가 아니다 — 흐리게 하고 날짜를 붙인다 */
+      `<td class="${cls3(d)}${stale?" est":""}"`+
+      `${stale?` title="민평 ${esc(r.mpd)} 기준 — 전일 대비가 아닙니다"`:""}>`+
+      `${d==null?"":nbp(d)}</td>`+
+      `<td class="d">${r.n||""}</td>`+
+      `<td class="d">${last?ageT(T-last):""}</td></tr>`;
+  }).join("") : `<tr><td colspan="12" class="empty">활동 종목이 없습니다</td></tr>`;
+}
+
+/* ── B: 사다리 / 버킷 ────────────────────────────────────────────────── */
+function renderB(T,rows,bks){
+  if(isCr()){
+    $("hB").textContent="등급 버킷";
+    $("sB").textContent="종별 × 등급";
+    $("thB").innerHTML=head([["종별",null,true],["등급","48px"],["오퍼","44px"],
+      ["중앙bp","56px"],["YTM","56px"],["수요","44px"]]);
+    const all=crAlive(T);
+    let h=`<tr class="clk${sel.cr==="ALL"?" sel":""}" data-b="ALL">`+
+      `<td class="l amb">전체</td><td class="d">—</td><td>${all.length}</td>`+
+      `<td class="${cls3(med(all.map(e=>e.bp)),true)}">${all.length?nbp(med(all.map(e=>e.bp))):""}</td>`+
+      `<td>${n3(med(all.map(e=>e.ytm).filter(v=>v!=null)))}</td>`+
+      `<td class="d">${all.filter(e=>(e.mb||0)>0).length}</td></tr>`;
+    h+=bks.map(b=>`<tr class="clk${sel.cr===b.k?" sel":""}" data-b="${esc(b.k)}">`+
+      `<td class="l">${esc(b.cls)}</td>`+
+      `<td class="${b.est?"d est":"m"}">${esc(b.rt)}</td>`+
+      `<td>${b.n}</td><td class="${cls3(med(b.bps),true)}">${nbp(med(b.bps))}</td>`+
+      `<td>${n3(med(b.ytms))}</td><td class="d">${b.mb||""}</td></tr>`).join("");
+    $("tbB").innerHTML=h;
+    return;
+  }
+  const M=meta(), c=sel[cat];
+  const cur=M.src.filter(e=>e.code===c && alive(e,"ktb",T) && e.y!=null);
+  const [aE,bE]=uncross(cur);
+  const [fa,fb]=bestOf(aE,bE);
+  $("hB").textContent="호가 사다리";
+  $("sB").textContent=aggBp?aggBp+"bp 집계":"원호가";
+  const lv=new Map();
+  for(const e of [...aE,...bE]){
+    const y=binOf(e.y,e.s), L=lv.get(y)||{B:null,S:null};
+    const sd=L[e.s]||{n:0,amt:0,unk:0,fresh:0,who:[]};
+    sd.n++; e.a?sd.amt+=e.a:sd.unk++;
+    sd.fresh=Math.max(sd.fresh,e.t); sd.who.push(e.d);
+    L[e.s]=sd; lv.set(y,L);
+  }
+  const ys=[...lv.keys()].sort((a,b)=>a-b);
+  const asks=ys.filter(y=>lv.get(y).S).map(y=>({y,...lv.get(y).S}));
+  const bids=ys.filter(y=>lv.get(y).B).map(y=>({y,...lv.get(y).B}));
+  /* 누적은 최우선에서 바깥으로: 오퍼는 아래(최고 금리)부터 위로, 비드는 위에서 아래로 */
+  { let n=0,a=0; for(let k=asks.length-1;k>=0;k--){ n+=asks[k].n; a+=asks[k].amt;
+      asks[k].cn=n; asks[k].ca=a; }
+    n=0;a=0; for(const b of bids){ n+=b.n; a+=b.amt; b.cn=n; b.ca=a; } }
+  const mx=Math.max(1,...asks.map(v=>v.cn),...bids.map(v=>v.cn));
+  $("thB").innerHTML=head([["수익률",null],["수량 억","70px"],["Σ 억","64px"],
+    ["건","34px"],["갱신","40px"]]);
+  const row=(e,side)=>{
+    const f=flash("B|"+c+"|"+side+"|"+e.y, `${e.n}|${e.amt}|${e.fresh}`);
+    return `<tr class="${side}${f}" style="--d:${Math.round(100*e.cn/mx)}"`+
+      ` title="${esc(e.who.join(", "))}">`+
+      `<td class="y">${e.y.toFixed(3)}</td>`+
+      `<td>${e.amt?e.amt.toLocaleString():""}${e.unk?(e.amt?"+?":"?"):""}</td>`+
+      `<td class="m">${e.ca?e.ca.toLocaleString():""}</td>`+
+      `<td class="d">${e.cn}</td><td class="d">${ageT(T-e.fresh)}</td></tr>`;
+  };
+  let h=asks.map(e=>row(e,"ask")).join("");
+  if(fa&&fb) h+=`<tr class="sp"><td>${((fb.y-fa.y)*100).toFixed(1)}bp</td>`+
+    `<td colspan="4" class="l">스프레드 · mid ${n3((fa.y+fb.y)/2)}</td></tr>`;
+  h+=bids.map(e=>row(e,"bid")).join("");
+  $("tbB").innerHTML=h||`<tr><td colspan="5" class="empty">살아 있는 호가가 없습니다</td></tr>`;
+}
+
+/* ── C: 선택 종목 체결 ───────────────────────────────────────────────── */
+const SIDE = s => s==="B" ? '<span class="bB">매수</span>'
+              : s==="S" ? '<span class="bS">매도</span>' : '<span class="bN">—</span>';
+function renderC(T){
+  const tp=SNAP.tape||[];
+  if(isCr()){
+    const rows=tp.filter(e=>e.sec==="크레딧/기타");
+    $("hC").textContent="크레딧 체결"; $("sC").textContent="CONFIRM";
+    $("rC").textContent=rows.length+"건";
+    $("thC").innerHTML=head([["시각","62px"],["종목",null,true],["방향","46px"],
+      ["딜러","104px",true]]);
+    $("tbC").innerHTML=rows.length?rows.map(e=>
+      `<tr title="${esc(e.raw)}"><td class="d">${hms(e.t)}</td>`+
+      `<td class="l">${esc(e.n||"")}</td><td>${SIDE(e.s)}</td>`+
+      `<td class="l d">${esc(e.d)}</td></tr>`).join("")
+      :`<tr><td colspan="4" class="empty">아직 확정된 크레딧 체결 없음</td></tr>`;
+    return;
+  }
+  const c=sel[cat];
+  const rows=tp.filter(e=>e.code===c);
+  $("hC").textContent="체결 (선택 종목)";
+  $("sC").textContent=(meta().names[c]||c||"");
+  $("rC").textContent=rows.length+"건";
+  $("thC").innerHTML=head([["시각","62px"],["방향","46px"],["수익률","58px"],
+    ["수량","42px"],["딜러",null,true]]);
+  $("tbC").innerHTML=rows.length?rows.map(e=>{
+    const mp=meta().mp[c], d=(e.y!=null&&mp!=null)?(e.y-mp)*100:null;
+    return `<tr title="${esc(e.raw)}"><td class="d">${hms(e.t)}</td>`+
+      `<td>${SIDE(e.s)}</td><td class="${cls3(d)}">${n3(e.y)}</td>`+
+      `<td class="d">${e.a??""}</td><td class="l d">${esc(e.d)}</td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="empty">이 종목의 확정 체결 없음</td></tr>`;
+}
+
+/* ── F: 체결 테이프 (전체) ───────────────────────────────────────────── */
+function renderF(T){
+  const rows=(SNAP.tape||[]);
+  $("rF").textContent=rows.length+"건 · 내용 없는 확인 "+(SNAP.n_ack||0);
+  $("thF").innerHTML=head([["시각","62px"],["종별","54px"],["방향","46px"],
+    ["종목","168px",true],["수익률","58px"],["수량","42px"],["딜러","112px",true],
+    ["원문",null,true]]);
+  $("tbF").innerHTML=rows.length?rows.map(e=>
+    `<tr title="${esc(e.raw)}"><td class="d">${hms(e.t)}</td>`+
+    `<td class="d">${esc(e.sec)}</td><td>${SIDE(e.s)}</td>`+
+    `<td class="l">${esc(e.n||"")}</td><td>${n3(e.y)}</td>`+
+    `<td class="d">${e.a??""}</td><td class="l m">${esc(e.d)}</td>`+
+    `<td class="l d">${esc(e.raw)}</td></tr>`).join("")
+    :`<tr><td colspan="8" class="empty">아직 확정 체결 없음</td></tr>`;
+}
+
+/* ── G: 매수 니즈 ────────────────────────────────────────────────────── */
+function renderG(T){
+  const rows=(isCr()?crNeeds(T):(SNAP.baskets||[]).filter(e=>alive(e,"credit",T)))
+    .slice().sort((a,b)=>b.t-a.t);
+  $("rG").textContent=rows.length+"건";
+  $("thG").innerHTML=head([["시각","62px"],["잔존","78px"],["섹터",null,true],
+    ["등급","46px"],["수량","42px"],["딜러","104px",true],["매칭","46px"]]);
+  $("tbG").innerHTML=rows.length?rows.map(e=>{
+    const rng=(e.hi!=null&&e.hi!==e.lo)?`${e.lo}~${e.hi}`:`${e.lo}`;
+    const bo=e.bo?` · 베스트 ${nbp(e.bo.bp)} ${e.bo.n}`:"";
+    return `<tr title="${esc((e.sec||"")+bo)}"><td class="d">${hms(e.t)}</td>`+
+      `<td>${rng}Y</td><td class="l">${esc(e.sec||"전체")}</td>`+
+      `<td class="m">${esc(e.rt||"")}</td><td class="d">${e.a??""}</td>`+
+      `<td class="l d">${esc(e.d)}</td>`+
+      `<td class="${e.ms?"up":"d"}">${e.ms?e.ms+"건":"—"}</td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="empty">활성 니즈 없음</td></tr>`;
+}
+
+/* ── H: 지표 커브 / 등급 요약 ────────────────────────────────────────── */
+/* 연물 하나에 한 줄. ★지표지정물이 곧 오늘 도는 물건은 아니다 — 2026-09-02 에
+   지표 7종의 호가는 전부 0~1건이고, 실제로 돈 것은 갓 입찰된 26-7·26-9 였다.
+   그래서 «그 연물에서 오늘 가장 활발한 종목» 을 세우고, 활동이 없으면
+   지표물을 민평만이라도 세운다(커브의 자리를 비우지 않는다). */
+function curveRows(T,M){
+  if(cat==="nhb") return bondRows(T);
+  const byT=new Map();
+  for(const r of bondRows(T)){
+    const t=parseFloat(r.ten); if(!t) continue;
+    const cur=byT.get(t);
+    /* 같은 연물 안에서는 «가장 나중 만기» = 가장 최근 발행분(온더런에 가장 가깝다).
+       만기가 같으면 활동량으로 가른다. */
+    const key=x=>String(x.mat||"")+"|"+String(x.hn).padStart(6,"0");
+    if(!cur || key(r)>key(cur)) byT.set(t,r);
+  }
+  for(const c of (M.bench||[])){
+    const t=parseFloat(tenOf(c,M)); if(!t || byT.has(t)) continue;
+    const h=(SNAP.hist||{})[c]||[];
+    byT.set(t,{c, nm:nameOf(c,M), ten:tenOf(c,M), alias:M.alias[c], bench:true,
+               mp:M.mp[c], fa:null, fb:null, mat:matOf(c,M),
+               mid:h.length?h[h.length-1][1]:null});
+  }
+  return [...byT.entries()].sort((a,b)=>a[0]-b[0]).map(e=>e[1]);
+}
+function renderH(T,rows,bks){
+  if(isCr()){
+    $("hH").textContent="등급 요약"; $("sH").textContent="전 종별 합산";
+    const m=new Map();
+    for(const e of crAlive(T)){ const r=e.rt||"미상";
+      if(!m.has(r)) m.set(r,{r,n:0,bps:[],ytms:[]});
+      const b=m.get(r); b.n++; b.bps.push(e.bp); if(e.ytm!=null) b.ytms.push(e.ytm); }
+    const arr=[...m.values()].sort((a,b)=>RTORD.indexOf(a.r)-RTORD.indexOf(b.r));
+    $("thH").innerHTML=head([["등급",null,true],["오퍼","40px"],["최저bp","50px"],
+      ["중앙bp","50px"],["최고bp","50px"],["YTM","54px"]]);
+    $("tbH").innerHTML=arr.length?arr.map(b=>
+      `<tr><td class="l">${esc(b.r)}</td><td>${b.n}</td>`+
+      `<td class="d">${nbp(Math.min(...b.bps))}</td>`+
+      `<td class="${cls3(med(b.bps),true)}">${nbp(med(b.bps))}</td>`+
+      `<td class="d">${nbp(Math.max(...b.bps))}</td>`+
+      `<td>${n3(med(b.ytms))}</td></tr>`).join("")
+      :`<tr><td colspan="6" class="empty">—</td></tr>`;
+    return;
+  }
+  const M=meta();
+  $("hH").textContent="지표 커브";
+  $("sH").textContent = cat==="nhb"?"사다리 칸":"연물별 최활발 · 없으면 지표물";
+  const src = curveRows(T,M);
+  $("thH").innerHTML=head([["연물","36px"],["종목",null,true],["잔존","44px"],
+    ["전일민평","56px"],["mid","54px"],["Δbp","44px"]]);
+  $("tbH").innerHTML=src.length?src.map(r=>{
+    const d=(r.mid!=null&&r.mp!=null)?(r.mid-r.mp)*100:null;
+    const ttm=yearsTo(r.mat);
+    return `<tr class="clk${r.c===sel[cat]?" sel":""}" data-c="${esc(r.c)}">`+
+      `<td class="d">${esc(r.ten||r.alias||"")}</td>`+
+      `<td class="l" title="${esc(r.nm)}">${esc(cat==="msb"?(r.alias||r.c):r.c)}`+
+      `${r.bench?' <span class="bench">지표</span>':""}</td>`+
+      `<td class="d">${ttm==null?"":ttm.toFixed(1)+"Y"}</td>`+
+      `<td class="m">${n3(r.mp)}</td>`+
+      `<td>${n3(r.mid)}</td><td class="${cls3(d)}">${d==null?"":nbp(d)}</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">—</td></tr>`;
+}
+
+/* ── 캔버스 ──────────────────────────────────────────────────────────── */
+const CG="#1C1C1C", CT="#6A6A6A", CA="#FF9E1B", CC="#3FB6E8";
+function setup(cv){
+  const r = window.devicePixelRatio>1 ? 2 : 1;
+  const w = cv.clientWidth||10, h = cv.clientHeight||10;
+  cv.width=w*r; cv.height=h*r;
+  const x=cv.getContext("2d"); x.setTransform(r,0,0,r,0,0);
+  x.clearRect(0,0,w,h);
+  x.font='10.5px "IBM Plex Mono", Consolas, monospace';
+  x.textBaseline="alphabetic";
+  return [x,w,h];
+}
+function msg(x,W,H,s){ x.fillStyle=CT; x.fillText(s,8,18); }
+function vline(x,px,y0,y1,col,dash){ x.save(); x.strokeStyle=col; x.lineWidth=1;
+  if(dash) x.setLineDash(dash);
+  x.beginPath(); x.moveTo(Math.round(px)+.5,y0); x.lineTo(Math.round(px)+.5,y1); x.stroke(); x.restore(); }
+function hline(x,py,x0,x1,col,dash){ x.save(); x.strokeStyle=col; x.lineWidth=1;
+  if(dash) x.setLineDash(dash);
+  x.beginPath(); x.moveTo(x0,Math.round(py)+.5); x.lineTo(x1,Math.round(py)+.5); x.stroke(); x.restore(); }
+
+function drawD(T){
+  const [x,W,H]=setup($("cvD"));
+  if(!SNAP) return;
+  if(isCr()) drawCurve(x,W,H,T); else drawPx(x,W,H,T);
+}
+function drawE(T){
+  const [x,W,H]=setup($("cvE"));
+  if(!SNAP) return;
+  if(isCr()) drawBars(x,W,H,T); else drawDepth(x,W,H,T);
+}
+
+function drawPx(x,W,H,T){
+  const c=sel[cat], M=meta(), mp=M.mp[c];
+  const h=((SNAP.hist||{})[c]||[]).filter(p=>p[0]<=T);
+  geoD=null;
+  if(h.length<2){ msg(x,W,H,"mid 이력 축적 중 — 양방향 호가가 있어야 표본이 쌓입니다"); return; }
+  const L=6,R=46,TP=8,B=15;
+  let t0=h[0][0], t1=Math.max(h[h.length-1][0],T);
+  if(t1-t0<1800) t1=t0+1800;
+  const vs=h.map(p=>p[1]).concat(mp!=null?[mp]:[]);
+  let lo=Math.min(...vs), hi=Math.max(...vs);
+  if(hi-lo<0.03){ const m=(hi+lo)/2; lo=m-0.015; hi=m+0.015; }
+  const pd=(hi-lo)*0.12; lo-=pd; hi+=pd;
+  const X=t=>L+(W-L-R)*(t-t0)/(t1-t0), Y=v=>TP+(H-TP-B)*(1-(v-lo)/(hi-lo));
+  /* 격자 */
+  x.fillStyle=CT;
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4;
+    hline(x,Y(v),L,W-R,CG); x.fillText(v.toFixed(3),W-R+4,Y(v)+3); }
+  const span=t1-t0, step=span<=7200?1800:3600;
+  for(let s=Math.ceil(t0/step)*step; s<=t1; s+=step){
+    vline(x,X(s),TP,H-B,CG); x.fillText(hm(s),X(s)-13,H-4); }
+  /* 전일 민평 */
+  if(mp!=null && mp>lo && mp<hi){
+    hline(x,Y(mp),L,W-R,"#7A5A18",[4,3]);
+    x.fillStyle="#A87A22"; x.fillText("MP "+n3(mp),L+3,Y(mp)-3);
+  }
+  /* 시세선 + 옅은 면 */
+  x.beginPath(); h.forEach((p,i)=> i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));
+  x.lineTo(X(h[h.length-1][0]),H-B); x.lineTo(X(h[0][0]),H-B); x.closePath();
+  x.fillStyle="rgba(255,158,27,.10)"; x.fill();
+  x.beginPath(); h.forEach((p,i)=> i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));
+  x.strokeStyle=CA; x.lineWidth=1.4; x.stroke();
+  /* 고 · 저 */
+  let hiP=h[0], loP=h[0];
+  for(const p of h){ if(p[1]>hiP[1]) hiP=p; if(p[1]<loP[1]) loP=p; }
+  x.fillStyle=CT;
+  x.fillText("H "+n3(hiP[1]),Math.min(X(hiP[0])+4,W-R-58),Y(hiP[1])-3);
+  x.fillText("L "+n3(loP[1]),Math.min(X(loP[0])+4,W-R-58),Y(loP[1])+11);
+  /* 마지막 값 */
+  const last=h[h.length-1];
+  x.fillStyle=CA; x.fillRect(X(last[0])-2,Y(last[1])-2,4,4);
+  hline(x,Y(last[1]),W-R-2,W-1,CA);
+  x.fillStyle="#000"; x.fillRect(W-R+1,Y(last[1])-7,R-1,13);
+  x.fillStyle=CA; x.fillText(n3(last[1]),W-R+4,Y(last[1])+3);
+  /* 체결 */
+  const fl=M.fills[c];
+  if(fl && fl.t>=t0 && fl.t<=t1 && fl.y>lo && fl.y<hi){
+    x.strokeStyle="#FFFFFF"; x.lineWidth=1;
+    x.beginPath(); x.arc(X(fl.t),Y(fl.y),3.5,0,7); x.stroke();
+    x.fillStyle="#CCCCCC"; x.fillText("체결 "+n3(fl.y),X(fl.t)+6,Y(fl.y)-4);
+  }
+  geoD={X,Y,t0,t1,lo,hi,L,R,TP,B,W,H,h};
+  /* 십자선 */
+  if(hov){
+    const t=t0+(t1-t0)*(hov.x-L)/(W-L-R);
+    let np=h[0]; for(const p of h) if(Math.abs(p[0]-t)<Math.abs(np[0]-t)) np=p;
+    vline(x,X(np[0]),TP,H-B,"#556",[2,2]);
+    hline(x,hov.y,L,W-R,"#556",[2,2]);
+    const d=(mp!=null)?(np[1]-mp)*100:null;
+    const s=`${hm(np[0])}  ${n3(np[1])}${d==null?"":"  "+nbp(d)+"bp"}`;
+    const w=x.measureText(s).width+8;
+    const bx=Math.min(Math.max(X(np[0])-w/2,L),W-R-w);
+    x.fillStyle="#101010"; x.fillRect(bx,TP,w,14);
+    x.strokeStyle="#3A3A3A"; x.strokeRect(bx+.5,TP+.5,w,14);
+    x.fillStyle="#E6E6E6"; x.fillText(s,bx+4,TP+11);
+  }
+}
+
+function drawDepth(x,W,H,T){
+  const c=sel[cat], M=meta();
+  const cur=M.src.filter(e=>e.code===c && alive(e,"ktb",T) && e.y!=null);
+  const [aE,bE]=uncross(cur), [fa,fb]=bestOf(aE,bE);
+  if(!aE.length && !bE.length){ msg(x,W,H,"살아 있는 호가가 없습니다"); return; }
+  const lv=new Map();
+  for(const e of [...aE,...bE]){ const y=binOf(e.y,e.s);
+    const L2=lv.get(y)||{B:{n:0,a:0},S:{n:0,a:0}};
+    L2[e.s].n++; L2[e.s].a += (e.a||0); lv.set(y,L2); }
+  const ys=[...lv.keys()].sort((a,b)=>a-b);
+  /* ★깊이의 잣대. 수량은 문면에 없을 때가 잦다(«845-» 처럼 레벨만 적는다).
+     한 칸이라도 수량을 모르면 «억» 으로 그릴 수 없다 — 그 칸이 0 이 되어
+     통째로 사라진다(2026-09-03 실측: 25-8 오퍼가 이렇게 없어졌다).
+     전 칸이 수량을 알 때만 억으로, 아니면 호가 «건수» 로 그린다. */
+  const allA=[...lv.values()].every(v=>(!v.S.n||v.S.a>0)&&(!v.B.n||v.B.a>0));
+  const val=o=>allA?o.a:o.n, unit=allA?"억":"건";
+  const asks=ys.filter(y=>lv.get(y).S.n).map(y=>({y,v:val(lv.get(y).S)}));
+  const bids=ys.filter(y=>lv.get(y).B.n).map(y=>({y,v:val(lv.get(y).B)}));
+  /* 누적은 최우선에서 바깥으로 */
+  asks.sort((a,b)=>b.y-a.y); bids.sort((a,b)=>a.y-b.y);
+  let s=0; for(const a of asks){ s+=a.v; a.c=s; }
+  s=0; for(const b of bids){ s+=b.v; b.c=s; }
+  const totA=asks.length?asks[asks.length-1].c:0, totB=bids.length?bids[bids.length-1].c:0;
+  const maxC=Math.max(1,totA,totB);
+  const mid=(fa&&fb)?(fa.y+fb.y)/2:(ys[0]+ys[ys.length-1])/2;
+  const rad=Math.max(mid-ys[0], ys[ys.length-1]-mid, (aggBp||0.5)/100*3)*1.18;
+  const L=6,R=48,TP=24,B=15;
+  const X=y=>L+(W-L-R)*((y-(mid-rad))/(2*rad)), Y=v=>TP+(H-TP-B)*(1-v/maxC);
+  /* 축 */
+  x.fillStyle=CT;
+  for(let i=0;i<=3;i++){ const v=maxC*i/3;
+    hline(x,Y(v),L,W-R,CG); x.fillText(Math.round(v),W-R+4,Y(v)+3); }
+  for(let i=0;i<=4;i++){ const y=mid-rad+2*rad*i/4;
+    vline(x,X(y),TP,H-B,CG); x.fillText(y.toFixed(3),X(y)-13,H-4); }
+
+  /* 계단 면. ★상승은 «그 레벨 가격» 에서 일어난다 — mid 에서 세우면 스프레드
+     구간에 없는 물량이 채워진다. 스프레드는 빈칸으로 보여야 한다. */
+  const step=(arr,col,fill,edge)=>{
+    if(!arr.length) return;
+    const xs=arr.map(p=>X(p.y)), pts=[[xs[0],0]];
+    for(let i=0;i<arr.length;i++){
+      pts.push([xs[i],arr[i].c]);
+      pts.push([i+1<arr.length?xs[i+1]:edge, arr[i].c]);
+    }
+    x.beginPath(); x.moveTo(pts[0][0],Y(0));
+    for(const [px,c] of pts) x.lineTo(px,Y(c));
+    x.lineTo(pts[pts.length-1][0],Y(0)); x.closePath();
+    x.fillStyle=fill; x.fill();
+    x.beginPath();
+    pts.forEach(([px,c],i)=> i?x.lineTo(px,Y(c)):x.moveTo(px,Y(c)));
+    x.strokeStyle=col; x.lineWidth=1.2; x.stroke();
+  };
+  step(asks,"#FF5A5A","rgba(255,90,90,.16)",L);      /* 오퍼는 왼쪽(낮은 금리)으로 */
+  step(bids,"#4EE07E","rgba(78,224,126,.16)",W-R);   /* 비드는 오른쪽(높은 금리)으로 */
+  /* mid + 스프레드 — 양쪽이 다 있을 때만 «mid» 를 긋는다 */
+  const twoSided=!!(fa&&fb);
+  if(twoSided) vline(x,X(mid),TP-4,H-B,CA,[3,3]);
+  /* 머리 줄: 왼쪽 오퍼 합 · 가운데 mid/SPD · 오른쪽 비드 합. 겹치면 가운데를 뺀다. */
+  const lt=`오퍼 누적 ${totA}${unit}`, rt=`비드 누적 ${totB}${unit}`;
+  const ct = twoSided ? `mid ${n3(mid)} · SPD ${((fb.y-fa.y)*100).toFixed(1)}bp`
+                      : (asks.length ? "오퍼만 있습니다 — mid 없음"
+                                     : "비드만 있습니다 — mid 없음");
+  const wl=x.measureText(lt).width, wr=x.measureText(rt).width, wc=x.measureText(ct).width;
+  x.fillStyle="#FF5A5A"; x.fillText(lt,L+2,11);
+  x.fillStyle="#4EE07E"; x.fillText(rt,W-R-wr-2,11);
+  if(L+wl+8 < (W-R-wr-8) - wc){
+    x.fillStyle=CA;
+    x.fillText(ct,Math.min(Math.max(X(mid)-wc/2,L+wl+8),W-R-wr-8-wc),11);
+  } else { x.fillStyle=CA; x.fillText(ct,L+2,22); }
+}
+
+const yearsTo = s => { if(!s) return null;
+  const d=Date.parse(s+"T00:00:00"), b=Date.parse((SNAP.date||"")+"T00:00:00");
+  return (isNaN(d)||isNaN(b))?null:(d-b)/(365.25*864e5); };
+
+function drawCurve(x,W,H,T){
+  const off=crSel(T).filter(e=>e.ttm!=null&&e.ytm!=null);
+  const bench=(SNAP.bench||[]).map(c=>({c,mp:(SNAP.mp||{})[c],ttm:yearsTo((SNAP.mats||{})[c])}))
+    .filter(o=>o.mp!=null&&o.ttm!=null&&o.ttm>0).sort((a,b)=>a.ttm-b.ttm);
+  if(!off.length){ msg(x,W,H,"잔존·YTM 을 아는 오퍼가 없습니다"); return; }
+  const L=6,R=42,TP=8,B=15;
+  /* ★x 범위는 «오퍼» 가 정한다. 국고 지표에는 50년물이 있어서 같이 넣으면
+     크레딧 점이 전부 왼쪽 끝에 뭉친다(오늘 오퍼 최장 잔존 4.7년). */
+  let x1=(off.length?Math.max(...off.map(e=>e.ttm)):10)*1.10;
+  x1=Math.max(x1,1);
+  const bn=bench.filter(o=>o.ttm<=x1*1.02);
+  const vs=off.map(e=>e.ytm).concat(bn.map(o=>o.mp));
+  let x0=0;
+  let lo=Math.min(...vs), hi=Math.max(...vs);
+  if(hi-lo<0.1){ const m=(hi+lo)/2; lo=m-0.05; hi=m+0.05; }
+  const pd=(hi-lo)*0.12; lo-=pd; hi+=pd;
+  const X=v=>L+(W-L-R)*(v-x0)/(x1-x0), Y=v=>TP+(H-TP-B)*(1-(v-lo)/(hi-lo));
+  x.fillStyle=CT;
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4;
+    hline(x,Y(v),L,W-R,CG); x.fillText(v.toFixed(2),W-R+4,Y(v)+3); }
+  for(let i=0;i<=5;i++){ const v=x0+(x1-x0)*i/5;
+    vline(x,X(v),TP,H-B,CG); x.fillText(v.toFixed(1)+"Y",X(v)-8,H-4); }
+  if(bn.length>1){
+    x.beginPath(); bn.forEach((o,i)=> i?x.lineTo(X(o.ttm),Y(o.mp)):x.moveTo(X(o.ttm),Y(o.mp)));
+    x.strokeStyle=CC; x.lineWidth=1.2; x.stroke();
+    x.fillStyle=CC;
+    for(const o of bn) x.fillRect(X(o.ttm)-1.5,Y(o.mp)-1.5,3,3);
+    x.fillText("국고 지표 커브(전일 민평)",L+3,TP+10);
+  }
+  for(const e of off){
+    const r=Math.max(2, Math.min(5, 2+(e.a||0)/60));
+    x.fillStyle = (e.mb||0)>0 ? "#4EE07E" : CA;
+    x.beginPath(); x.arc(X(e.ttm),Y(e.ytm),r,0,7); x.fill();
+  }
+  const lab=off.slice().sort((a,b)=>b.bp-a.bp).slice(0,5);
+  x.fillStyle="#BBBBBB";
+  for(const e of lab) x.fillText(e.n,Math.min(X(e.ttm)+5,W-R-x.measureText(e.n).width),Y(e.ytm)-4);
+  x.fillStyle=CT; x.fillText("● 오퍼 (초록 = 수요 매칭) · 크기 = 수량",L+3,H-B-4);
+}
+
+function drawBars(x,W,H,T){
+  const off=crSel(T).slice().sort((a,b)=>b.bp-a.bp);
+  if(!off.length){ msg(x,W,H,"오퍼 없음"); return; }
+  const L=6,R=6,TP=14,B=6, rowH=13;
+  const n=Math.min(off.length, Math.floor((H-TP-B)/rowH));
+  const mx=Math.max(...off.map(e=>Math.abs(e.bp)),1);
+  const nameW=Math.min(110,W*0.32), barX=L+nameW+4, barW=W-R-barX-34;
+  x.fillStyle=CT; x.fillText(`민평 대비 bp — 상위 ${n} / ${off.length}건`,L,10);
+  for(let i=0;i<n;i++){
+    const e=off[i], y=TP+i*rowH;
+    x.fillStyle="#BBBBBB";
+    let nm=e.n; while(x.measureText(nm).width>nameW-2 && nm.length>2) nm=nm.slice(0,-1);
+    x.fillText(nm,L,y+9);
+    const w=Math.max(1,barW*Math.abs(e.bp)/mx);
+    x.fillStyle = e.bp>=0 ? "rgba(255,90,90,.55)" : "rgba(78,224,126,.55)";
+    x.fillRect(barX,y+2,w,8);
+    x.fillStyle = e.bp>=0 ? "#FF5A5A" : "#4EE07E";
+    x.fillText(nbp(e.bp),barX+w+4,y+9);
+  }
+}
+
+/* ── 그리기 ──────────────────────────────────────────────────────────── */
+function render(){
+  if(!SNAP) return;
+  const T=nowSec();
+  const {rows,bks}=ensureSel(T);
+  renderCmd(T,rows,bks); renderStat(T,rows,bks);
+  renderA(T,rows,bks); renderB(T,rows,bks); renderC(T);
+  renderF(T); renderG(T); renderH(T,rows,bks);
+  const inm = isCr() ? (sel.cr==="ALL"?"크레딧 전체":sel.cr.replace("|"," "))
+                     : ((rows.find(r=>r.c===sel[cat])||{}).nm||"");
+  $("hD").textContent = isCr()?"커브":"시세";
+  $("sD").textContent = isCr()?"잔존 × YTM":inm+" · mid 10초 표본";
+  $("hE").textContent = isCr()?"민평 대비":"심도";
+  $("sE").textContent = isCr()?"오퍼 스프레드":inm+" · 누적";
+  drawD(T); drawE(T);
+  $("rep").hidden=!SNAP.replay;
+  const au=SNAP.auction;
+  $("foot").textContent =
+    `민평 ${String(SNAP.mp_date||"?").slice(0,10)} 기준 · 절대값 교체 · 무크로스(어긋난 쌍 중 오래된 쪽 제거) · `+
+    `활성 = 국고·통안·국주 30분 / 크레딧 2시간 · 최우선·스프레드는 항상 최신 기준 · `+
+    `증감 색 = 가격 기준(금리 하락 = 초록) · 국민주택 값은 문면 민평 기준 복원 · `+
+    (au&&au.code ? `오늘은 국채 입찰일 — 국딱은 ${au.name||au.code} 로 붙였습니다(판별 적중 93.2%) · ` : "")+
+    `국당 계열은 입찰일과 무관하게 국민주택(적중 87%) · 보이는 것만의 책`;
+  if(au && au.code){
+    const t = `국채 입찰일 · 국딱 = ${au.name||au.code}`;
+    if(cat==="ktb") $("sA").innerHTML=`${rows.length}종 · 만기 순 <span class="warn">${esc(t)}</span>`;
+    if(cat==="nhb") $("sA").innerHTML=
+      `${rows.length}종 <span class="warn">국채 입찰일 — 국딱은 국채, 국당 계열은 국민주택</span>`;
+  }
+}
+
+/* ── 상태 줄 ─────────────────────────────────────────────────────────── */
+setInterval(()=>{
+  const d=new Date();
+  $("clk").textContent=`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  const hb=(Date.now()-lastHb)/1000, da=(Date.now()-lastData)/1000;
+  const st=$("state");
+  if(lastHb===0||hb>12){ st.textContent="끊김"; st.className="st bad"; }
+  else { st.textContent="LIVE"; st.className="st"; }
+  $("age").textContent=lastData?`호가 ${da<2?"방금":Math.floor(da)+"초 전"}`:"";
+},1000);
+
+/* ── 컨트롤 ──────────────────────────────────────────────────────────── */
+for(const b of document.querySelectorAll(".cat"))
+  b.addEventListener("click",()=>{ cat=b.dataset.k; prevSig={}; hov=null;
+    $("dd").classList.remove("open"); render(); });
+$("instr").addEventListener("click",e=>{
+  const r=$("instr").getBoundingClientRect();
+  $("dd").style.left=Math.round(r.left)+"px";
+  $("dd").classList.toggle("open"); e.stopPropagation(); });
+$("dd").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-c],button[data-b]"); if(!b) return;
+  if(b.dataset.c!==undefined) sel[cat]=b.dataset.c; else sel.cr=b.dataset.b;
+  prevSig={}; $("dd").classList.remove("open"); render(); });
+document.addEventListener("click",e=>{
+  if(!e.target.closest("#instr,#dd")) $("dd").classList.remove("open"); });
+$("agg").addEventListener("change",e=>{ aggBp=parseFloat(e.target.value); prevSig={}; render(); });
+$("ttl").addEventListener("change",e=>{ ttlMode=e.target.value; prevSig={}; render(); });
+for(const id of ["tbA","tbB","tbH"]) $(id).addEventListener("click",e=>{
+  const tr=e.target.closest("tr[data-c],tr[data-b]"); if(!tr) return;
+  if(tr.dataset.c!==undefined) sel[cat]=tr.dataset.c; else sel.cr=tr.dataset.b;
+  prevSig={}; render(); });
+$("cvD").addEventListener("mousemove",e=>{
+  const r=$("cvD").getBoundingClientRect();
+  hov={x:e.clientX-r.left, y:e.clientY-r.top}; drawD(nowSec()); });
+$("cvD").addEventListener("mouseleave",()=>{ hov=null; drawD(nowSec()); });
+window.addEventListener("keydown",e=>{
+  if(e.target.tagName==="SELECT") return;
+  const i=CATS.findIndex(c=>c[0]===cat);
+  if(e.key==="["||e.key==="ArrowLeft"&&e.altKey){ cat=CATS[(i+3)%4][0]; render(); }
+  if(e.key==="]"||e.key==="ArrowRight"&&e.altKey){ cat=CATS[(i+1)%4][0]; render(); }
+  if(e.key==="Escape") $("dd").classList.remove("open");
+});
+window.addEventListener("resize",()=>{ const T=nowSec(); drawD(T); drawE(T); });
+
+/* ── SSE ─────────────────────────────────────────────────────────────── */
+function setSrvNow(){ const p=String((SNAP||{}).now||"").split(":");
+  if(p.length===3) srvNow=(+p[0])*3600+(+p[1])*60+(+p[2]); }
+function connect(){
+  const es=new EventSource("/events");
+  es.onmessage=ev=>{ SNAP=JSON.parse(ev.data); lastHb=lastData=Date.now(); setSrvNow(); render(); };
+  es.addEventListener("hb",()=>{ lastHb=Date.now(); });
+  es.onerror=()=>{ es.close(); setTimeout(connect,3000); };
+}
+connect();
+setInterval(()=>{ if(Date.now()-lastHb>15000) fetch("/book.json",{cache:"no-store"})
+  .then(r=>r.json()).then(j=>{ SNAP=j; lastData=lastHb=Date.now(); setSrvNow(); render(); })
+  .catch(()=>{}); }, 6000);
+setInterval(()=>{ if(SNAP) render(); }, 20000);
+</script>
+</body></html>
