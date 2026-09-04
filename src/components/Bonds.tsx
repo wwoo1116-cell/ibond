@@ -11,7 +11,6 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 
-import { HStack, VStack } from '@coinbase/cds-web/layout';
 import { Text } from '@coinbase/cds-web/typography';
 
 import { getView } from '@/lib/api';
@@ -229,7 +228,12 @@ function PxChart({ px }: { px: NonNullable<View['px']> }) {
   );
 }
 
-export function Bonds({ lane, ttl, feed = [] }: { lane: Lane; ttl: TtlMode; feed?: FeedRow[] }) {
+export function Bonds({ lane, ttl, onTtl, feed = [] }: {
+  lane: Lane;
+  ttl: TtlMode;
+  onTtl?: (t: TtlMode) => void;
+  feed?: FeedRow[];
+}) {
   const [v, setV] = useState<View | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [agg, setAgg] = useState(0);
@@ -249,6 +253,12 @@ export function Bonds({ lane, ttl, feed = [] }: { lane: Lane; ttl: TtlMode; feed
       setErr(e instanceof Error ? e.message : '실패');
     }
   }, [lane, ttl, code, agg]);
+
+  /* ★레인이 바뀌면 고른 종목을 놓는다. 안 놓으면 통안에서 고른 코드가 국민주택에
+     그대로 남아 «헤더는 —, 메시지는 남의 종목» 이 된다(실측 2026-09-04). */
+  useEffect(() => {
+    setCode(null);
+  }, [lane]);
 
   useEffect(() => {
     void pull();
@@ -276,17 +286,25 @@ export function Bonds({ lane, ttl, feed = [] }: { lane: Lane; ttl: TtlMode; feed
           {rows.map((r) => (
             <button
               key={r.c}
-              className={`kb-li${r.c === code ? ' on' : ''}${r.today ? '' : ' mut'}`}
+              className={`kb-li2${r.c === code ? ' on' : ''}${r.today ? '' : ' mut'}`}
               onClick={() => setCode(r.c)}
             >
+              {/* 두 줄 — 옛 화면과 같다. 한 줄에 밀어 넣으면 배지가 잘린다(실측). */}
               <span className="nm">
                 {r.nm}
+                {/* ★통안은 딜러가 «구구삼통»·«구통» 으로 부른다 — 만기 표기보다 이 이름이
+                    먼저 읽힌다. 옛 화면도 배지로 달아 둔다. */}
+                {r.alias ? <b className="kb-badge al">{r.alias}</b> : null}
                 {r.bench ? <b className="kb-badge">지표</b> : null}
                 {r.next ? <b className="kb-badge">차기</b> : null}
               </span>
-              <span className="ten">{r.ten}</span>
-              <span className="num">{n3(r.mid)}</span>
-              <span className="num kb-n">
+              <span className="v">{n3(r.mid)}</span>
+              <span className="sub">
+                {r.ten}
+                {r.mat ? ` · ${r.mat}` : ''}
+                {r.n ? ` · ${r.n}건` : ''}
+              </span>
+              <span className={`d ${r.mid != null && r.mp != null && r.mid < r.mp ? 'sr-down' : 'sr-up'}`}>
                 {r.mid != null && r.mp != null ? sbp((r.mid - r.mp) * 100) : ''}
               </span>
             </button>
@@ -298,7 +316,10 @@ export function Bonds({ lane, ttl, feed = [] }: { lane: Lane; ttl: TtlMode; feed
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">{sel?.nm ?? '—'}</Text>
-            <Text as="span" font="legal" color="fgMuted">{sel?.full ?? ''}</Text>
+            {sel?.alias ? <b className="kb-badge al">{sel.alias}</b> : null}
+            <Text as="span" font="legal" color="fgMuted">
+              {sel?.full && sel.full !== sel.nm ? sel.full : (sel?.ten ?? '')}
+            </Text>
           </div>
           <div className="kb-big">{n3(sel?.mid)}</div>
           <div className="kb-sub">
@@ -306,33 +327,34 @@ export function Bonds({ lane, ttl, feed = [] }: { lane: Lane; ttl: TtlMode; feed
               ? `민평 ${n3(sel.mp)} 대비 ${sbp((sel.mid - sel.mp) * 100)}`
               : '민평 대비를 낼 수 없습니다'}
           </div>
-          <VStack gap={1} className="kb-kv">
-            <HStack justifyContent="space-between">
-              <Text as="span" font="legal" color="fgMuted">최우선 오퍼</Text>
-              <Text as="span" font="label2">{n3(sel?.fa?.y)}</Text>
-            </HStack>
-            <HStack justifyContent="space-between">
-              <Text as="span" font="legal" color="fgMuted">최우선 비드</Text>
-              <Text as="span" font="label2">{n3(sel?.fb?.y)}</Text>
-            </HStack>
-            <HStack justifyContent="space-between">
-              <Text as="span" font="legal" color="fgMuted">만기</Text>
-              <Text as="span" font="legal">{sel?.mat || '—'}</Text>
-            </HStack>
-            <HStack justifyContent="space-between">
-              <Text as="span" font="legal" color="fgMuted">오늘 호가</Text>
-              <Text as="span" font="legal">{sel?.n ?? 0}건</Text>
-            </HStack>
-            {sel?.fill ? (
-              <HStack justifyContent="space-between">
-                <Text as="span" font="legal" color="fgMuted">마지막 체결</Text>
-                <Text as="span" font="label2">
-                  {n3((sel.fill as { y?: number }).y)}{' '}
-                  <span className="kb-n">{hms((sel.fill as { t?: number }).t ?? 0)}</span>
-                </Text>
-              </HStack>
-            ) : null}
-          </VStack>
+          {/* 옛 화면과 같은 네 칸 — 오퍼·비드·스프레드·당일 체결 */}
+          <div className="kb-quad">
+            <div>
+              <span className="kb-n">매도 (오퍼)</span>
+              <b className="sr-down">{n3(sel?.fa?.y)}</b>
+            </div>
+            <div>
+              <span className="kb-n">매수 (비드)</span>
+              <b className="sr-up">{n3(sel?.fb?.y)}</b>
+            </div>
+            <div>
+              <span className="kb-n">스프레드</span>
+              <b>{v.ob?.best?.spread_bp != null ? `${v.ob.best.spread_bp.toFixed(1)}bp` : '—'}</b>
+            </div>
+            <div>
+              <span className="kb-n">당일 체결</span>
+              <b>
+                {sel?.fill ? n3((sel.fill as { y?: number }).y) : '—'}
+                {sel?.fill ? (
+                  <span className="kb-n"> {hms((sel.fill as { t?: number }).t ?? 0)}</span>
+                ) : null}
+              </b>
+            </div>
+          </div>
+          <div className="kb-sub2">
+            만기 {sel?.mat || '—'} · 오늘 호가 {sel?.n ?? 0}건
+            {sel?.hn ? ` · mid 표본 ${sel.hn}` : ''}
+          </div>
         </div>
 
         <div className="kb-card">
@@ -417,12 +439,25 @@ export function Bonds({ lane, ttl, feed = [] }: { lane: Lane; ttl: TtlMode; feed
               className="kb-sel"
               value={String(agg)}
               onChange={(e) => setAgg(Number(e.target.value))}
+              title="호가 집계 — 국내 HTS 처럼 빈 칸 포함 균일 격자"
             >
               <option value="0">원호가</option>
               <option value="0.5">0.5bp</option>
               <option value="1">1bp</option>
               <option value="2.5">2.5bp</option>
             </select>
+            {onTtl ? (
+              <select
+                className="kb-sel"
+                value={ttl}
+                onChange={(ev) => onTtl(ev.target.value as TtlMode)}
+                title="호가 수명 — 화면 필터일 뿐 책을 바꾸지 않는다"
+              >
+                <option value="def">활성</option>
+                <option value="half">타이트</option>
+                <option value="inf">세션</option>
+              </select>
+            ) : null}
           </div>
           {v.ob ? <Ladder ob={v.ob} T={T} /> : <div className="kb-empty">종목을 고르세요</div>}
         </div>

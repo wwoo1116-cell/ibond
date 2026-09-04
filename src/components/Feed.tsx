@@ -8,6 +8,7 @@ import { Box, HStack, VStack } from '@coinbase/cds-web/layout';
 import { Text } from '@coinbase/cds-web/typography';
 
 import type { FeedRow } from '@/lib/api';
+import { useWatch, watchKey } from '@/lib/watch';
 
 const KIND: Record<string, [string, string]> = {
   QUOTE: ['호가', 'q'],
@@ -29,14 +30,31 @@ const n3 = (v?: number | null) => (v == null ? '' : v.toFixed(3));
 /** 수량 기본단위 100억 [OWNER] — «1계약» 이 아니라 «100억» 으로 적어야 합산이 된다. */
 const lot = (a?: number | null) => (a == null || !a ? '' : `${Math.round(a * 10) / 10}억`);
 
-const Row = memo(function Row({ e }: { e: FeedRow }) {
+const Row = memo(function Row({ e, on, onStar }: {
+  e: FeedRow;
+  on: boolean;
+  onStar: (k?: string | null) => void;
+}) {
   const [kn, kc] = KIND[e.k ?? 'OTHER'] ?? ['기타', ''];
+  const wk = watchKey(e);
   return (
     <VStack className="kb-row" paddingY={1}>
       <HStack alignItems="baseline" gap={2}>
         <Text as="span" font="legal" color="fgMuted">
           {hms(e.t)}
         </Text>
+        {/* 관심 종목 — 옛 화면의 ☆ 자리. 종목이 없는 행에는 별을 달지 않는다. */}
+        {wk ? (
+          <button
+            className={`kb-star${on ? ' on' : ''}`}
+            title="관심 종목"
+            onClick={() => onStar(wk)}
+          >
+            {on ? '★' : '☆'}
+          </button>
+        ) : (
+          <span className="kb-star ph" />
+        )}
         <Box
           paddingX={1}
           background={kc === 'q' ? 'bgPrimaryWash' : kc === 'c' ? 'bgSecondary' : 'bgAlternate'}
@@ -78,6 +96,7 @@ const Row = memo(function Row({ e }: { e: FeedRow }) {
 export function Feed({ rows }: { rows: FeedRow[] }) {
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const { watch, toggle } = useWatch();
 
   /** 맨 아래에 있었으면 새 줄을 따라가고, 위로 올려 읽는 중이면 그대로 둔다.
    *  ★전면 재구축이 스크롤을 날리는 문제는 v1 HTML 에서 이미 겪었다. */
@@ -97,7 +116,9 @@ export function Feed({ rows }: { rows: FeedRow[] }) {
   return (
     <div ref={box} onScroll={onScroll} className="kb-feed">
       {shown.length ? (
-        shown.map((e) => <Row key={e.i} e={e} />)
+        shown.map((e) => (
+          <Row key={e.i} e={e} on={watch.has(watchKey(e) ?? '')} onStar={toggle} />
+        ))
       ) : (
         <Text as="p" font="body" color="fgMuted">
           메시지를 기다리는 중입니다.

@@ -34,6 +34,8 @@ const PK: [keyof Pick<Pulse['bins'][number], 'q' | 'a' | 'c' | 'i' | 'o'>, strin
   ['o', '기타', 'var(--kb-p-o)'],
 ];
 
+const LANE_LBL: Record<string, string> = { ktb: '국고', msb: '통안', nhb: '국민주택', cr: '크레딧' };
+
 const EVK: Record<string, string> = {
   first: '첫호가',
   best: '최우선',
@@ -136,6 +138,9 @@ function Leaderboard({ lb, lane, onLane }: {
 }) {
   const rows = lb.rows ?? [];
   const maxN = Math.max(1, ...rows.map((r) => r.ln ?? 0));
+  /* 딜러를 누르면 그 줄 아래가 펼쳐진다 — 옛 화면의 `dlSel` 자리다.
+     쓰는 값은 이미 리더보드에 실려 온 것뿐이라 서버를 더 부르지 않는다. */
+  const [sel, setSel] = useState<string | null>(null);
   return (
     <>
       <div className="kb-pills">
@@ -159,8 +164,14 @@ function Leaderboard({ lb, lane, onLane }: {
           {rows.slice(0, 60).map((d, i) => {
             const q = (d.s ?? 0) + (d.b ?? 0);
             const pb = q ? Math.round((100 * (d.b ?? 0)) / q) : 0;
+            const open = sel === `${d.k}${i}`;
             return (
-              <tr key={`${d.k}${i}`} title={`${d.d ?? ''} · 첫 ${hms(d.first ?? 0)} 마지막 ${hms(d.last ?? 0)}`}>
+              <Fragment key={`${d.k}${i}`}>
+              <tr
+                className={`dl${open ? ' on' : ''}`}
+                title={`${d.d ?? ''} · 첫 ${hms(d.first ?? 0)} 마지막 ${hms(d.last ?? 0)}`}
+                onClick={() => setSel(open ? null : `${d.k}${i}`)}
+              >
                 <td className="l">{d.d}</td>
                 <td className="num">{d.ln}</td>
                 <td>
@@ -171,6 +182,34 @@ function Leaderboard({ lb, lane, onLane }: {
                 <td className="num kb-n">{d.c || ''}</td>
                 <td className="num kb-n">{d.ab ? `${Math.round(d.ab / 60)}분` : ''}</td>
               </tr>
+              {open ? (
+                <tr className="dld">
+                  <td colSpan={5}>
+                    <div className="kb-dld">
+                      <span className="kb-n">
+                        첫 {hms(d.first ?? 0)} · 마지막 {hms(d.last ?? 0)}
+                        {d.lane
+                          ? ` · ${Object.entries(d.lane)
+                              .sort((x, y) => y[1] - x[1])
+                              .slice(0, 3)
+                              .map(([k, v]) => `${LANE_LBL[k] ?? k} ${v}`)
+                              .join(' · ')}`
+                          : ''}
+                      </span>
+                      <div className="codes">
+                        {(d.codes ?? []).slice(0, 12).map((x, j) => (
+                          <span key={j} className="kb-badge">
+                            {String((x as unknown[])[0]).slice(0, 12)}
+                            <b>{String((x as unknown[])[1])}</b>
+                          </span>
+                        ))}
+                        {!(d.codes ?? []).length ? <span className="kb-n">종목 기록 없음</span> : null}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : null}
+              </Fragment>
             );
           })}
         </tbody>
@@ -179,7 +218,7 @@ function Leaderboard({ lb, lane, onLane }: {
   );
 }
 
-export function Trends({ ttl }: { ttl: TtlMode }) {
+export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => void }) {
   const [v, setV] = useState<View | null>(null);
   const [dlLane, setDlLane] = useState('all');
   const [evOn, setEvOn] = useState<Record<string, boolean>>({
@@ -228,6 +267,18 @@ export function Trends({ ttl }: { ttl: TtlMode }) {
               {p.bin / 60}분 단위 · 회색선 = 어제
               {p.t0 != null ? ` · ${hm(p.t0)}~${hm(p.t1 ?? p.t0)}` : ''}
             </Text>
+            {onTtl ? (
+              <select
+                className="kb-sel"
+                value={ttl}
+                onChange={(ev) => onTtl(ev.target.value as TtlMode)}
+                title="호가 수명 — 화면 필터일 뿐 책을 바꾸지 않는다"
+              >
+                <option value="def">활성</option>
+                <option value="half">타이트</option>
+                <option value="inf">세션</option>
+              </select>
+            ) : null}
           </div>
           <div className="kb-kvgrid">
             {kv('호가 · 관심', `${p.nq.toLocaleString()} · ${p.na.toLocaleString()}`)}

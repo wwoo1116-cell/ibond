@@ -117,7 +117,7 @@ function Curve({ curve, grade }: {
   );
 }
 
-export function Credit({ ttl }: { ttl: TtlMode }) {
+export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => void }) {
   const [v, setV] = useState<View | null>(null);
   const [cls, setCls] = useState<string | null>(null);
   const [rt, setRt] = useState<string | null>(null);
@@ -267,6 +267,18 @@ export function Credit({ ttl }: { ttl: TtlMode }) {
             <Text as="span" font="legal" color="fgMuted">
               잔존 순{noLvl.length ? ` · 레벨 미상 ${noLvl.length}` : ''}
             </Text>
+            {onTtl ? (
+              <select
+                className="kb-sel"
+                value={ttl}
+                onChange={(ev) => onTtl(ev.target.value as TtlMode)}
+                title="호가 수명 — 화면 필터일 뿐 책을 바꾸지 않는다"
+              >
+                <option value="def">활성</option>
+                <option value="half">타이트</option>
+                <option value="inf">세션</option>
+              </select>
+            ) : null}
           </div>
           {offers.length ? (
             <table className="kb-tbl">

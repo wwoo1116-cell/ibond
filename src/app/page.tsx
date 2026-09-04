@@ -18,7 +18,8 @@ import { Text } from '@coinbase/cds-web/typography';
 import { Button } from '@coinbase/cds-web/buttons';
 
 import { DEFAULT_API, apiBase, getFeed, getHealth, getView, setApi, url } from '@/lib/api';
-import type { FeedRow, View } from '@/lib/api';
+import type { FeedRow, TtlMode, View } from '@/lib/api';
+import { useWatch, watchKey } from '@/lib/watch';
 import { Feed } from '@/components/Feed';
 import { Bonds } from '@/components/Bonds';
 import { Credit } from '@/components/Credit';
@@ -66,6 +67,10 @@ export default function Page() {
   const [ref, setRef] = useState<View | null>(null);
   const [clock, setClock] = useState('');
   const [filt, setFilt] = useState<Filt>('all');
+  const [ttl, setTtl] = useState<TtlMode>('def');
+  const [alarm, setAlarm] = useState(false);
+  const { watch } = useWatch();
+  const seen = useRef(0);
   const maxI = useRef(0);
   const lastBeat = useRef(0);
 
@@ -100,7 +105,7 @@ export default function Page() {
     if (conn === 'setup' || conn === 'booting') return;
     let live = true;
     const pull = () => {
-      getView('ktb', 'def')
+      getView('ktb', ttl)
         .then((v) => live && setRef(v))
         .catch(() => undefined);
     };
@@ -110,7 +115,7 @@ export default function Page() {
       live = false;
       clearInterval(id);
     };
-  }, [conn]);
+  }, [conn, ttl]);
 
   /* 서버 시각. 옛 화면의 큰 시계 자리다 — 리플레이면 동결 시각에서 흐른다. */
   const T = ref?.T;
@@ -125,6 +130,32 @@ export default function Page() {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [T]);
+
+  /* 관심 종목 알림. 켠 뒤에 «새로» 들어온 행만 본다 — 켜는 순간 하루치가
+     한꺼번에 울리면 안 된다. 권한이 없으면 조용히 아무것도 안 한다. */
+  useEffect(() => {
+    if (!alarm || !rows.length) return;
+    const last = rows[rows.length - 1].i;
+    if (!seen.current) {
+      seen.current = last;
+      return;
+    }
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    for (const e of rows) {
+      if (e.i <= seen.current) continue;
+      const k = watchKey(e);
+      if (!k || !watch.has(k)) continue;
+      try {
+        new Notification(`${e.n ?? k} ${e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}`, {
+          body: e.raw ?? '',
+          tag: `kbond-${k}`,
+        });
+      } catch {
+        /* 알림이 막혀 있어도 화면은 돈다 */
+      }
+    }
+    seen.current = last;
+  }, [rows, alarm, watch]);
 
   /* SSE — 책이 바뀔 때만 온다. 15초 조용하면 «끊김» 으로 본다(하트비트가 있다). */
   useEffect(() => {
@@ -198,6 +229,23 @@ export default function Page() {
         <Text as="span" font="legal" color="fgMuted">
           {nMsg ? `오늘 ${nMsg.toLocaleString()}건` : ''}
         </Text>
+        <button
+          className={`kb-bell${alarm ? ' on' : ''}`}
+          title="관심 종목 알림 — 브라우저 알림도 켭니다"
+          onClick={async () => {
+            if (!alarm && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+              try {
+                await Notification.requestPermission();
+              } catch {
+                /* 거절해도 별표는 남는다 */
+              }
+            }
+            seen.current = 0;
+            setAlarm((v) => !v);
+          }}
+        >
+          🔔 알림{watch.size ? ` ${watch.size}` : ''}
+        </button>
         <span className={`kb-dot${conn === 'live' ? ' on' : ''}`} />
         <Text as="span" font="label2">
           {conn === 'live' ? '실시간' : '끊김'}
@@ -249,12 +297,19 @@ export default function Page() {
           </div>
         </div>
       ) : tab === 'dyn' ? (
-        <Trends ttl="def" />
+        <Trends ttl={ttl} onTtl={setTtl} />
       ) : tab === 'cr' ? (
-        <Credit ttl="def" />
+        <Credit ttl={ttl} onTtl={setTtl} />
       ) : (
-        <Bonds lane={tab} ttl="def" feed={rows} />
+        <Bonds lane={tab} ttl={ttl} onTtl={setTtl} feed={rows} />
       )}
+
+      {/* 옛 화면 하단 캡션 — 문구를 그대로 옮겼다(읽는 법을 화면이 스스로 말한다). */}
+      <div className="kb-foot">
+        블커본드·막무가내 두 방을 파싱해 그대로 흘립니다 · 종류: 호가·체결·문의(관심 포함)·미해석 ·
+        값이 안 붙은 행은 아직 못 읽은 것입니다(교체 다리, «원» 단위 크레딧 호가 등) ·
+        수량 기본단위 100억, 100억 미만은 자투리
+      </div>
     </div>
   );
 }
