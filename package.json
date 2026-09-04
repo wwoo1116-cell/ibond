@@ -1,0 +1,32 @@
+{
+  "name": "kbond-web",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev -p 3400",
+    "build": "next build",
+    "start": "next start -p 3400",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@coinbase/cds-common": "9.22.0",
+    "@coinbase/cds-icons": "5.22.0",
+    "@coinbase/cds-web": "9.22.0",
+    "next": "15.4.8",
+    "react": "19.1.2",
+    "react-dom": "19.1.2"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "15.4.8",
+    "typescript": "^5"
+  }
+}

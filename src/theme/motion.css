@@ -1,0 +1,63 @@
+/* 모션 토큰 — **세 시간과 곡선 하나**. 색이 `direction.css` 한 곳에 사는 것과 같은
+ * 이유로, 시간도 여기 말고 어디에도 적지 않는다.
+ *
+ * ── 왜 이 파일이 생겼나 (실측 2026-08-14) ───────────────────────────────────
+ * v2 는 이 시점까지 시간을 다섯 군데에 흩어 적고 있었다: `type.css` 에 `0.12s` 가
+ * 셋, `useFlipReorder.ts` 에 `220ms` 와 곡선 문자열이 하나. 값이 우연히 맞았을
+ * 뿐이고 한 곳을 고치면 나머지는 조용히 어긋난다. v1 이 같은 자리에서 **일곱 개의
+ * 지속시간과 네 개의 곡선**까지 갔었고, 그중 의도해서 고른 곡선은 하나뿐이었다.
+ *
+ * ── 세 시간 ─────────────────────────────────────────────────────────────────
+ *   fast  120ms  이동이 없는 상태 변화 — 호버 틴트, 포커스 링, 칩
+ *   base  220ms  모든 등장
+ *   exit  160ms  모든 퇴장. **퇴장은 등장보다 항상 짧다**
+ *
+ * 곡선은 하나뿐이다 — `--sr-ease-out`, 강한 감속에 오버슈트 없음
+ * [v1 OWNER 2026-08-06]. v1 은 여기에 예외를 딱 하나 뒀다(행 재정렬 스프링).
+ * v2 는 그 예외가 **없다**: v2 의 재정렬은 라이브러리 없는 CSS FLIP 이고
+ * (`table/useFlipReorder.ts` 의 모듈 주석 — CDS `TableRow` 가 ref 를 안 준다),
+ * `transition-timing-function` 은 스프링을 표현하지 못한다. 없는 기구를 위해
+ * 토큰을 두지 않는다.
+ *
+ * ── 감속 규칙은 두 겹이다 ───────────────────────────────────────────────────
+ * ① 아래 블랭킷이 **모든** transition/animation 을 사실상 0 으로 만든다. 저자가
+ *    잊어버린 자리까지 덮는 것이 목적이라 `!important` 다.
+ * ② 그 위에 토큰 자체도 0 으로 바꾼다. 블랭킷은 `transition-duration` 만 잡고,
+ *    JS 가 `setTimeout(MOTION.base)` 처럼 **시간을 값으로** 쓰는 자리는 못 잡기
+ *    때문이다. TS 쪽 짝은 `theme/motion.ts` 의 `instant()` 다.
+ *
+ * 두 파일의 숫자는 `guards/motion-tokens.test.ts` 가 계속 대조한다 —
+ * `theme/ramp.ts` 의 EDGE_OPACITY 가 다크 헤어라인과 맺은 것과 같은 관계다.
+ *
+ * ── `:root` 여도 되는 이유 ─────────────────────────────────────────────────
+ * `direction.css` 의 면 토큰은 CDS 의 `--color-*` 를 **참조**하기 때문에 `:root`
+ * 에서 죽었다(그 파일의 실측 주석). 여기 값들은 어떤 CDS 변수도 안 읽는 리터럴
+ * 이라 선언 자리가 값에 영향을 주지 않는다. `--sr-up`/`--sr-down` 과 같은 부류다.
+ */
+
+:root {
+  --sr-motion-fast: 120ms;
+  --sr-motion-base: 220ms;
+  --sr-motion-exit: 160ms;
+  --sr-ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sr-motion-fast: 0ms;
+    --sr-motion-base: 0ms;
+    --sr-motion-exit: 0ms;
+  }
+
+  /* 0 이 아니라 0.01ms 인 이유: `transitionend`·`animationend` 를 기다리는 코드가
+     있으면 0 은 이벤트를 아예 안 내보내서 그 코드가 영영 멈춘다. 눈에는 즉시고
+     이벤트는 그대로 온다. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

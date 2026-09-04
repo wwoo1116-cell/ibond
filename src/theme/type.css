@@ -1,0 +1,2964 @@
+/* D4 — the type stack unifies on Pretendard (SIL OFL).
+ *
+ * The reason is not taste. Mixed Latin/Hangul inside one cell is this product's
+ * normal case ("IRS 3Y", "회사 AA− 3Y"), and two faces mean two baselines, two
+ * sets of metrics, and a column width computed from format maxima that no longer
+ * holds for half the strings in the column.
+ *
+ * ── Self-hosted, and why local() is NOT used ─────────────────────────────────
+ * An earlier revision of this file sourced the face with `local()` only and noted
+ * that self-hosting was "a gap, not a decision", on the belief that Pretendard was
+ * installed on this desk. **It is not.** The Windows font registry on this machine
+ * holds Malgun Gothic (Regular/Bold/SemiLight) and Noto Sans KR — no Pretendard.
+ * So every `local()` lookup missed and the product had been rendering in Malgun
+ * the whole time, silently.
+ *
+ * That silence had a second cost. Malgun ships three weights, so CSS 550/600/650
+ * all snap to the same Bold, and a four-step weight hierarchy renders as two steps
+ * — everything either Regular or Bold. The type had no middle register.
+ *
+ * `local()` is deliberately absent now rather than merely supplemented. A locally
+ * installed Pretendard of a different version has different metrics, and column
+ * widths here are computed from format maxima; a reader on another machine must
+ * not get different column widths from the same data. One file, one metric set.
+ *
+ * pretendard@1.3.9, SIL OFL-1.1. Files and licence live in `public/fonts/`.
+ *
+ * ── FOUT / fallback width ────────────────────────────────────────────────────
+ * `font-display: block` rather than `swap`: a swap would relayout the table and
+ * jump every column width, which is the one thing widths derived from format
+ * maxima must never do. `block` renders invisible text until the face arrives
+ * (capped at ~3s, then the fallback), so the first thing painted is already in
+ * the final metrics. The fallback chain stays ordered by metric closeness for
+ * Hangul so that even the 3s-timeout case changes face without changing line box.
+ */
+
+@font-face {
+  font-family: 'Pretendard SR';
+  src: url('/fonts/PretendardVariable.woff2') format('woff2');
+  font-weight: 45 930; /* the file's real wght axis range, measured — not 100 900 */
+  font-style: normal;
+  font-display: block;
+}
+
+:root {
+  --sr-font-sans:
+    'Pretendard SR', 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo',
+    'Malgun Gothic', system-ui, sans-serif;
+}
+
+/* 이 앱이 **직접 만든** 요소의 face — 상단 내비 버튼, 일별 대사 표, 날짜 칸,
+ * 서랍 탭처럼 CDS 타이포그래피 컴포넌트를 안 거치는 텍스트 전부.
+ *
+ * ⚠ 이게 없으면 그것들이 **브라우저 기본 한글 폰트**로 그려진다. `<html lang="ko">`
+ * 이고 어떤 규칙도 `body` 의 `font-family` 를 안 정하면 크롬이 자기 한글 기본값을
+ * 쓰기 때문이다. 실측 2026-08-14: 표의 숫자(CDS `TextLabel2`)는 Pretendard 인데
+ * 상단 내비의 "Main·Backtest"는 **Noto Sans KR** 이었다 — 한 화면에 두 서체이고,
+ * 라틴 글자에서 그 차이가 드러난다(폭 실측 Pretendard 79.06 vs Noto 78.08).
+ *
+ * 아래 `--fontFamily-*` 매핑과 **다른 일**을 한다: 저건 CDS 컴포넌트가 읽는 토큰,
+ * 이건 상속으로 내려가는 실제 face 다. 둘 다 있어야 화면의 서체가 하나가 된다. */
+body {
+  font-family: var(--sr-font-sans);
+  /* **낱말 중간에서 접지 않는다** [OWNER 2026-08-25 — "단어에서 줄바꿈 금지.
+     국고, 줄 바꾸고 채 뭐 이딴게 비일비재하네"].
+
+     브라우저 기본(`word-break: normal`)은 한글을 **음절 아무 데서나** 끊는다 —
+     영문에는 없는 병이라 컴포넌트마다 따로 발견됐고, 이 파일에만 같은 수리가
+     여덟 곳에 흩어져 있었다(2026-08-21 주석: 「인하하고」가 「인 / 하하고」로).
+     뿌리에서 한 번 끊으면 새 화면이 그 발견을 반복하지 않는다. 상속되므로
+     아래 개별 `keep-all` 들은 이제 중복이지만, 지우면 그 자리가 왜 그런지가
+     같이 지워지므로 둔다.
+
+     끊을 데가 없는 긴 토큰(URL·id)은 `overflow-wrap: break-word` 가 따로
+     맡는다 — 그건 낱말을 쪼개는 게 아니라 넘침을 막는 것이다. */
+  word-break: keep-all;
+}
+
+/* CDS resolves its own faces through `--fontFamily-*`; pointing those at the
+ * stack above is what actually changes the rendered face, since every CDS text
+ * component reads them. One declaration, not a per-component override. */
+body,
+[class*='sauron-v2'] {
+  --fontFamily-display1: var(--sr-font-sans);
+  --fontFamily-display2: var(--sr-font-sans);
+  --fontFamily-display3: var(--sr-font-sans);
+  --fontFamily-title1: var(--sr-font-sans);
+  --fontFamily-title2: var(--sr-font-sans);
+  --fontFamily-title3: var(--sr-font-sans);
+  --fontFamily-title4: var(--sr-font-sans);
+  --fontFamily-headline: var(--sr-font-sans);
+  --fontFamily-body: var(--sr-font-sans);
+  --fontFamily-label1: var(--sr-font-sans);
+  --fontFamily-label2: var(--sr-font-sans);
+  --fontFamily-caption: var(--sr-font-sans);
+  --fontFamily-legal: var(--sr-font-sans);
+}
+
+/* Numbers keep tabular figures everywhere they line up in a column. CDS's
+ * `tabularNumbers` prop already does this per component; this is the floor for
+ * anything that renders digits without going through it. */
+.sr-up,
+.sr-down,
+.sr-flat {
+  font-variant-numeric: tabular-nums;
+}
+/* ── The three surfaces, applied ────────────────────────────────────────────
+ * Definitions and the measurement behind them live in `direction.css`; this is
+ * only where they land. The page is the ground, cards sit on it, and controls
+ * are FILLED rather than outlined — a bordered control on a card reads as a
+ * third surface that is not there.
+ */
+.sr-page {
+  background: var(--sr-page);
+}
+
+/* A card is a tone change AND a radius AND a hairline. One of the three alone
+ * reads as a mistake: tone alone looks like a selection, radius alone like a
+ * clipped image, hairline alone like the wireframe this replaced. */
+.sr-card {
+  background: var(--sr-card);
+  border: 1px solid var(--color-bgLine);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* ── 커서 리드아웃 카드 (`ui/ReadoutCard.tsx`) ───────────────────────────────
+ *
+ * 차트 위에 떠서 커서 아래의 값을 읽는 카드다. 카드 **위에** 뜨는 것이라 바탕은
+ * `--sr-popover`(라이트=흰색, 다크=한 칸 위) 이고, 라이트에서는 색으로 올라갈 수
+ * 없으므로 그림자와 헤어라인이 위계를 진다.
+ *
+ * `pointer-events: none` 이 이 규칙 중 가장 중요하다 — 카드가 커서를 받으면
+ * 스크러버가 그 순간 멈추고, 카드는 자기가 가린 값에 얼어붙는다. */
+/* 카드가 기준으로 삼는 상자 = 그림이 놓인 자리. 카드는 `position: absolute` 이고
+   `left` 를 픽셀로 받으므로, 이 상자가 `relative` 가 아니면 카드가 페이지 기준으로
+   떠서 차트와 상관없는 곳에 선다. */
+.sr-plot {
+  position: relative;
+}
+
+.sr-readout {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  /* 폭은 **내용이 정한다** [2026-08-20]. 고정 148 이던 시절에는 호출부가 자기
+     최장 줄을 계산해서 넘겨야 했고, 두 명이 연속으로 그 함정에 빠졌다
+     (`ReadoutCard.tsx::READOUT_CARD_MAX` 머리글에 두 실측이 있다).
+     `max-content` 는 가장 긴 줄만큼만 넓어지고, 그보다 짧은 줄들은 그 폭으로
+     늘어나므로 값의 오른쪽 정렬은 그대로다. 상한이 있는 이유는 카드가 그림을
+     통째로 덮는 일을 막기 위해서다. */
+  width: max-content;
+  max-width: 260px;
+  /* 커서 자리. 담긴 상자가 `--sr-readout-x` 에 **이미 클램프된** 값을 적는다 —
+     그래야 카드가 커서를 따라다니는 데 리렌더가 필요 없다. `left` 를 prop 으로
+     받는 자리(데이터 좌표에 붙는 카드)는 인라인 스타일이 이 값을 이긴다. */
+  left: var(--sr-readout-x, 0px);
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--color-bgLine);
+  border-radius: 8px;
+  background: var(--sr-popover);
+  box-shadow: var(--sr-popover-shadow);
+  pointer-events: none;
+}
+
+/* 줄들. `Box` 기본이 flex 라 방향을 못박는다(§5.4 함정 1). */
+.sr-readout-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 변화는 위 네 줄의 또 다른 통계가 아니라 **다른 양**이다. v1 이 여기에 준
+   `mt-1` 과 같은 자리. */
+.sr-readout-change {
+  margin-top: 4px;
+}
+
+/* ── Top nav + mega panel, after coinbase.com (`coinbase_tab.png`) ───────────
+ *
+ * Reference geometry: a hairline-bottomed bar, text items that take a soft grey
+ * pill on hover/open, and a full-width panel below holding «glyph chip + title +
+ * one line». Nothing here is a fill except that pill.
+ *
+ * The bar sits on `--sr-card` rather than the page, so the ground is visible
+ * below it and the bar reads as a surface rather than as the page's top edge. */
+.sr-nav {
+  position: relative;
+  z-index: 20;
+  border-bottom: 1px solid var(--color-bgLine);
+  background: var(--sr-card);
+}
+
+/* `width: 100%` is load-bearing. This was a `<div>` (block, therefore full
+ * width) before the CDS pass; `HStack` is a flex item that shrinks to content,
+ * so the bar collapsed to 753px and `margin-left: auto` on the right block had
+ * nothing left to push against. */
+.sr-navbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  height: 64px;
+  width: 100%;
+}
+
+
+.sr-navitems {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-grow: 1;
+}
+
+/* ── 캐논 알약과 **같은 치수** [OWNER 2026-08-27 — "여전히 알약처럼 쓰는 것들
+ *    사이즈가 다 좀 큰 거 같은데 … 그거 사이즈 다 줄인거 기준으로 맞춰줄래?"] ──
+ *
+ * 종전은 40px 상자에 16/600 이었다(레퍼런스의 수). 그런데 이 앱의 화면에는
+ * 알약처럼 생긴 것이 넷 있고(내비·`.sr-pillbtn`·구간 탭·범례 칩) 그 넷이
+ * 40 · 32 · 32 · 34 로 갈려 있었다 — 실측 2026-08-27 Main. 같은 모양이 네 치수면
+ * 그것이 곧 「사이트 전체에 얼라인이 없다」의 한 얼굴이다.
+ *
+ * 오너 선택은 **전부 32/14**(줄인 쪽에 맞춘다)다. 아래 `.sr-pillbtn` 과 같은
+ * 수이고, 가로 패딩만 내비가 한 칸 넓다 — 내비 항목은 서로 붙어 서므로 글자
+ * 사이가 좁으면 한 덩어리로 읽힌다. */
+.sr-navitem {
+  /* **글자를 상자 가운데로.** 이게 없으면 안쪽 글자가 상자 위쪽에 붙는다 —
+     버튼은 40px 인데 CDS 타이포그래피 span 의 줄상자는 24px 이라, 자동 배치에서
+     span 이 위에 얹히고 글자 중심이 상자 중심보다 **8px 위**로 간다.
+     실측 2026-08-14: 브랜드("KRW Rates")는 중심 32, 내비 항목은 24 였고 그 차이가
+     그대로 보였다.
+
+     두 참조가 같은 방법을 쓴다(같은 날 실측): Coinbase 는 `display:flex` 인 44px
+     항목에서 상자 중심 34 == 글자 중심 34, 토스는 `inline-flex; align-items:center`
+     인 36px 항목에서 26 == 26 이다. 둘 다 글자 중심과 상자 중심이 **같다.** */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: var(--fontWeight-headline);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--sr-motion-fast) var(--sr-ease-out);
+}
+
+/* 아이콘 버튼 — 화면 모드 토글. 글자가 아니라 **아이콘**이라 알약이 아니라 정사각에
+   가깝고, 라벨 항목과 다른 크기를 진다(토스 실측: 32×32, radius 8, 옅은 틴트 배경).
+   글리프 문자("☾")를 라벨과 같은 알약에 넣었던 것이 어긋나 보인 두 번째 이유였다 —
+   문자의 시각 중심은 라틴 글자와 다르고 크기도 폰트가 정한다. */
+.sr-naviconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 32: 주석 위의 토스 실측값 그대로 — 코드는 36 으로 적혀 있어 자기 주석과
+     어긋나 있었고, 우측 유틸리티 줄(변화·신선도·스킴)이 28/36 두 높이로
+     들쭉했다(전체 앱 크리틱 2026-08-19). 이 줄의 컨트롤은 전부 32 로 선다. */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  /* fgMuted 였고 다크에서 거의 안 보였다 [OWNER 승인 2026-08-18 점검]. 이 버튼은
+     장식이 아니라 스킴의 유일한 입구라 잉크 본색으로 올린다 — 조용함은 크기
+     (32px 아이콘 버튼)와 투명 배경이 이미 지고 있다. */
+  color: var(--color-fg);
+  cursor: pointer;
+  transition:
+    background var(--sr-motion-fast) var(--sr-ease-out),
+    color var(--sr-motion-fast) var(--sr-ease-out);
+}
+
+.sr-naviconbtn:hover {
+  background: var(--sr-control);
+  color: var(--color-fg);
+}
+
+.sr-naviconbtn:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+/* ── 핀(고정)한 행 [OWNER 2026-08-19 — "옅은 회색 배경 깔아서 표시"] ─────────
+ * URL 의 `r` = 미리보기가 폴백하는 행인데, 표에는 아무 흔적이 없었다(전체 앱
+ * 크리틱: 대응 CSS 0건 — "표에 흔적이 없다면 핀은 진짜 개념인가").
+ * 채움은 RV 표의 행 강조(.sr-rv-row[data-on])와 같은 낱말인 --sr-control.
+ * 훅은 aria-current — role=table 의 행에서 aria-selected 는 무효라 접근성
+ * 트리에도 안 잡히던 것을 상태 표기와 시각 표기가 한 속성을 쓰도록 바꿨다.
+ * 틴트 셀(변화 열)의 인라인 배경은 이 채움 위에 그대로 이긴다 — 방향 틴트가
+ * 핀 회색보다 강한 정보라는 뜻이고, 그래서 둘이 싸우지 않는다. */
+tr[aria-current='true'] > td {
+  background: var(--sr-control);
+}
+
+/* Two tones of ONE shape, rather than two shapes.
+ *
+ * The first version marked the current section with `inset 0 -2px` on a pill
+ * with `border-radius: 999px`, and the "underline" curved around the stadium —
+ * it read as a stray outline, not as a mark. A rounded control cannot carry a
+ * straight underline without a second element to draw it.
+ *
+ * So both states are the same pill and only the tone differs: pointing at
+ * something is fainter than being in it. */
+/* 글자 크기는 **안쪽 span 까지** 내려가야 한다. 라벨이 CDS `TextHeadline`
+   (16/600)이라, 버튼에만 적으면 상속이 그 선언에 진다 — 이 리포가 세 번째로
+   같은 자리에서 배우는 것이다(`.sr-ctlfont` 주석의 그 함정). 무게는 그대로
+   600 이라 건드리지 않는다. */
+.sr-navitem * {
+  font-size: 14px;
+}
+
+.sr-navitem:hover,
+.sr-navitem[data-open='true'] {
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+}
+
+.sr-navitem[data-on='true'] {
+  background: var(--sr-control);
+}
+
+.sr-navitem:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+.sr-navright {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The panel. Absolute so it never pushes the page down — a menu that reflows the
+ * document on hover makes the thing you were about to click move. */
+/* No drop shadow, and that is the reference's choice rather than an omission:
+ * `coinbase_tab.png` shows the panel sitting flush on the page with a hairline
+ * as its only edge. A shadow here also could not be written — every colour in
+ * v2 lives in `direction.css` and `guards/color-source.test.ts` enforces it, and
+ * it caught the `rgb(0 0 0 / 8%)` this line first carried. */
+/* 패널 뒤를 **덮는다** [Coinbase 실측 2026-08-14: `rgba(50,53,61,0.33)` 가 바
+   아래 전체를 덮는다].
+
+   이게 없으면 패널이 "패널" 로 안 읽힌다 — 흰 시트 위의 글자와 그 아래 표가 같은
+   평면에 있는 것처럼 보이고, 실제로 v2 가 그 상태였다. 덮개는 장식이 아니라
+   "지금은 이 메뉴가 주인공" 이라는 정보다. */
+.sr-megascrim {
+  position: fixed;
+  inset: 0;
+  top: 64px;
+  background: var(--sr-scrim);
+  z-index: 19;
+}
+
+.sr-mega {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  /* **덮개보다 위**. 이게 없으면 패널이 안 열린 것처럼 보인다 — 실측 2026-08-14:
+     `z-index: auto` 라 `.sr-nav` 의 쌓임 맥락 안에서 0층에 그려졌고, 같은 맥락의
+     `.sr-megascrim`(19층)이 **패널을 덮었다.** 33% 회색이 시트 위에 얹히니 아래
+     화면과 밝기가 비슷해져 경계가 사라지고 글자는 흐려졌으며, 무엇보다
+     `elementFromPoint(400,200)` 이 덮개를 반환했다 — 항목을 누를 수조차 없었다.
+     덮개는 패널을 돋보이게 하려고 넣은 것이니, 순서가 뒤집히면 정확히 반대로
+     작동한다. */
+  z-index: 20;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-bgLine);
+}
+
+/* `width: 100%` 가 load-bearing 이다. `.sr-mega` 는 CDS `Box` 이고 **CDS Box 는
+   기본이 `display: flex`** 다(§5.4 의 함정 1). 그래서 이 안쪽 줄이 flex 아이템이
+   되어 내용만큼만 넓어졌다 — 실측 2026-08-14: 패널은 2,560 인데 안쪽은 **631**
+   이었고, 그 결과 오른쪽 설명 카드가 항목 바로 옆에 붙어 있었다(참조는 그걸 시트의
+   오른쪽 끝에 둔다). 내비 바가 같은 이유로 이미 `width: 100%` 를 지고 있다. */
+.sr-mega-inner {
+  display: flex;
+  gap: 32px;
+  padding: 24px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.sr-mega-cols {
+  display: flex;
+  gap: 32px;
+  flex-grow: 1;
+  flex-wrap: wrap;
+}
+
+.sr-mega-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 210px;
+}
+
+.sr-mega-coltitle {
+  padding: 0 12px 6px;
+}
+
+
+/* The reference's rounded-square icon chip. A glyph rather than an icon font:
+ * v1 already chose these characters for these same asset classes, and inventing
+ * a second vocabulary would make two products name one thing two ways. */
+.sr-megaglyph {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--sr-control);
+  color: var(--color-fgMuted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+
+.sr-mega-aside {
+  flex: 0 0 260px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--sr-control);
+}
+
+/* ── Period spans, measured off coinbase.com/price/* on 2026-08-13 ───────────
+ *
+ * The reference's numbers, not approximations of them: 16px/600 labels in a
+ * 40px-tall fully-round pill, transparent until active. The active pill tints
+ * with THE CHART'S OWN SIGN — the hue is set inline in `PreviewPane` because it
+ * depends on the data, not on the stylesheet.
+ *
+ * `border-radius: 999px` rather than the reference's literal `100000px`; both
+ * resolve to the same stadium shape, and the repo already spells it 999.
+ */
+/* CDS's `PeriodSelector` draws the row; the only thing added here is the SIGN.
+ *
+ * The reference colours the active period with the same hue as the line, so the
+ * control and the picture agree. CDS cannot know that — it depends on the data —
+ * so the wrapper carries `data-dir` and the active tab reads it.
+ *
+ * ── Why CDS *variables* and not a colour rule (measured 2026-08-19) ─────────
+ * The first version set `color` on `[aria-selected='true']` and relied on
+ * inheritance. It never worked: the tab's inner span carries CDS's `fgPrimary`
+ * atomic class — its own `color: var(--color-fgPrimary)` — so the rendered
+ * label stayed Coinbase blue while the button around it dutifully turned red.
+ * The wash likewise arrives as an inline `background-color:
+ * var(--color-bgPrimaryWash)` on the sliding indicator, which no stylesheet
+ * rule can beat. Both read CDS variables, so the fix is to redefine the
+ * variables in this scope and let CDS's own plumbing deliver them.
+ *
+ * Blue matters here beyond consistency: in this product blue IS a word — the
+ * frozen down-direction hue — so a blue active chip under a rising chart reads
+ * as "1Y is falling". Flat charts get the neutral grey pill (the nav's active
+ * grammar) instead of the primary wash for the same reason. */
+.sr-spans {
+  --color-fgPrimary: var(--color-fg);
+  --color-bgPrimaryWash: var(--color-bgSecondary);
+}
+
+.sr-spans[data-dir='up'] {
+  --color-fgPrimary: var(--sr-up);
+  --color-bgPrimaryWash: color-mix(in srgb, var(--sr-up) 10%, transparent);
+}
+
+.sr-spans[data-dir='down'] {
+  --color-fgPrimary: var(--sr-down);
+  --color-bgPrimaryWash: color-mix(in srgb, var(--sr-down) 10%, transparent);
+}
+
+/* ── Neutral tabs — the app's one active-control grammar ─────────────────────
+ * `PeriodSelector` ships a "primary wash" active state: Coinbase-blue chip,
+ * Coinbase-blue label. Everywhere else in this product an active control is
+ * INK — the nav's grey stadium, `SegmentedTabs`' black pill, the RV lane's
+ * inverted pill — and blue is reserved for the down direction. This scope
+ * makes a PeriodSelector speak that grammar; it exists for selectors whose
+ * choice carries no data sign (Lab's pool/issuer/tenor/camera rows). Signed
+ * selectors wrap in `.sr-spans` above instead. */
+.sr-tabs-neutral {
+  --color-fgPrimary: var(--color-fg);
+  --color-bgPrimaryWash: var(--color-bgSecondary);
+}
+
+/* The unit rides the hero number at a fraction of its size — a level is a
+ * quantity, and the unit is not part of the quantity. */
+/* `display: inline` is load-bearing: CDS's `Box` is `display: flex` even with
+ * `as="span"`, so without this the unit drops onto its own line under the
+ * number it belongs to. */
+.sr-hero-unit {
+  display: inline;
+  font-size: 0.45em;
+  font-weight: var(--fontWeight-headline);
+  margin-left: 0.15em;
+  color: var(--color-fgMuted);
+}
+
+.sr-hero-span {
+  display: inline;
+  color: var(--color-fgMuted);
+}
+
+/* ── Stat columns ───────────────────────────────────────────────────────────
+ * Divided by a hairline rather than a gap. Three lists separated by whitespace
+ * read as three floating groups; a rule between them makes one block with three
+ * parts, which is what the reference does under its chart.
+ *
+ * The hairline is alpha over the surface (the reference uses
+ * `rgba(91,97,110,0.2)`), so it holds on every surface without a second token. */
+.sr-stats {
+  border-top: 1px solid var(--color-bgLine);
+}
+
+.sr-statcol + .sr-statcol {
+  border-left: 1px solid var(--color-bgLine);
+}
+
+/* 첫 칸도 **왼쪽 패딩을 진다** — 2026-08-24 에 뺐던 것을 되돌린다
+ * [OWNER 2026-08-27 — "「이 구간」 앞에 공백이 너무 부족하다", 왼쪽으로 확인].
+ *
+ * 뺐던 근거는 «스트립의 첫 값이 본문 열과 밑선을 맞춰야 한다» 였다. 그런데 그
+ * 결과는 「이 구간」 이 카드 왼쪽 끝에 딱 붙는 것이고, 스트립은 위아래를 헤어라인
+ * 으로 나눈 **자기 블록**이라 그 안에서는 첫 칸도 다른 칸과 같은 여백을 져야
+ * 한다 — 지금은 칸 사이에만 세로 헤어라인과 패딩이 있고 맨 앞만 없어서, 읽는
+ * 눈에는 첫 칸이 잘려 보인다.
+ *
+ * 규칙을 지우기만 하면 `StatColumn` 의 `paddingX` 가 그대로 살아난다. */
+
+/* 「모형」 레인의 스트립은 **읽기 폭에 선다.**
+ *
+ * 이 면들은 글이 760px 에 갇혀 있다. 스트립만 카드 폭(1,270px)을 쓰면 본문과
+ * 스트립의 왼쪽·오른쪽 끝이 안 맞아서 한 칼럼으로 안 읽힌다. 표와 그래프는
+ * 폭을 다 쓰는 것이 이득이지만(비교하려고 옆으로 눕는 것들), 스트립은 본문
+ * 사이에 끼는 것이라 본문과 같은 자를 쓴다. */
+.sr-read .sr-stats {
+  max-width: 760px;
+}
+
+/* ── Numeric alignment — v2 owns this, because CDS drops it ──────────────────
+ *
+ * `TableCell` accepts `justifyContent`, and when you pass plain `children` it never
+ * reaches the DOM: `smartJustifyContent` is only applied in the `title`/`subtitle`
+ * branches. Measured — every numeric cell computed `justify-content: normal` and sat
+ * flush LEFT with ~37px of empty cell to its right.
+ *
+ * It looked correct only because the values on screen happened to share a digit count.
+ * `-14.2` beside `191.6`, or `103.310` beside `-0.028`, would not have lined up, and
+ * right alignment is the whole reason `tabular-nums` is on: it is what puts decimal
+ * points under each other so two rows can be compared without reading them.
+ */
+.sr-num {
+  text-align: right;
+}
+
+.sr-num > * {
+  justify-content: flex-end;
+}
+
+/* …그리고 그 한 줄로는 **안 닿는다**.
+ *
+ * `TableCell` 은 children 을 여섯 겹으로 감싸고, 값을 실제로 안는 마지막 겹이
+ * **세로 flex**(`column-…`)다(실측 2026-08-20). 세로축에서 `justify-content` 는
+ * 위아래를 다루므로 `justifyContent="flex-end"` 는 가로로 아무것도 못 한다 —
+ * 가로로 미는 것은 `align-items` 이고, CDS 는 거기에 `flex-start` 를 심어 둔다.
+ * 209px 칸에 44px 숫자가 왼쪽 끝에 붙어 있는 것을 재고 나서야 보였다.
+ *
+ * Main 의 표에서 이 결함이 안 보인 이유는 정렬이 되고 있어서가 아니라 **슬랙이
+ * 없어서**다(열을 `ch` 로 잰다). 그래서 이 규칙은 Main 에서 무동작이다.
+ * `.sr-label` 은 건드리지 않으므로 이름 열은 그대로 왼쪽에 남는다. */
+.sr-num [class*='column-'] {
+  align-items: flex-end;
+}
+
+.sr-num span {
+  text-align: right;
+}
+
+/* The label column is text and stays left — the rule is "numbers right, text left",
+ * not "everything right". */
+.sr-label {
+  text-align: left;
+}
+
+/* ── The 52주 cell: three statistics and a track, on ONE shared sub-grid ─────
+ *
+ * The template comes from `columns.rangeTemplate()` and is handed to BOTH the
+ * header and every body cell as an inline style, exactly as the outer table's
+ * widths come from one `<colgroup>`. Two grids declared separately drift; one
+ * grid used twice cannot.
+ *
+ * The trailing empty cell is the filler track — the 52주 column is the table's
+ * flexible tail, and the slack has to land AFTER the numbers so they stay
+ * aligned down the page instead of spreading apart.
+ */
+.sr-range {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  gap: 0;
+}
+
+.sr-range > * {
+  text-align: right;
+  padding-inline-end: 12px;
+  min-width: 0;
+}
+
+/* The filler carries NO padding. It is a `minmax(0, 1fr)` track, so on the
+ * widest ladder state — 52주 + 위치 + 세타 — it resolves to 0px, and a 0px track
+ * holding a span with 12px of inline padding cannot shrink below that padding:
+ * `min-width: 0` removes the content floor, not the box's own padding. Measured
+ * in the running app (2026-08-14): the 52주 `<th>` came back clientWidth 439,
+ * scrollWidth 443, and the table grew a horizontal scrollbar the moment 세타
+ * took the last of the slack. Padding on a track that exists only to absorb
+ * slack was never doing anything anyway. */
+.sr-range > *:last-child {
+  padding-inline-end: 0;
+}
+
+/* 낮은 쪽 → 높은 쪽. The rail is a filled control, the marker is ink: the rail
+ * is a scale and the marker is a value, and they must not read as one object. */
+.sr-track {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--sr-control);
+  margin-inline-end: 12px;
+}
+
+.sr-track-mark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 10px;
+  border-radius: 1px;
+  background: var(--color-fg);
+  transform: translateX(-1px);
+}
+
+/* ── Column headers: 700, muted ─────────────────────────────────────────────
+ *
+ * Measured on coinbase.com/explore's asset table: headers are **16px/700** in
+ * `rgb(91,97,110)` — the one place Coinbase uses a third weight. Its body cells
+ * are 400/600, so 700 is not a third register inside the data; it is what
+ * separates the HEADER ROW from every row under it.
+ *
+ * CDS has no 700 token — its whole scale is 400/600 (`themes/defaultTheme.js`),
+ * which is why this is a rule here and not a `fontWeight` entry in
+ * `sauronTheme`. Adding 700 to the theme would put a third weight in reach of
+ * every component; scoping it to `th` keeps it where it was measured.
+ *
+ * The size stays at the token's (13px `caption`) rather than Coinbase's 16px:
+ * a 16px header over 13px values would out-weigh the data it names, and this
+ * table runs denser than theirs. Weight carries the separation, size does not. */
+thead .sr-num,
+thead th {
+  font-weight: 700;
+}
+
+/* ── The name cell: the name, and where that name normally sits ──────────────
+ *
+ * Two registers and no third. The NAME carries the row's only non-numeric
+ * emphasis (label1/600) and is therefore also the thing a vertical scan lands
+ * on; the second line separates by size and colour rather than by a third
+ * weight. Colours come from CDS tokens — every hex in v2 lives in
+ * `direction.css`, and `guards/color-source.test.ts` enforces it.
+ *
+ * A leading tenor chip was built here and removed: v2's labels already lead with
+ * the tenor, so it restated the name in every group. The measurement that
+ * settled it is recorded in `table/cells.ts` — do not re-derive it.
+ *
+ * `min-width: 0` matters and is easy to lose: a flex child defaults to
+ * `min-width: auto` and refuses to shrink below its content. */
+.sr-name-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+/* 말줄임 금지 [OWNER 2026-08-25 — CLAUDE.md 같은 이름 절]. 여기 있던
+   `text-overflow: ellipsis` 는 죽은 안전판이었다 — 열 폭이 최장 라벨로 실측돼
+   있어(columns.ts) 발동할 일이 없어야 하고, 발동하면 «국고…» 가 된다. 이제
+   너무 긴 문자열은 조용히 잘리는 대신 이웃 위로 **시끄럽게 넘친다** — 즉시
+   눈에 띄어 폭을 고치게 되는 쪽이 이 리포의 실패 문법이다(조용한 강등 금지). */
+.sr-name-stack > * {
+  white-space: nowrap;
+}
+
+/* ── 떠 있는 창 (레인 3) ─────────────────────────────────────────────────────
+ *
+ * 카드와 같은 면 규칙을 따른다: 색조 + 라운드 + 헤어라인 셋 다(DESIGN §3.4).
+ * 다른 점은 **그림자** 하나다 — 이건 페이지에 붙은 면이 아니라 진짜로 떠 있는
+ * 면이고, 그 구분이 카드와 창을 가른다. z 는 `ui/window/layers.ts` 가 정한다.
+ *
+ * 부호 있는 숫자가 이 위에 앉는다(백테스트 손익). 그래서 배경은 `--sr-card` —
+ * 방향색이 4.5:1 을 넘는 유일한 면이다(DESIGN §3.2). 페이지 바탕을 쓰면 그
+ * 숫자들이 전부 기준 미달이 된다. */
+.sr-window {
+  background: var(--sr-card);
+  border: 1px solid var(--color-bgLine);
+  border-radius: 16px;
+  /* 그림자는 **CDS 토큰**이다. 색 리터럴은 `direction.css` 밖에 못 산다
+     (`guards/color-source.test.ts`), 그리고 그림자 색도 색이다 — 이 규칙이
+     실제로 이 줄을 잡았다. `elevation2`(0 8px 24px, 검정 12%)가 CDS 가 "떠 있는
+     면" 에 주는 값이고, 창은 그 자리다. */
+  box-shadow: var(--shadow-elevation2);
+  /* **자르지 않는다** — 팝업은 창 위에 떠야 한다 [실측 2026-08-14].
+   *
+   * 여기 `overflow: hidden` 이 있었고, 모서리를 위한 것이었다. 그런데 CDS 의
+   * `Select` 드롭다운은 floating-ui 로 **이 창을 기준 삼아** 절대 배치된다
+   * (offsetParent 가 `.sr-window`, `transform: translate(x, y)`). 포털이 아니라
+   * 창의 자손이므로, 창이 자르면 드롭다운도 잘린다.
+   *
+   * 실측: 백테스트 종목 목록 **99개**가 창 아래로 70px 잘려 있었다 — 마지막
+   * 항목들을 고를 방법이 없었다. 시뮬레이션의 버터플라이는 56개다. 눈에 잘
+   * 안 띄는 이유는 잘린 자리가 창 밖이라 "목록이 짧구나" 로 읽히기 때문이다.
+   *
+   * 그래서 모서리 자르기를 **자식으로 내린다**(바로 아래 두 규칙). 머리는
+   * 배경이 없어 자를 것이 없고(닫기 버튼은 8px 안쪽이라 모서리 호에 닿지
+   * 않는다), 채운 면은 서랍의 탭 바 하나뿐이다. */
+  overflow: visible;
+}
+
+/* 창의 마지막 자식이 아래 모서리를 진다. `:last-child` 인 이유는 서랍이 있을
+   때와 없을 때 바닥에 오는 것이 다르기 때문이다 — 몸통에 고정으로 반경을 주면
+   서랍이 있는 창에서 내용이 창 한가운데서 잘린다. 반경이 15px 인 것은 1px
+   테두리 **안쪽** 반경이라서다(16 − 1). */
+.sr-window > *:last-child {
+  border-end-start-radius: 15px;
+  border-end-end-radius: 15px;
+}
+
+/* 손잡이. `cursor: move` 는 여기에만 — 끌 수 있는 면이 하나뿐이라는 사실이
+ * 커서로 읽혀야 한다. `touch-action: none` 이 없으면 터치에서 브라우저가
+ * 스크롤을 가져가 포인터 이동이 끊긴다. */
+.sr-window-head {
+  /* `border-box` — 테두리가 높이 **안에** 들어와야 한다. 실측 2026-08-14: 없으면
+     렌더 높이가 45(44 + 아래 테두리 1)가 되고, 클램프 상수(44)와 1px 어긋나
+     아래로 끝까지 끈 창의 손잡이 마지막 픽셀이 화면 밖으로 나갔다. 1px 이지만
+     이 상수가 지키는 것이 "손잡이는 항상 잡힌다" 라서 그냥 두면 그 문장이
+     거짓이 된다. */
+  box-sizing: border-box;
+  padding: 0 8px 0 16px;
+  height: 44px;
+  border-bottom: 1px solid var(--color-bgLine);
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+
+.sr-window-head > *:nth-child(2) {
+  margin-inline-start: auto;
+}
+
+/* 창 머리의 닫기, 그리고 북 행의 줄삭제가 같은 클래스를 쓴다.
+ *
+ * 높이 32 는 **행에서 필요한 값**이다. 전에는 높이 선언이 없어 내재값 28
+ * (16px lh1 + 6/6)로 섰고, 북 행은 `alignItems="flex-end"` 라 바닥이 정렬되므로
+ * 28짜리 상자의 중심이 컨트롤 중심선보다 2px 내려앉았다(실측 잉크 중심 174.5
+ * vs 173). 32 로 적으면 바닥 정렬에서 중심이 정확히 만난다.
+ *
+ * 좌우 패딩 8 은 그대로 둔다 — 머리에서 이 8 이 컨테이너의 오른쪽 인셋 8 과
+ * 합쳐져 **잉크가 가장자리에서 16** 에 서고, 그게 제목 잉크의 좌측 16 과 이루는
+ * 대칭이다(실측). 컨테이너를 16/16 으로 "고치면" 이 대칭이 깨진다.
+ *
+ * 44px 머리에서 32 는 여전히 세로 중앙에 선다(전 28 도 그랬다). */
+.sr-window-close {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--color-fgMuted);
+  font: inherit;
+  line-height: 1;
+}
+
+.sr-window-close:hover {
+  background: var(--sr-control);
+  color: var(--color-fg);
+}
+
+.sr-window-body {
+  max-height: 70vh;
+  overflow: auto;
+  /* 창이 자기 상한(`FloatingWindow` 의 `maxHeight`)에 닿으면 **몸통이 준다.**
+     `min-height: 0` 이 없으면 flex 아이템의 기본 최소 높이가 자기 내용이라
+     줄지 않고, 창이 상한을 넘어 화면 밖으로 자란다.
+
+     `flex-shrink: 12` 는 서랍(1)에 대한 **양보 비율**이다 [2026-09-02 실측].
+     flex 는 부족분을 `shrink × basis` 로 나눠 문다 — 몸통 basis 는 서랍의
+     여러 배라 12 를 얹으면 몸통이 사실상 전부 문다(실측: 창 상한 815 에서
+     서랍 346 유지 · 종전 같이 줄던 판에서는 173 까지 눌렸다). 그런데도
+     **0 이 아닌** 이유가 이 값의 요점이다: 창을 화면 아래로 끌어 상한이
+     서랍보다 작아지면 몸통이 0 이 되고 그 다음은 서랍이 물어야 한다.
+     0 이면 물 쪽이 없어 창이 화면 밖으로 자란다(감사 산술: top ≥ 0.62V−124
+     에서 넘침). 비율은 「누가 먼저 주나」이고, 0 은 「끝까지 안 준다」다. */
+  flex: 0 12 auto;
+  min-height: 0;
+}
+
+/* ── 하단 서랍 ───────────────────────────────────────────────────────────────
+ * 탭 바는 접혀 있을 때도 보인다. 펼친 몸통은 자기 높이 상한을 지고 스크롤한다 —
+ * 창이 서랍 때문에 화면 밖으로 자라면 손잡이 클램프가 무의미해진다. */
+.sr-drawer {
+  border-top: 1px solid var(--color-bgLine);
+  /* **먼저 주는 쪽은 몸통이다 — 서랍은 마지막에 준다** [2026-09-02 실측].
+     창은 열 flex 이고 몸통(`max-height: 70vh`)과 서랍이 둘 다 `flex-shrink: 1`
+     이라, 창이 상한에 닿으면 **둘이 같이** 줄었다. 그 판에서 서랍이 173px 까지
+     눌려 머리 줄과 스크롤바만 남고 **데이터가 한 줄도 안 보였다**(MR 일별 대사
+     실측: 몸통 599 · 서랍 173 · 창 상한 759).
+
+     서랍은 «잠깐 펴 보는 것»이고 몸통은 **자기 스크롤을 가진다** — 먼저 줄어야
+     할 쪽은 몸통이다. 그래서 비율로 가른다(`.sr-window-body` 의 12 대 여기 1).
+     한때 이 값이 `0` 이었는데 그건 지나쳤다: 서랍 상한 38vh 가 창을 못 밀어낸다는
+     당시 근거는 **창 상한이 38vh 보다 클 때만** 참이고, 창을 화면 아래로 끌면
+     상한이 그보다 작아진다(실측 2026-09-02: 창 하단 948 · 화면 911 — 37px 밖).
+     1 이면 그 자리에서 서랍이 물어 창이 화면 안에 남는다. */
+  flex-shrink: 1;
+  /* 자기 안에서 자른다 — 탭 바가 `--sr-control` 로 채워져 있어서, 안 자르면 그
+     사각 모서리가 창의 둥근 모서리 밖으로 삐져나온다(창이 더 이상 안 자른다).
+     여기서 자르는 것은 안전하다: 드롭다운의 컨테이닝 블록은 창이지 서랍이 아니다. */
+  overflow: hidden;
+}
+
+.sr-drawer-tabs {
+  height: 32px;
+  padding: 0 8px;
+  background: var(--sr-control);
+}
+
+.sr-drawer-tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: var(--color-fgMuted);
+  font: inherit;
+  font-size: 13px;
+}
+
+.sr-drawer-tab[data-active] {
+  background: var(--sr-card);
+  color: var(--color-fg);
+}
+
+/* 내용이 없는 탭은 흐리지만 **눌린다** — 없다는 사실을 열어서 읽을 수 있어야
+ * 한다(WindowDrawer 의 주석 참조). */
+.sr-drawer-tab[data-empty] {
+  opacity: 0.55;
+}
+
+.sr-drawer-body {
+  max-height: 38vh;
+  overflow: auto;
+  padding: 12px 16px;
+  /* 안의 스크롤러(대사 스택)가 **남는 높이**를 받도록 열 flex 로 둔다. 창이
+     상한에 닿아 서랍이 눌리면 스택도 같이 줄어야 한다 — 안 줄면 스크롤러가
+     둘이 되고(서랍 + 스택), 그 순간 스택의 사방 고정 범례가 깨진다. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 서랍 안의 표 — **남는 높이를 받는 상자** [OWNER 2026-09-02 — "일별대사에서
+ * 왜 밑에 좌우로 드래그 할 수 있는 홀더 같은게 없어?"].
+ *
+ * 증상: 일별 대사표(열 14개·폭 1,444px)가 가로로 388px 넘치는데 **가로 스크롤
+ * 바가 화면에 없었다.** 바는 있었다 — 실측하면 표 상자 바닥이 y=945 인데 서랍
+ * (창)은 y=830 에서 잘려, 바가 달린 그 15px 모서리가 **밖에 있었다**.
+ *
+ * 뿌리: 상자에 `max-height: 30vh` 를 박아 뒀는데 서랍이 실제로 준 높이는
+ * 173px 이었다(창이 상한에 닿으면 서랍이 눌린다). 상자가 안 줄어드니 서랍이
+ * 대신 스크롤하고, 스크롤러가 둘이 됐다 — `.sr-drawer-body` 의 주석이 정확히
+ * 그것을 경고하고 있었다(«안 줄면 스크롤러가 둘이 되고 … 사방 고정이 깨진다»).
+ *
+ * 그래서 높이를 **박지 않고 받는다**: 상자는 `flex: 1 · min-height: 0` 으로
+ * 서랍의 남는 높이를 받고, 스크롤은 CDS 가 표에 두른 컨테이너 하나가 진다
+ * (`> div` — CDS 해시 클래스는 빌드마다 바뀌므로 자식 선택자로 잡는다. 같은
+ * 이유로 `.sr-rv-rank-scroll > div` 도 그렇게 적혀 있다). */
+.sr-mr-drawertable {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.sr-mr-drawertable > div {
+  max-height: 100%;
+}
+
+/* 대사표를 **하루가 통째로 보이는 밀도**로 [실물 실측 2026-09-03].
+ *
+ * 다리가 줄로 내려가면서 하루가 7줄이 됐다. CDS 기본 줄 높이는 44px 이라
+ * 하루가 308px 인데 **서랍 자체가 288px** 이었다 — 오너가 요구한 「하루에
+ * 찍혀야 함」이 화면에서 성립하지 않았다(브라우저 실측: 보이는 줄 5.6개).
+ *
+ * 높이는 `td` 가 아니라 CDS 가 셀 안에 두는 두 겹(`.cds-Cell` 과 그 자식)의
+ * 세로 여백에서 온다 — `td` 의 padding 은 이미 0 이라 거기를 만져도 안 줄었다.
+ * 두 겹을 눌러 **24px** 로 내리면 하루가 168px 이라 서랍에 한 날 반이 든다.
+ *
+ * 이 표에만 준다. 앱의 다른 표는 손으로 짚는 표라 CDS 기본 밀도가 맞고,
+ * 이건 「시스템 화면과 줄 단위로 맞춰 보는」 대사표다(ReconStack 머리의 그
+ * 규율 — 80영업일 240줄이 요구사항 그 자체다). */
+.sr-mr-drawertable tbody .cds-Cell {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.sr-mr-drawertable tbody .cds-Cell > * {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/* 하루의 **첫 줄**에만 경계 — 날짜는 블록의 첫 줄에만 적히므로, 선이 없으면
+ * 일곱 줄이 이웃 날과 섞여 어디서 끊기는지 눈이 못 잡는다(실물 실측에서
+ * 바로 보였다). 가로선은 헤어라인이다 — 축 규칙(수평=헤어라인). */
+.sr-mr-drawertable tbody tr[data-sr-daytop] td {
+  box-shadow: inset 0 1px 0 var(--sr-edge-shadow);
+}
+
+/* 포지션 한 줄 — 표가 아니라 문장 줄이다. 구분선만 준다. */
+.sr-bt-row {
+  padding: 6px 0;
+  border-top: 1px solid var(--color-bgLine);
+}
+
+/* 포지션 줄의 접힌 상세(다리별 노셔널·DV01). 기계는 접어 두고, 펼치는 손잡이는
+ * 줄 안에서 조용히 앉아 있어야 한다 — 이 줄의 주인공은 손익 숫자다. */
+.sr-bt-legs summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.sr-bt-legs summary::-webkit-details-marker {
+  display: none;
+}
+
+.sr-bt-legs[open] summary {
+  opacity: 0.7;
+}
+
+/* ── 일별 대사 스택 (레인 4·5 공용) ──────────────────────────────────────────
+ *
+ * 규율과 근거는 `ui/window/ReconStack.tsx` 의 모듈 주석에 있다. 여기 있는 것은
+ * 그 규율이 요구하는 CSS 뿐이다.
+ *
+ * 이 표만 `tabular-nums` 를 넘어 **글자 크기를 직접 정한다**(14px 본문 / 13px
+ * 범례). 폭 계산이 전부 `ch` 이고 `ch` 는 그 요소 자신의 폰트에서 풀리므로,
+ * 크기가 상속으로 흔들리면 sticky 오프셋과 트랙이 어긋난다 — 표 안에 `ch` 가
+ * 세 벌이던 §5.5 의 그 함정이다. */
+/* 스크롤 사슬의 가운데 고리 — 서랍이 눌리면 이 상자가 줄고, 그래야 안의
+   스크롤러가 준다. 블록이면 사슬이 여기서 끊긴다. */
+.sr-recon-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sr-recon-scroll {
+  overflow: auto;
+  /* 캡(`maxHeight` 프롭)은 상한일 뿐이고, 자리가 그보다 좁으면 그만큼만 쓴다.
+     `min-height: 0` 이 없으면 flex 아이템이 자기 내용보다 안 줄어 서랍 밖으로
+     삐져나간다(실측 2026-08-14: 서랍 219px 안에서 스택이 273px 이었다). */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sr-recon {
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-recon-th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--sr-card);
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-fgMuted);
+  text-align: left;
+}
+
+/* 모서리 범례 — 세로 스크롤의 top 에 더해 가로 좌표까지 고정된다. z 가 한 칸
+   높은 이유: 가로 스크롤 중 테너 헤더가 이 밑을 지난다. */
+.sr-recon-pin {
+  z-index: 20;
+}
+
+.sr-recon-sort {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.sr-recon-sort:hover {
+  color: var(--color-fg);
+}
+
+.sr-recon-td {
+  padding: 4px 0 4px 8px;
+}
+
+/* 고정 셀의 배경은 **불투명이어야 한다** — 밑을 지나는 히트맵 틴트가 비치면
+   범례가 격자처럼 읽힌다. */
+.sr-recon-stick {
+  position: sticky;
+  z-index: 5;
+  background: var(--sr-card);
+}
+
+/* 고정 열의 **안쪽 경계** — "여기서부터 덮고 있다" [OWNER 2026-08-19].
+   불투명 범례가 가로 스크롤 중 격자를 소리 없이 가려서, 읽는 사람에게는 숫자가
+   그냥 없는 것처럼 보였다(잘린 게 아니라 사라진 것으로 읽힌다). 헤어라인이
+   경계를 긋고, 그 안쪽으로 도로 물러나는 옅은 그림자가 "밑을 지나간다"를 말한다.
+
+   `border` 가 아니라 `box-shadow` 인 이유는 이 표의 첫 규율과 같다: 트랙 폭이
+   1px 라도 밀리면 `ch` 로 적은 sticky 오프셋과 실제 경계가 어긋나 고정 열
+   사이로 밑이 샌다(모듈 주석의 실측). 그림자는 레이아웃을 안 민다. */
+.sr-recon-edge-l {
+  box-shadow:
+    1px 0 0 var(--color-bgLine),
+    6px 0 8px -6px var(--sr-edge-shadow);
+}
+
+/* 테너 격자와 **돈 칸**의 경계 [OWNER 2026-09-03 — "합계랑 평가, 잔차, 캐리,
+   롤다운, 조달, 그날 손익도 다 같이 한 묶음에서 움직여야 하지 않을까"].
+
+   여기 있던 `.sr-recon-edge-r` 은 «여기서부터 덮고 있다» 를 뜻하는 그림자였다 —
+   오른쪽 범례가 불투명하게 고정돼 격자를 소리 없이 가렸기 때문이다. 2026-09-03
+   에 그 고정을 풀어 돈 칸이 테너와 한 덩어리로 흐르게 했으므로, 덮는 것이 없다.
+   그림자를 그대로 두면 화면이 없는 사실을 말하게 된다 — 그래서 **평범한
+   헤어라인**만 남긴다(축 규칙: 수직 경계는 1px 선). */
+.sr-recon-div-l {
+  box-shadow: inset 1px 0 0 var(--color-bgLine);
+}
+
+.sr-recon-center {
+  text-align: center;
+}
+
+/* ── 두 격자를 가르는 머리 [OWNER, 2026-08-21 — 혼합 북] ────────────────────
+   스왑 KRD 와 채권 KRD 는 다른 커브의 감도라 한 칸에 못 더한다. 표는 하나로
+   두되(손익 3분해는 원이라 그냥 더해진다) 격자만 두 덩어리로 세운다.
+
+   그룹 줄이 헤더 위에 서므로 **테너 줄의 `top` 이 그만큼 내려가야 한다.**
+   두 값이 갈리면 세로 스크롤 중에 테너 머리가 그룹 머리 밑으로 파고든다.
+   26px 은 이 줄의 실제 높이다(패딩 4+4 + 13px 글자 한 줄). 하나를 고치면
+   **둘 다** 고쳐야 한다. */
+.sr-recon-grouprow > .sr-recon-th {
+  top: 0;
+  height: 26px;
+  padding: 4px 0;
+  text-align: left;
+}
+
+/* 라벨만 가로로 붙는다 — `left` 는 왼쪽 고정 열의 폭이고 인라인으로 온다
+   (13px 헤더의 `ch` 는 14px 본문의 `ch` 와 다르다 — `headCh` 의 근거). */
+.sr-recon-grouplabel {
+  position: sticky;
+  display: inline-block;
+  padding-left: 8px;
+  font-weight: 500;
+  color: var(--color-fg);
+}
+
+.sr-recon-hasgroups > .sr-recon-th {
+  top: 26px;
+}
+
+/* 경계는 헤어라인 하나 — "여기서부터 다른 커브". `border` 가 아니라 inset
+   그림자인 이유는 `.sr-recon-edge-*` 와 같다: 트랙 폭이 1px 밀리면 `ch` 로
+   적은 sticky 오프셋과 실제 경계가 어긋난다. */
+.sr-recon-groupsep {
+  box-shadow: inset 1px 0 0 var(--color-bgLine);
+}
+
+.sr-recon-right {
+  text-align: right;
+}
+
+.sr-recon-top {
+  vertical-align: top;
+}
+
+.sr-recon-kind {
+  font-size: 13px;
+  color: var(--color-fgMuted);
+}
+
+.sr-recon-strong {
+  font-weight: 500;
+}
+
+.sr-recon-blank {
+  color: var(--color-fgMuted);
+  opacity: 0.6;
+}
+
+/* ── 커브 표면 · Lab (`ui/YieldSurface.tsx`) ────────────────────────────────
+   잉크는 `currentColor` 로 내려간다 — 능선 수백 장이 각자 `var()` 를 들면
+   합성기가 멈춘다(이 제품이 v1 에서 이미 밟은 자리). 한 번만 정하고 상속시킨다. */
+/* 스크롤바는 이 화면에 존재하지 않는다 [OWNER 2026-08-18 — "이런 게 있으면
+   안 되고"]. 넘치면 잘리고, 더 보고 싶은 것은 드래그 확대/축소가 진다. */
+/* `.sr-surface-page` 는 은퇴했다 — Lab 이 페이지 맨살에서 카드 위로 이사했다
+   [OWNER 2026-08-19, 메인·백테스트 문법 정렬]. 호스트의 헤어라인은 카드 머리
+   (컨트롤·캡션)와 그림을 가르는 안쪽 구분선으로 남는다. */
+.sr-surface-host {
+  border-top: 1px solid var(--color-bgLine);
+  padding-top: 12px;
+  overflow: hidden;
+  /* 카드의 남는 세로를 flex 로 받는다 — 캔버스 높이는 이 상자의 **실측**이다
+     (추정이 아니라). 이게 없으면 상자 높이가 내용(캔버스)을 따라가는 순환이
+     되고, 흔한 창 높이에서 앞줄 라벨이 카드 밖으로 잘렸다(실측 855). */
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.sr-surface {
+  position: relative;
+  /* 단면 패널 테두리 등 1px 짜리 삐져나옴이 호스트의 overflow-x:auto 를 깨워
+     상시 가로 스크롤바를 세운다(실측 1px). 이 상자가 곧 의도한 크기다 — 자른다. */
+  overflow: hidden;
+}
+
+/* 3D 표면의 캔버스 — 인라인 기본값이면 밑에 4px 유령 여백이 생기고,
+   touch-action 을 안 죽이면 드래그 회전이 스크롤과 싸운다. */
+.sr-s3d-canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* 캔버스가 키보드 정거장이 됐다(화살표 = 날짜·테너) — 포커스 링은 내비
+   아이콘 버튼과 같은 문법, 단 상자가 overflow:hidden 안이라 안쪽으로 긋는다. */
+.sr-s3d-canvas:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: -2px;
+}
+
+/* 화면 밖 읽기 전용 텍스트 — 캔버스 리드아웃의 스크린리더 판. */
+.sr-a11y-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 세 겹 스택 — 바닥선(2D) / 표면(WebGL) / 주석(2D). 포인터는 맨 위층만 받는다. */
+.sr-s3d-stack {
+  position: relative;
+}
+
+.sr-s3d-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.sr-s3d-layer:not(.sr-s3d-canvas) {
+  pointer-events: none;
+}
+
+
+.sr-surface-cut-date {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 변화 기록 (`ui/ChangeLog.tsx`) ─────────────────────────────────────────
+   내비 안에 사는 방아쇠 + 그 아래로 열리는 팝오버. */
+.sr-clog {
+  position: relative;
+}
+
+.sr-clog-trigger {
+  display: inline-flex;
+  align-items: center;
+  /* 28 → 32: 우측 유틸리티 줄의 등고(.sr-naviconbtn 주석 참조). */
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--color-fgMuted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--sr-motion-fast) var(--sr-ease-out),
+    color var(--sr-motion-fast) var(--sr-ease-out);
+}
+
+.sr-clog-trigger:hover {
+  background: var(--sr-control);
+  color: var(--color-fg);
+}
+
+/* 바깥 클릭을 받는 면. **색이 없다** — 팝오버는 화면을 가져가지 않는다. */
+.sr-clog-away {
+  position: fixed;
+  inset: 0;
+}
+
+.sr-clog-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  border: 1px solid var(--color-bgLine);
+  border-radius: 12px;
+  padding: 6px;
+  background: var(--sr-popover);
+  box-shadow: var(--sr-popover-shadow);
+}
+
+.sr-clog-head {
+  padding: 4px 8px 6px;
+}
+
+.sr-clog-empty {
+  padding: 10px 8px;
+}
+
+.sr-clog-cluster {
+  border-bottom: 1px solid var(--color-bgLine);
+  padding: 4px 0;
+}
+
+.sr-clog-cluster:last-child {
+  border-bottom: 0;
+}
+
+.sr-clog-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--sr-motion-fast) var(--sr-ease-out);
+}
+
+.sr-clog-line:hover {
+  background: var(--sr-control);
+}
+
+.sr-clog-tags {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sr-clog-tag {
+  flex-shrink: 0;
+  border: 1px solid var(--color-bgLine);
+  border-radius: 999px;
+  padding: 0 6px;
+  color: var(--color-fgMuted);
+  font-size: 12px;
+}
+
+.sr-clog-delta {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-clog-more {
+  margin-left: 10px;
+  border: 0;
+  padding: 2px 4px;
+  background: transparent;
+  color: var(--color-fgMuted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sr-clog-related {
+  margin-left: 12px;
+  border-left: 1px solid var(--color-bgLine);
+  padding-left: 4px;
+}
+
+/* ── 포워드 매트릭스 (`ui/ForwardMatrix.tsx`) ───────────────────────────────
+   격자 **안에는 선이 없다.** 칸끼리 변을 공유해 하나의 면을 이루고, 구조는 틴트와
+   고정 열이 진다. 남는 테두리는 「고시 교차점」 한 칸의 성질뿐이다. */
+.sr-matrix-wrap {
+  overflow: auto;
+  max-width: 100%;
+}
+
+.sr-matrix {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.sr-matrix th,
+.sr-matrix td {
+  height: 26px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+.sr-matrix-th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-width: 74px;
+  background: var(--sr-card);
+  text-align: right;
+  font-weight: var(--fontWeight-headline);
+}
+
+/* 고정 셀의 배경은 **불투명이어야 한다** — 아니면 밑을 지나는 틴트가 비쳐서
+   고정 열까지 격자처럼 읽힌다(`ReconStack` 이 진 규칙과 같다). */
+.sr-matrix-stick {
+  position: sticky;
+  z-index: 3;
+  background: var(--sr-card);
+  text-align: left;
+  font-weight: 400;
+}
+
+.sr-matrix thead .sr-matrix-stick {
+  top: 0;
+  z-index: 4;
+}
+
+.sr-matrix-start {
+  left: 0;
+  min-width: 48px;
+}
+
+.sr-matrix-date {
+  left: 48px;
+  min-width: 92px;
+}
+
+.sr-matrix-td {
+  border: 1px solid transparent;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 양쪽 다리가 고시 만기인 교차점. 칸 **하나**의 성질이라 선이 아니라 테두리다. */
+.sr-matrix-live {
+  border-color: var(--color-bgLine);
+}
+
+.sr-matrix-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 2px 2px;
+}
+
+/* ── 틴트 범례 (`ui/TintLegend.tsx`) ────────────────────────────────────────
+   기능이 아니라 열쇠다 — 작고 조용하다. */
+.sr-tintlegend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sr-tintlegend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sr-tintlegend-strip {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--color-bgLine);
+  border-radius: 4px;
+}
+
+.sr-tintlegend-sw {
+  display: block;
+  /* 16×12 는 조용한 날(틴트 0칸) 범례가 그냥 안 보였다 [OWNER 승인 2026-08-18
+     점검]. 열쇠는 조용하되 **읽혀야** 열쇠다. */
+  width: 22px;
+  height: 14px;
+}
+
+/* 칠하지 않은 가운데 — 카드 색 그대로여야 "색 없음" 으로 읽힌다. */
+.sr-tintlegend-none {
+  background: var(--sr-card);
+}
+
+/* ── 주요 포워드 [감사 2026-08-25 — `.sr-keyfwd` · `.sr-gauge` 삭제] ─────────
+   이 자리에 이 블록만의 표 스타일(26px 행)과 게이지 부품 다섯이 있었다. 둘 다
+   캐논에 이미 있는 것의 중복이었다 — 표는 CDS `Table` + `ROW_H`, 52주 자리는
+   `.sr-track`/`.sr-track-mark`. `ui/ForwardMatrix.tsx::KeyForwardBlock` 은 이제
+   그 부품들을 임포트해서 서고, 이 파일에 자기 몫의 CSS 를 두지 않는다.
+   (위의 격자 `.sr-matrix*` 는 남는다 — 열 열 개짜리 숫자 면이라 CDS 셀 여백을
+   감당할 수 없고, 그 사유는 컴포넌트 머리 주석에 적혀 있다.) */
+
+/* ── 하단 기준점 띠 (`ui/BottomStrip.tsx`) ──────────────────────────────────
+   페이지 기둥의 **마지막 flex 아이템**이다(`fixed` 아님 — 컴포넌트 주석 참조).
+   그래서 `position: relative` 는 안쪽 두 겹을 겹쳐 놓기 위한 것뿐이다.
+
+   ⚠ `height` 를 애니메이션하는 것은 **의도된 예외**다(합성 전용 규칙 위반).
+   `transform` 으로 띠를 밀면 띠만 움직이고 그 자리는 안 돌아온다 — 내용 영역이
+   받는 높이는 이 flex 아이템의 높이로 정의되므로, 여기서 되찾아 주려던 22px 이
+   그대로 빈 칸으로 남는다. 즉 합성 속성으로는 이 동작을 표현할 수가 없다.
+   한 요소의 한 속성이고, 사용자 조작 한 번에 한 번 34↔12px 이며, 감속 설정에서는
+   0 이 된다. v1 이 같은 자리에서 같은 이유로 내린 판단과 같다. */
+.sr-strip {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--color-bgLine);
+  background: var(--sr-card);
+  transition: height var(--sr-motion-base) var(--sr-ease-out);
+}
+
+/* 두 겹은 같은 자리에 겹쳐 서고 투명도로만 교차한다. `absolute` 인 이유는 둘 다
+   마운트된 채로 서로의 흐름을 밀지 않게 하기 위해서다. */
+.sr-strip-handle,
+.sr-strip-row {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity var(--sr-motion-fast) var(--sr-ease-out);
+}
+
+.sr-strip-handle[data-shown],
+.sr-strip-row[data-shown] {
+  opacity: 1;
+}
+
+.sr-strip-handle {
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* 시트가 쓰는 손잡이 모양 그대로 — "접혀 있다" 로 읽히고 유물로는 안 읽힌다. */
+.sr-strip-grab {
+  display: block;
+  width: 32px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--color-bgLine);
+}
+
+.sr-strip-row {
+  gap: 4px;
+  padding: 0 24px; /* 페이지 좌우 거터와 같은 값 */
+  font-size: 13px;
+}
+
+.sr-strip-anchor {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--sr-motion-fast) var(--sr-ease-out);
+}
+
+.sr-strip-anchor:hover {
+  background: var(--sr-control);
+}
+
+.sr-strip-anchor:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 1px;
+}
+
+.sr-strip-anchor-label {
+  color: var(--color-fgMuted);
+}
+
+/* 수준과 변화는 표와 같은 규율을 진다 — 등폭 숫자, 부호 있는 값만 색. */
+.sr-strip-anchor-now,
+.sr-strip-anchor-d {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-strip-anchor-now {
+  font-weight: 500;
+}
+
+/* 접기 단추 — 알약이 아니라 20×20 정사각(키트 실측). 다른 컨트롤과 다른 모양인
+   것이 의도다: 이건 라벨이 아니라 크롬 조작이다. */
+.sr-strip-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--sr-control);
+  color: var(--color-fgMuted);
+  font-size: 11px;
+  font-weight: 700; /* 11px 글리프는 한 단계 굵어야 읽힌다 */
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--sr-motion-fast) var(--sr-ease-out),
+    color var(--sr-motion-fast) var(--sr-ease-out);
+}
+
+.sr-strip-collapse:hover {
+  color: var(--color-fg);
+}
+
+/* ── 렌더 경계의 한 줄짜리 대체물 (`ui/ErrorBoundary.tsx` compact) ───────────
+   크롬 높이 영역에서만 쓴다. 자기 자리를 **그대로** 차지해야 아래 내용이 위로
+   튀지 않는다 — 경계가 레이아웃을 움직이면 결함 하나가 화면 전체를 흔든다. */
+.sr-eb-compact {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  /* 유일한 compact 사용처인 하단 띠의 **펼친 높이**와 같아야 한다
+     (`ui/BottomStrip.tsx` 의 `STRIP_H.open`, 가드가 대조한다).
+     `100%` 로 두면 flex 기둥의 자식이라 페이지 전체 높이로 풀린다 — 결함 한 줄이
+     화면을 통째로 먹는다. */
+  height: 34px;
+  border-top: 1px solid var(--color-bgLine);
+  padding: 0 24px;
+  color: var(--color-fgMuted);
+  font-size: 13px;
+}
+
+.sr-recon-daytop > td {
+  border-top: 1px solid var(--color-bgLine);
+}
+
+.sr-recon-note,
+.sr-recon-empty {
+  padding-top: 8px;
+  font-size: 13px;
+  color: var(--color-fgMuted);
+}
+
+.sr-recon-empty {
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* ── 시뮬레이션 설정 (레인 5, v1 형태) ───────────────────────────────────────
+ *
+ * 설정은 카드 열이다. 카드가 면 규칙(색조 + 라운드 + 헤어라인)을 그대로 따르되,
+ * `.sr-card` 와 달리 **안 자른다** — 안의 `Select` 드롭다운이 카드 밖으로 나와야
+ * 한다(창에서 겪은 것과 같은 문제, DESIGN §8.10). */
+.sr-simcard {
+  background: var(--sr-card);
+  border: 1px solid var(--color-bgLine);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+/* 접히는 카드의 머리 — 보통 카드 머리와 **같은 높이**로 선다.
+ *
+ * CDS `Pressable as="button"` 의 상자는 블록이라, 안에 든 블록 자식(머리줄)이
+ * 인라인 줄상자에 담기면서 위아래로 1px 씩 여유가 붙었다 — 실측 2026-08-27
+ * 시뮬 설정 열: 접히는 카드 22px 대 보통 카드 20px. 같은 열에 선 같은 위계의
+ * 카드들이라 그 2px 이 곧 「얼라인」 5 위반이다. flex 로 만들면 상자가 자식을
+ * 정확히 안는다. */
+.sr-simcard-head {
+  display: flex;
+  width: 100%;
+  /* 남은 2px 의 정체는 CDS `Interactable` 이 두르는 **투명 1px 테두리**다
+     (`solid rgba(10,11,13,0)` — 실측). 그건 포커스 표시가 걸리는 자리일 수
+     있으므로 **지우지 않고** 세로 흐름에서만 뺀다: 상자는 그대로 22px 이되
+     줄에서 차지하는 높이가 20px 이 되어, 머리 글자가 보통 카드와 같은
+     자리에 선다. `border` 를 지우는 대신 상쇄하는 것은 이 리포가 대사 표
+     고정열에서 이미 한 판단과 같은 갈래다(«border 는 오프셋을 깬다»). */
+  margin-block: -1px;
+}
+
+.sr-simcard-chev {
+  display: inline-block;
+  color: var(--color-fgMuted);
+  transition: transform var(--sr-motion-fast) var(--sr-ease-out);
+  line-height: 1;
+  /* 머리줄은 제목·요약을 **baseline** 으로 맞추는데, ⌄ 글리프는 시각 중심이
+     baseline 위에 떠서 카드마다 반 픽셀씩 떠 보였다 [OWNER 승인 2026-08-18
+     점검]. 글리프는 글자가 아니라 표식이므로 자기만 세로 중앙으로 선다. */
+  align-self: center;
+  font-size: 12px;
+}
+
+.sr-simcard-chev[data-open] {
+  transform: rotate(180deg);
+}
+
+/* 케이스 대시 — CDS `Chip` 의 `start` 슬롯에 들어가는 색 선분. 칩 자체는 CDS 것이고
+   이 대시만 이 리포 것이다(CDS 에 "시리즈 색 표식" 이라는 개념이 없다). */
+
+.sr-casedash {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+/* 토탈 행만 굵다 — 나머지는 그 합의 구성이다. */
+
+/* ── 워터폴 ────────────────────────────────────────────────────────────────
+ * 성분 셋이 총손익으로 합쳐지는 그림. 앞의 셋은 **떠 있는 막대**(누적 위에서
+ * 시작)라 합쳐지는 것이 눈에 보이고, 마지막 토탈만 0 에서 선다. */
+.sr-waterfall {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  min-width: 320px;
+  flex-grow: 1;
+  /* 값 라벨은 막대 **위**에 앉는다. 위쪽 여백이 없으면 첫 막대(가장 높은 것)의
+     라벨이 컨테이너 밖으로 나가 위 설명 문장과 겹친다(실측 2026-08-14). */
+  padding-top: 20px;
+  /* 채권 섞인 북은 열이 여덟이다 — 아래 열 최소폭이 값을 다 담으므로 좁은
+     창에서는 이 상자가 가로로 스크롤한다. 자르는 것도 겹치는 것도 금지라
+     남는 길은 스크롤뿐이다 [OWNER 2026-08-25 — CLAUDE.md 말줄임 절대 금지]. */
+  overflow-x: auto;
+}
+
+.sr-wf-col {
+  position: relative;
+  flex: 1 1 0;
+  /* 56 → 120 [OWNER 2026-08-25 겹침 금지]: 값 라벨(`−12억 3,456만원` ≈ 108px
+     @12px)이 절대배치 nowrap 로 가운데 정렬이라, 열이 값보다 좁으면 이웃 열의
+     값 위에 그대로 앉는다 — 8열 혼합 북에서 실측된 겹침. 최소폭이 최장 값을
+     담는다. */
+  min-width: 120px;
+}
+
+.sr-wf-bar {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  border-radius: 3px;
+}
+
+.sr-wf-val,
+.sr-wf-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fgMuted);
+  white-space: nowrap;
+}
+
+.sr-wf-label {
+  bottom: 0;
+}
+
+.sr-wf-total {
+  color: var(--color-fg);
+}
+
+.sr-wf-sum {
+  border-top: 1px solid var(--color-bgLine);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+/* ── Setting — 출처 블록 (SettingView) ──────────────────────────────────────
+ * 컨트롤 무리와 "이 숫자가 어디서 왔는가" 를 헤어라인으로 가른다 — 카드 내부
+ * 구획의 기존 규칙(.sr-wf-sum 등)과 같은 토큰이다. */
+.sr-setting-prov {
+  border-top: 1px solid var(--color-bgLine);
+  padding-top: 12px;
+}
+
+/* 3D 표면의 커서 리드아웃 — `.sr-readout` 의 자리(top:8px)를 커서 추적이
+   덮어쓴다(onPointerMove 가 left/top 을 직접 민다). */
+.sr-s3d-readout {
+  left: 0;
+  top: 0;
+  min-width: 148px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── RV Analysis · Strategy (`src/rv/`) ─────────────────────────────────────
+ *
+ * 표는 전부 **손 표**다 — CDS `Table` 은 셀당 32px 좌우 패딩이라 만기 × Δy 격자
+ * (13열)가 화면을 넘는다(§5.5 의 실측, ReconStack 과 같은 판단). 숫자는 오른쪽·
+ * 라벨은 왼쪽, 등폭 숫자 — 표의 공통 규율 그대로다. */
+
+/* 조건 바 — **고정·불투명**. 어떤 조건에서 나온 숫자인지가 카드보다 먼저
+   읽혀야 하고(RvPage 모듈 주석), 스크롤로 카드가 이 밑을 지나므로 배경은
+   반드시 불투명이어야 한다(고정 셀의 같은 규칙). */
+.sr-rv-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--sr-page);
+  border-bottom: 1px solid var(--color-bgLine);
+  padding: 8px 0 10px;
+}
+
+.sr-rv-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* 랭킹 표만 세로도 스크롤한다 — 74행 전부를 화면 높이로 펼치지 않는다
+   (2026-08-19 크리틱 P1). 스크롤 안에서 열 머리는 sticky 로 남는다.
+
+   높이는 캡 상수가 아니라 **absolute 채움**이다 — 2열에서 왼쪽(랭킹) 카드의
+   높이는 오른쪽 열(Score+사분면)이 정하는데, 표 내용을 흐름에 두면 표 자신이
+   행(row)의 높이를 1,700px 로 밀어 올린다. absolute 는 내용 높이를 행 계산에서
+   빼서 "카드가 받은 높이만큼만" 표가 서게 한다(2차 크리틱 실측: 캡 상수판은
+   카드 883px 중 내용 517px — 하단 366px 이 죽은 여백이었다). */
+.sr-rv-rank-fill {
+  position: relative;
+  flex: 1 1 auto;
+  /* 좁은 화면에서 열이 하나로 접히면 오른쪽 열이 없어 이 최소값이 표 높이다. */
+  min-height: 360px;
+}
+
+.sr-rv-rank-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+/* 표는 카드 폭을 **채운다** [OWNER — "꽉 채우기"]. 활자는 Backtest 표의
+   실측값이다 [OWNER 2026-08-19 — "글자 크기도 백테스트랑"]: 숫자 셀 14 ·
+   이름 14/600 · 서브라인 13/500 · 열 머리 13 뮤트.
+
+   **16 → 14** [감사 2026-08-25]. 「Backtest 숫자 셀 16px」은 오측이었다 —
+   Main·Backtest 의 본문 숫자는 `TextLabel2`(14px)이고, 열 머리에 대해서는 이
+   파일이 이미 같은 오측을 인정하고 13px 로 고쳤다(아래 `.sr-rv-th` 주석).
+   본문만 안 고쳐져 있었고, 그래서 이 표에서는 **숫자(16)가 자기 이름(14/600)
+   보다 커서** Main 의 위계가 거꾸로 서 있었다. */
+.sr-rv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 열 머리는 스크롤을 따라온다 — 행 30 에서 "버퍼가 몇 번째 열이었지"를 기억으로
+   들게 하지 않는다. 고정 셀의 배경은 불투명이어야 한다(ReconStack 의 규칙 —
+   밑을 지나는 틴트가 비치면 머리가 격자처럼 읽힌다). */
+/* 열 머리는 13px caption — DESIGN §5.3 명문("분리는 굵기가 하고 크기는 하지
+   않는다"; 16px 머리는 자기가 이름 붙인 데이터(14/600)보다 무거웠다 — 3차
+   크리틱 P1. 앞서 적었던 "Backtest th 16px 실측"은 다른 th 를 잡았을 혐의). */
+.sr-rv-th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--sr-card);
+  padding: 8px 8px;
+  font-size: 13px;
+  color: var(--color-fgMuted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sr-rv-td {
+  padding: 4px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 라벨 열만 왼쪽 — "숫자는 오른쪽, 글은 왼쪽" 규칙의 rv 판. */
+.sr-rv-left {
+  text-align: left;
+}
+
+/* 표는 카드 **전폭**이다(Main 의 InstrumentTable 문법 — 헤어라인이 카드
+   가장자리까지 간다). 내용의 가장자리 인셋 16px 은 첫/끝 셀이 진다. */
+.sr-rv-table th:first-child,
+.sr-rv-table td:first-child {
+  padding-left: 16px;
+}
+
+.sr-rv-table th:last-child,
+.sr-rv-table td:last-child {
+  padding-right: 16px;
+}
+
+/* 랭킹 표의 줄과 히트맵 칸은 클릭 → 이력 단면이다. 커서와 포커스가 그 사실을
+   말한다 — 색은 이미 틴트가 지고 있어 hover 는 배경 한 단만. */
+.sr-rv-row {
+  cursor: pointer;
+}
+
+.sr-rv-row:hover {
+  background: var(--sr-control);
+}
+
+/* 역방향 연동 — 사분면 점 hover 가 표의 그 행을 같은 채움으로 강조한다. */
+.sr-rv-row[data-on='true'] {
+  background: var(--sr-control);
+}
+
+/* 열 머리 뜻풀이의 앵커 — **맨눈 형태는 여느 열 머리와 같다** [OWNER
+   2026-08-19 — "형태를 바꾸라고 한 적은 없는데… 이전 형태 유지하면서 커서
+   가져다대면 호버링 패널 하나"]. 점선 밑줄(underline dotted)과 cursor:help 는
+   그 지시로 걷어냈다 — 설명은 CDS Tooltip(hover·포커스)이 그대로 진다. */
+.sr-rv-thhelp {
+  cursor: default;
+}
+
+/* `ThHelp` 의 **숙주 추종 판**(rv 손 표) — 크기만 못 박고 굵기·색은 물려받는다.
+ * 그 표의 머리는 `Text` 없이 글자를 직접 넣어 `thead th` 의 700 을 받으므로,
+ * 이 부품만 600 이면 한 행에 두 굵기가 선다(실측 2026-09-02). */
+/* 롤 표식 — 숫자 뒤에 붙는 위첨자 한 글자(`StrategyWindow.RollMark`).
+   점선 밑줄이 «설명 있음» 의 관례 표식인 것은 `.sr-rv-thhelp` 와 같다. */
+.sr-mr-rollmark {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  vertical-align: super;
+  font-size: 10px;
+}
+
+.sr-thhelp-host {
+  font-size: 13px;
+}
+
+.sr-rv-thhelp:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+/* CDS Tooltip 은 앵커를 **flex DIV**(subjectCss, 해시 클래스)로 감싸고 그
+   DIV 가 셀 폭을 채운다 — flex 안에서는 text-align 이 무력해서 라벨이
+   flex-start(왼쪽)에 앉는다. 실측 2026-08-19: "버퍼" 라벨 x=438, 그 열의 값
+   오른쪽 끝 x=664 — 툴팁 단 열 머리 셋만 자기 숫자들과 어긋나 있었다
+   [OWNER — "하부 사항들이랑 얼라인도 안 맞음"]. 해시 클래스라 직접 못 짚고
+   th 의 직계 div 로 짚는다 — 이 표 머리의 직계 div 는 툴팁 앵커뿐이다. */
+.sr-rv-th > div {
+  justify-content: flex-end;
+}
+
+/* 툴팁 본문 — 패널이 **세로로 자라는** 줄바꿈 문단 [OWNER 2026-08-19 — "패널
+   밖으로 글씨가 빠져나가… 단어 단위로 잘리는 것이 문제"]. 툴팁이 th(nowrap)
+   안에 렌더되어 한 줄을 상속받았고, 패널은 한 줄 높이인데 문장이 그 밖으로
+   흘러나갔다(실측: 패널 292px, 문장은 Score 열 위까지). normal 로 줄바꿈을
+   되살리고, keep-all 이 한국어를 **단어 사이에서만** 접는다 — 음절 중간에서
+   접히는 기본 CJK 규칙이 오너가 짚은 그 "단어 단위로 잘림"이다. */
+/* 1등 구간 띠 — 같은 섹터끼리 격자에서 winFrom..winTo 에 드는 칸의 테두리
+   [OWNER 2026-08-19 — "테이블 자체적으로 시각적으로 표현"]. 배경은 이미
+   틴트(부호·크기)가 쓰고 있어서 두 번째 채널은 **테두리**다. 셀마다 사각을
+   두르면 이웃 칸 사이에 이중선이 서므로, 몸통은 위·아래만 긋고 시작/끝 칸이
+   양 끝을 닫는다 — box-shadow(inset)라 트랙 폭을 밀지 않는다. */
+.sr-rv-table {
+  --sr-rv-winline: color-mix(in srgb, var(--color-fg) 55%, transparent);
+}
+
+.sr-rv-win {
+  box-shadow:
+    inset 0 1.5px 0 var(--sr-rv-winline),
+    inset 0 -1.5px 0 var(--sr-rv-winline);
+}
+
+.sr-rv-win.sr-rv-win-start {
+  box-shadow:
+    inset 0 1.5px 0 var(--sr-rv-winline),
+    inset 0 -1.5px 0 var(--sr-rv-winline),
+    inset 1.5px 0 0 var(--sr-rv-winline);
+}
+
+.sr-rv-win.sr-rv-win-end {
+  box-shadow:
+    inset 0 1.5px 0 var(--sr-rv-winline),
+    inset 0 -1.5px 0 var(--sr-rv-winline),
+    inset -1.5px 0 0 var(--sr-rv-winline);
+}
+
+.sr-rv-win.sr-rv-win-start.sr-rv-win-end {
+  box-shadow:
+    inset 0 1.5px 0 var(--sr-rv-winline),
+    inset 0 -1.5px 0 var(--sr-rv-winline),
+    inset 1.5px 0 0 var(--sr-rv-winline),
+    inset -1.5px 0 0 var(--sr-rv-winline);
+}
+
+.sr-rv-cell {
+  cursor: pointer;
+}
+
+/* 종목 칸의 실제 버튼 — 행 의미론을 지키면서(tr 에 role 금지 — 스크린리더의
+   표 탐색이 죽는다) 이력 창을 여는 것. 이 버튼 74개가 화면의 키보드 경로다. */
+.sr-rv-linkbtn {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sr-rv-linkbtn:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+/* 눌린다는 사실을 hover 가 말한다 — 화면 최대 활자(히어로)가 버튼인데
+   cursor 하나로는 발견이 안 됐다(3차 크리틱 P3). */
+.sr-rv-linkbtn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 히트맵 칸을 채우는 버튼 — 포인터 지름길(tabIndex=-1)이라 포커스 링은 없다.
+   height 100%: stretch 된 칸에서도 클릭 면이 칸 전체다. */
+.sr-rv-cellbtn {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+/* as-of 갈라짐 강조 — 색이 아니라 굵기+밑줄. 방향색은 이 바의 배경(--sr-page)
+   위에서 4.5:1 미달이고(DESIGN §3.2), 빨강이 상승·경고를 겸직하게 된다. */
+.sr-rv-asof-split {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* (사분면 리드아웃의 두 전신 — 하단 고정 블록(.sr-rv-pane-readout)과 점
+   이름표(.sr-rv-dotlabel), 그리고 오버레이(.sr-rv-hovercard) — 는 커서 옆
+   ReadoutCard 로 수렴하며 은퇴했다 [OWNER 2026-08-19].) */
+
+/* ── Main·Backtest 표 문법 정렬 [OWNER 2026-08-19] ──────────────────────────
+   그 표들의 실측(2026-08-19): 종목 칸 = 2줄 스택(이름 14/600 + 서브라인
+   13/500 뮤트), 행 사이 헤어라인, 행 높이 ~50px. 랭킹 표가 같은 문법을 진다. */
+.sr-rv-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sr-rv-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sr-rv-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-fgMuted);
+  white-space: nowrap;
+}
+
+/* 경로 칸의 작은 숫자 — 그 경로가 **이 만기의 잔존만기 지점**에서 실제로 움직인
+   폭(bp). 총수익 옆에 붙되 뮤트·작게 서서 주된 숫자를 안 다툰다. 같은 경로가
+   행마다 다르게 닿는다는 사실이 이 칸의 존재 이유라 열 머리로는 못 옮긴다
+   [OWNER 2026-08-20 — 워크북 케이스 C/C-2 의 E열]. */
+.sr-rv-pathdy {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-fgMuted);
+}
+
+/* 행 구분 헤어라인 — 랭킹 표 전용. 틴트 격자(히트맵·Δy 격자)에는 선을 긋지
+   않는다("격자 안에는 선이 없다" — ForwardMatrix 의 같은 규칙). */
+.sr-rv-divided tbody td {
+  border-top: 1px solid var(--color-bgLine);
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+/* (히트맵 행 stretch 는 넣었다 뺐다 [OWNER "이전으로 돌려주고"] — 카드 채움은
+   행 높이가 아니라 레이아웃의 일이다.) */
+
+/* 화면 컨트롤 pill — **Main 기간 셀렉터의 실측값**(14/600 · 높이 32 · 알약)
+   [OWNER 2026-08-19 — "커브 레인·52주/전체 폰트가 너무 크다"]. CDS
+   SegmentedTabs(16/36)와 Button(s) 대신 이 pill 이 화면 컨트롤의 크기 위계다.
+   data-on = 선택(이력 창 토글) 또는 상시 채움(커브 레인 — 채움 컨트롤 규칙).
+
+   **이름이 `.sr-rv-*` 가 아니다** [2026-08-25]. rv 에서 태어났지만 page.tsx·
+   Strategy·Lab 이 다 쓰는 앱 공용이고, `sr-rv-` 접두사 때문에 «저건 rv 방언»
+   으로 읽혀 새 화면이 제 알약을 또 만들 뻔했다(오너 지적의 뿌리). 이름은
+   자기가 무엇인지 말해야 한다. */
+/* ── CDS 컨트롤의 **글자**를 이 앱의 컨트롤 활자로 [OWNER 2026-08-27 —
+ *    "컴포넌트의 사이즈와 그 안에 들어가는 폰트 사이즈가 너무 커서"] ──────────
+ *
+ * 상자는 CDS 가 준다(`Button size="xs"` = 32px · `SegmentedTabs styles.tab`).
+ * 글자는 못 준다 — `fontSize` prop 을 줘도 안 바뀌는데, CDS 가 버튼 속 글자
+ * 노드에 타이포 클래스를 걸고 **그 클래스가 자기 font-size 를 선언**하기
+ * 때문이다(실측 2026-08-27: `size="xs" fontSize="label1"` 에서도 16px). 이
+ * 리포가 이미 두 번 적어 둔 함정이다 — «상속으로 이기려 한 자리에 선언이
+ * 있었다»(`theme/terminal.css` 의 그 절).
+ *
+ * 값은 캐논의 알약과 **같은 수**다(아래 `.sr-pillbtn` — 14/600). 한 행에
+ * `.sr-pillbtn` 과 CDS 버튼이 같이 서는 화면이라(제목 줄·백테스트 설정 줄)
+ * 둘이 다른 활자면 그 행이 곧 어긋나 보인다.
+ *
+ * 특정도는 CDS 의 생성 클래스와 같은 (0,1,0)이고, 이 파일이 `globalStyles`
+ * **뒤에** 임포트되므로 이긴다(`app/layout.tsx` 의 그 순서). */
+.sr-ctlfont,
+.sr-ctlfont * {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* ── 새 묶음이 시작되는 칸 [OWNER 2026-08-27 — "너무 따닥따닥 붙어있어서 …
+ *    자연스러움을 추구할 수는 없을까? 지금은 너무 인위적인 느낌"] ─────────────
+ *
+ * 「얼라인」은 지금까지 «같은 간격» 을 뜻했다. 그런데 백테스트 설정 줄을 재면
+ * 칸 일곱이 **전부 12px 등간격**이고(실측 2026-08-27), 그래서 종류·종목(무엇을)
+ * 과 진입일·청산일(언제)이 서로 남남인지 한 덩어리인지 화면이 말하지 않는다.
+ * 등간격은 자로 잰 듯하지만 **뜻을 안 나른다** — 그게 「인위적」의 정체다.
+ *
+ * 그래서 간격을 둘로 나눈다: 묶음 **안**은 행의 `gap`(8), 묶음 **사이**는
+ * 여기 더하는 한 칸을 얹어 24. 게슈탈트의 근접성 원리이고, 이 리포가 이미
+ * 세로로 하고 있는 것(카드 안 1 · 카드 사이 1.5)의 가로 판이다.
+ *
+ * 값은 이 앱의 간격 계단 위에 있다 — `sauronTheme.space['1']` 이 **6** 이므로
+ * (`table/rowHeight.ts` 의 그 산술) 묶음 안 6(1칸) · 묶음 사이 24(4칸)이고
+ * 여기 더하는 것은 그 차 18(3칸)이다.
+ * 줄이 접히면 `margin` 이 줄머리에 남지만, 그 자리는 어차피 새 묶음이 시작되는
+ * 자리라 읽기를 해치지 않는다. */
+/* ── 범례 칩도 캐논 알약 치수로 [OWNER 2026-08-27] ────────────────────────────
+ *
+ * CDS `Chip size="xs"` 는 **34px · 16px** 이다(실측 2026-08-27: 테두리 1px 두
+ * 겹 + 안쪽 `padding: 6px 12px` + 줄상자). 차트 아래 범례(CD 91일·기준금리·
+ * MA5/10/20)가 그 치수라, 바로 위 구간 탭(32/14)·알약(32/14)과 두 픽셀씩
+ * 어긋나 있었다.
+ *
+ * 상자를 32 로 못 박고 안쪽 세로 패딩을 걷어 낸다 — 글자는 `.sr-ctlfont` 가
+ * 14/20 으로 주므로 20 + 테두리 2 = 22 이고, 남는 10px 을 flex 가 위아래로
+ * 나눈다. 가로 패딩은 그대로 둔다(칩의 폭은 글자가 정한다). */
+.sr-chip {
+  height: 32px;
+}
+
+.sr-chip > * {
+  padding-block: 0;
+  height: 100%;
+}
+
+/* `.sr-fgroup` 은퇴 [OWNER 2026-09-02 — "가로 근접성 리듬 폐기하고 그냥
+ * 동간격으로 배치하기"]. 종전에는 컨트롤 행에서 «묶음 안 6px · 묶음 사이 24px»
+ * 로 게슈탈트 근접성을 만들었다(Backtest 설정 줄의 「무엇을 · 얼마나 · 언제 ·
+ * 그래서 얼마」). 그 문법을 앱에서 걷고 **컨트롤 칸 사이는 어디서나 12px**
+ * 한 값이다(`gap={1.5}`).
+ *
+ * 폐기 근거: 리듬이 두 벌로 갈려 있었고(설정 줄 6/24 · 조건 바 4/16) 어느 것이
+ * 정본인지 어느 파일도 말하지 않았다. 묶음은 «상자 안 죽은 폭»에도 흔들려서,
+ * 선언은 6/24 인데 눈에 보이는 빈틈은 여덟 가지였다(실측 2026-09-02). 근접성이
+ * 그렇게 흔들리면 없느니만 못하다 — 한 값으로 눕히고, 묶음은 라벨이 말한다. */
+
+.sr-pillbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-fgMuted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--sr-motion-fast) var(--sr-ease-out),
+    color var(--sr-motion-fast) var(--sr-ease-out);
+}
+
+.sr-pillbtn:hover {
+  background: var(--sr-control);
+  color: var(--color-fg);
+}
+
+/* 선택/열림 = **잉크 반전** — 처음엔 --sr-control 채움이었는데 이 pill 들이
+   서는 조건 바의 배경이 같은 --sr-page 라 라이트에서 채움이 투명했다(3차
+   크리틱 실측: 238,240,243 == 238,240,243). 잉크 채움은 어느 면 위에서든
+   보인다 — SegmentedTabs 활성 pill 의 그 look. */
+.sr-pillbtn[data-on='true'] {
+  background: var(--color-fg);
+  color: var(--sr-card);
+}
+
+/* 액션 pill(커브 레인) — 상시 회색 채움(Backtest 의 secondary 버튼 look).
+   카드(흰) 위에 서므로 --sr-control 이 보인다. */
+.sr-pillbtn[data-fill] {
+  background: var(--sr-control);
+  color: var(--color-fg);
+}
+
+.sr-pillbtn:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+/* 사분면 산점 — 손 SVG. 눈금·사분면 라벨은 뮤트 잉크(토큰), 등폭 숫자.
+   크기는 useMeasure 실측이라 svg 는 그냥 블록이다 — meet 비율 끼움은 남는
+   쪽을 여백으로 버렸다 [OWNER "패널을 꽉 채우기"]. */
+.sr-rv-scatter {
+  display: block;
+}
+
+/* 측정 대상 — 미리보기 pane 에서 남는 높이를 다 받는 플롯 상자. */
+.sr-rv-plotfill {
+  flex: 1 1 0;
+  min-height: 280px;
+  overflow: hidden;
+}
+
+.sr-rv-tick {
+  font-size: 13px;
+  fill: var(--color-fgMuted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 사분면 라벨 — 서술형 넉 자. 데이터보다 조용해야 하므로 눈금과 같은 뮤트,
+   다만 좌표의 뜻이라 한 단 굵게. */
+.sr-rv-quad {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--color-fgMuted);
+}
+
+/* 점은 포인터 지름길(비포커스)이다 — 키보드 경로는 랭킹 표의 종목 버튼. */
+.sr-rv-dot {
+  cursor: pointer;
+}
+
+
+/* 「모형」 탭의 정의 목록 — 행 사이 헤어라인.
+ *
+ * CDS `Table` 은 셀당 좌우 32px 이라 «용어 : 설명» 두 칸에는 너무 벌어진다
+ * (RV 랭킹표가 손 표로 간 것과 같은 이유). 여기는 표가 아니라 **목록**이고,
+ * 필요한 것은 행 구분선 하나뿐이다. */
+.sr-scn-deftable > * + * {
+  border-top: 1px solid var(--color-bgLine);
+}
+
+/* ── Lab 발행 캘린더 (`lab/IssuancePage.tsx`) ────────────────────────────────
+ *
+ * 달력 격자다. CDS 에 달력 컴포넌트가 없고(있는 것은 날짜 **입력**이다), 여기서
+ * 필요한 것은 «한 달을 한 눈에» 라 격자가 전부다.
+ *
+ * **다섯 열이다** [OWNER, 2026-08-20] — 토·일을 뺐다. 잃는 것이 없다: 입찰·
+ * 공개시장운영·금통위는 영업일에만 서고 발행 납입일은 Following 으로 이미 밀려
+ * 있다. 주말 두 칸이 빠지니 남은 다섯 칸이 그만큼 넓어져 숫자가 붙지 않는다.
+ * **평일 공휴일은 남는다** — 그날은 정말로 «거래가 없던 날» 이라 자리가 뜻이다.
+ *
+ * 칸은 누를 수 있다 — 그날 상세가 아래에 열린다. 그래서 hover·선택 상태가 있고,
+ * 비영업일은 눌러도 볼 것이 없지만 **자리는 지킨다**(빠지면 요일이 어긋난다). */
+
+/* 열 자리. **요일 머리와 날짜 격자가 이것만 공유한다** — 아래 `.sr-cal-grid` 의
+ * 「높이를 채운다」 규칙까지 머리가 물려받으면 머리 줄도 같이 늘어나 바닥에 빈
+ * 자리가 남는다(실측 2026-08-20: 머리가 50px, 바닥에 90px 이 떴다). */
+.sr-cal-cols {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+}
+
+/* 시트가 뜨는 기준 상자. 카드가 `overflow: hidden` 이라 시트는 카드 안에서
+ * 카드의 둥근 모서리를 따라 잘린다 — 그게 «카드 위로 올라온다» 의 올바른 모양이다. */
+.sr-cal-card {
+  position: relative;
+}
+
+/* 뒤를 덮는 면. 이게 없으면 시트와 그 아래 달력이 같은 평면으로 읽힌다 —
+ * 메가 패널이 이미 겪은 그 일이다. 누르면 닫힌다. */
+.sr-cal-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--sr-scrim);
+  z-index: 2;
+}
+
+/* 바닥에서 올라오는 시트. **불투명하다** — 바탕이 `--sr-popover` 라 라이트에서는
+ * 흰색, 다크에서는 카드보다 한 칸 위다. 뒤의 격자가 비쳐 보이지 않는다. */
+.sr-cal-sheet {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 3;
+  max-height: 78%;
+  overflow-y: auto;
+  padding: 16px;
+  border-top: 1px solid var(--color-bgLine);
+  background: var(--sr-popover);
+  box-shadow: var(--sr-popover-shadow);
+}
+
+.sr-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* **모든 주가 같은 높이**이고, 격자가 **남는 높이를 전부 먹는다**.
+     [OWNER, 2026-08-20 — "스크롤 최대한 안 하는 방향으로, 한눈에 들어오는 게
+     제일 좋아"]
+
+     `auto` 로 두면 일정이 셋인 날이 낀 주만 109px 로 부풀어(실측 92/109) 달력이
+     층층이 어긋나고, 게다가 한 달이 650px 짜리 자리에 80px 넘쳐 스크롤이 났다.
+
+     답은 픽셀을 깎는 게 아니라 **채우는 것**이다. 부모가 높이를 주고(`flex: 1`),
+     행은 `1fr` 이라 그 높이를 균등하게 나눈다. 창이 높으면 칸이 넉넉해지고 낮으면
+     빠듯해지되, **어느 쪽이든 안 넘친다**. 폰트는 안 건드린다 — 13px 전창 규칙이
+     오너 결정이고 가드가 걸려 있다.
+
+     `minmax` 의 최소는 72px 다. 날짜(16) + 금액(18) + 일정 두 줄(36) 이 들어가는
+     최소치이고, 그 아래로 눌릴 만큼 낮은 창이면 그때는 스크롤이 맞다. */
+  grid-auto-rows: minmax(72px, 1fr);
+  gap: 2px;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 요일 머리. **칸의 왼쪽 패딩과 같은 6px** 이라 «월» 이 그 열의 날짜 숫자 바로
+ * 위에 선다. 첫 판은 오른쪽 정렬이었는데, 날짜는 왼쪽이라 머리와 몸이 열의 반대
+ * 끝에 서 있었다 [OWNER 지적 «얼라인 개판», 2026-08-20]. */
+.sr-cal-dow {
+  /* 7px = 칸의 패딩 6px + 투명 테두리 1px. 6px 으로 두면 실측에서 정확히 1px 이
+     어긋난다(머리 443 · 날짜 444). */
+  padding: 0 7px 4px;
+  text-align: left;
+}
+
+.sr-cal-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sr-cal-cell:hover {
+  border-color: var(--color-bgLine);
+}
+
+/* 공휴일은 **눌러 둔다**(토·일은 이제 애초에 안 온다). 첫 판은 반대로 평일에
+ * 바탕을 깔았는데, 그러면 평일이 한 덩어리 슬래브가 되고 휴일이 거기 뚫린
+ * 구멍처럼 읽혔다. 달력의 관례는 쉬는 날을 죽이는 쪽이다.
+ *
+ * 바탕은 `--sr-page` 다. `bgAlternate` 였는데 다크에서 **카드 바탕과 정확히 같은
+ * 색**이라(둘 다 rgb(20,21,25) — 실측 2026-08-20) 8/17 대체공휴일이 아무 표시도
+ * 없었다. `--sr-page` 는 두 테마 모두에서 카드보다 한 칸 내려간 면이다:
+ * 라이트 = 회색 vs 흰 카드, 다크 = rgb(10,11,13) vs rgb(20,21,25). */
+.sr-cal-cell[data-off='1'] {
+  background: var(--sr-page);
+}
+
+.sr-cal-cell[data-today='1'] {
+  border-color: var(--color-fgMuted);
+}
+
+.sr-cal-cell[data-sel='1'] {
+  border-color: var(--color-fg);
+  background: var(--color-bgSecondary);
+}
+
+/* 그날 발행액의 크기 — **칸의 채움**이 진다.
+ *
+ * Main 이 변화 열에 크기 틴트를 까는 그 문법이다(`table/tint.ts`). 바닥에 눕는
+ * 막대였는데, 그건 칸에 한 줄을 더 요구해서 일정이 셋인 날이 넘쳤다(실측
+ * 2026-08-20: 필요 110px, 준 높이 77px, 행끼리 겹쳤다).
+ *
+ * 색이 아니라 **잉크의 농도**다 — 이 앱에서 색은 방향만 나르고 발행량에는 방향이
+ * 없다. 상한이 0.10 인 것은 그 위에 muted 13px 글자가 서기 때문이다(Main 의 변화
+ * 열이 0.20 에서 멈추는 것과 같은 이유이고, 여기 글자가 더 흐리므로 더 낮다). */
+.sr-cal-cell {
+  background-image: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--color-fgMuted) calc(var(--sr-cal-fill, 0) * 10%), transparent),
+    transparent
+  );
+}
+
+/* 그날의 일정 — **이름을 적는다**.
+ *
+ * 첫 판은 익명의 점 세 개였다. 토·일을 빼면서 열이 다섯이 되고 칸이 287px 로
+ * 넓어졌는데(실측 2026-08-20), 그 폭을 두고도 «국고채 입찰» 을 점으로 두는 건
+ * 낭비다. 그리고 그게 오너가 지적한 병의 칸 단위 판본이다 — 판정만 남고 그게
+ * 무엇인지가 사라지는 것.
+ *
+ * 레인은 **잉크의 세기**로만 가른다(색은 방향만 나른다는 규칙). 금통위만
+ * `--color-fg`, 나머지는 muted. */
+.sr-cal-evs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* 말줄임 금지 [OWNER 2026-08-25] — 긴 일정 이름은 잘리는 대신 단어 사이에서
+   줄을 넘긴다(keep-all — body 가 지는 그 규칙). 칸은 세로로 자란다. */
+.sr-cal-ev {
+  white-space: normal;
+  word-break: keep-all;
+}
+
+/* ── 공시 지평 밖 [2026-08-21] ───────────────────────────────────────────────
+ *
+ * **빈칸에는 두 가지 뜻이 있고 그 둘은 반대다.** 지평 안의 빈칸은 «그날 아무
+ * 일도 없었다» 이고, 지평 밖의 빈칸은 «아직 모른다» 다. 은행채·여전채에는
+ * 발행계획이라는 것이 존재하지 않아서(민간 발행자에게 사전 공표 의무가 없다)
+ * 앞날은 늘 비어 보인다.
+ *
+ * 그런데 화면이 그 경계를 안 그리고 있었다 — 실측 2026-08-21: 2026년 9월로
+ * 넘기면 22칸이 통째로 비고, 섹터 목록도 전부 «—» 고, 어디에도 이유가 없다.
+ * 트레이더는 그걸 «9월엔 발행이 없다» 로 읽는다. 백엔드는 `issuanceThrough` 를
+ * 처음부터 보내고 있었고 `issuance.py` 머리글이 "화면이 그 경계를 그린다" 라고
+ * 적어 두었는데, 그리지 않고 있었다.
+ *
+ * **색을 안 쓴다** — 색은 방향만 나른다. 빗금은 잉크의 결이지 방향이 아니다.
+ * `--color-bgLine` 하나로 짜서 라이트·다크가 알아서 따라온다. */
+.sr-cal-cell[data-beyond='1'] {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    var(--color-bgLine) 5px,
+    var(--color-bgLine) 6px
+  );
+}
+
+/* 지평 밖에서는 채움이 뜻을 잃는다(셀 것이 없다). 두 무늬가 겹치면 어느 쪽도
+   안 읽히므로 채움 그라디언트를 덮어쓴다 — 위 규칙이 뒤에 서서 이긴다. */
+
+/* 앞달·뒷달로 넘어가는 자리를 메우는 빈 칸. 배경도 테두리도 없다. */
+.sr-cal-blank {
+  min-height: 0;
+}
+
+/* ── 충격반응 격자 (Lab · 시나리오 「충격반응」 탭) ──────────────────────────
+ *
+ * 논문 Figure 18 은 **2열 × 4행**이다. 그 구도가 이 그림의 뜻이라 화면도 2열을
+ * 기본으로 잡는다 — 금리와 환율이 한 줄, 갭과 물가가 한 줄, 하는 식으로 짝이
+ * 맞아야 읽힌다. 좁아지면 1열로 무너진다.
+ *
+ * 칸 높이를 못 박는 이유: 칸마다 머리글 줄 수가 다르다(논문 대조 줄이 있는 칸과
+ * 없는 칸, 범례가 있는 칸과 없는 칸). 높이를 내용에 맡기면 같은 행의 두 그림이
+ * 서로 다른 높이가 되고, 그러면 두 곡선의 기울기를 눈으로 못 견준다. */
+.sr-irf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .sr-irf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sr-irf-panel {
+  border: 1px solid var(--color-bgLine);
+  border-radius: 8px;
+  background: var(--sr-card);
+  min-width: 0;
+}
+
+/* 그림 자리만 등고다. 위아래 글줄은 칸마다 다르게 두고, 플롯만 같은 높이로
+   맞춘다 — 견줘야 하는 것은 곡선이지 카드가 아니다. */
+.sr-irf-plot {
+  height: 132px;
+  min-width: 0;
+}
+
+.sr-irf-swatch {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  /* 색은 호출부가 **CSS 변수로** 넘긴다. 인라인 `background: <색>` 은 이 리포의
+     규칙(CLAUDE.md §1)이 막는다 — 팔레트가 컴포넌트로 새는 통로이기 때문. */
+  background: var(--sr-irf-swatch-color, var(--color-fg));
+}
+
+/* 비어 있는 여덟 번째 칸. 테두리를 점선으로 두어 «못 그린 칸» 임을 형태로도
+   말한다 — 글만으로 두면 로딩 중인 칸처럼 보인다. */
+.sr-irf-absent {
+  border-style: dashed;
+  background: transparent;
+}
+
+/* ── Lab 「모형」 · 전략 면 [소유: 세션 2, 2026-08-21] ───────────────────────
+ * 이 파일은 분할 금지라 각자 끝에 자기 블록을 붙인다. 여기부터 아래는 전략 면
+ * 것이고, 다른 세션은 이 블록을 안 건드린다.
+ *
+ * 규칙 셋만 진다 — 설정 열의 폭, 노트가 줄어드는 자리, 내보내기 평문 상자.
+ * 그 밖의 치수는 CDS 와 기존 토큰이 이미 진다. */
+.sr-strat-controls {
+  /* 점 여덟 개가 세 줄로 접히는 폭. 260 은 설정 열(ControlCard)이 이미 쓰는
+     폭이고, 여기서 새 폭을 만들면 Lab 안에 설정 열이 두 종류가 된다. */
+  width: 260px;
+  flex-shrink: 0;
+  min-width: 0;
+  /* 한국어는 낱말 중간에서 접히면 안 된다 — 실측 2026-08-21: 「인하하고」가
+     「인 / 하하고」로 갈려 있었다. */
+  word-break: keep-all;
+}
+
+.sr-strat-note {
+  /* 표가 좁아질 때 부모를 밀지 않게. flex 자식의 기본 min-width 는 auto 라
+     내용이 컨테이너를 넘겨 가로 스크롤을 만든다(이 리포가 이미 세 번 겪었다). */
+  flex-basis: 420px;
+  word-break: keep-all;
+}
+
+/* 노트는 **카드 안에서** 구른다. 페이지가 스크롤하지 않는 100vh 기둥이라
+   (`PRODUCT.md`), 카드가 자기 스크롤을 안 지면 리스크 세 줄과 가정 띠가 아예
+   닿지 않는다 — 실측 2026-08-21 에 그 상태로 한 번 떴다.
+   `min-height: 0` 이 없으면 flex 자식이 내용 높이로 부풀어 스크롤이 안 생긴다. */
+.sr-strat-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* 일곱 열짜리 표는 자기 상자 안에서만 가로로 구른다. */
+.sr-strat-table {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/* 붙여 넣을 평문. 줄바꿈을 그대로 보이되 가로로 넘치지 않게 감싼다 —
+   `pre` 의 기본값은 안 감싸고, 안 감싸면 노트 한 줄이 화면을 밀어낸다. */
+.sr-strat-export {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--sr-control);
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-x: auto;
+}
+
+/* ── Lab 「모형」 — 모형 면 · 방법 면 [세션 3, 2026-08-21] ─────────────────────
+ *
+ * 이 파일은 분할 금지라 각자 끝에 자기 블록을 붙인다. 여기부터 아래는 세션 3
+ * 것이고, 다른 세션은 이 블록을 안 건드린다.
+ *
+ * 진 규칙은 넷 — 배선 그래프의 잉크, 원장의 행 구분, 판정 알약, 그리고 표가
+ * 가로로만 흐르는 것. 나머지 치수는 CDS 와 기존 토큰이 이미 진다. */
+
+/* 배선 그래프. **가로만 흐른다** — 세로로 흐르게 두면 카드가 페이지를 밀고,
+   이 앱은 페이지가 안 흐른다는 전제 위에 서 있다. */
+/* ── 배선 그래프의 가로 스크롤 ─────────────────────────────────────────────
+ *
+ * 그림이 2,302px 이고 상자는 1,851px 이라 오른쪽이 늘 잘린다. 스크롤은 되는데
+ * **잘렸다는 사실이 화면에 없었다** — 오른쪽 끝에서 노드가 딱 끊기면 그림이
+ * 거기서 끝난 것처럼 보인다.
+ *
+ * 오른쪽 가장자리에 바탕색으로 페이드를 깔아서 «여기서 이어진다» 를 말한다.
+ * 색을 코드에서 조립하지 않고 여기서 `--sr-control` 로만 만든다
+ * (`guards/color-source.test.ts`). 끝까지 굴리면 페이드가 사라져야 하므로
+ * `animation-timeline: scroll()` 을 쓰고, 못 쓰는 브라우저에서는 페이드가 늘
+ * 보인다 — 그건 «더 있을 수 있다» 라 거짓말이 아니다. */
+.sr-wire-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 10px;
+  background: var(--sr-control);
+  position: relative;
+}
+
+.sr-wire-fade {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 48px;
+  pointer-events: none;
+  border-start-end-radius: 10px;
+  border-end-end-radius: 10px;
+  background: linear-gradient(to left, var(--sr-control), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-wire-fade {
+    /* 페이드는 모션이 아니라 상태 표시라 그대로 둔다. */
+    opacity: 1;
+  }
+}
+
+.sr-wire-svg {
+  display: block;
+  /* **줄어들면 안 된다.** `.sr-wire-scroll` 은 CDS `Box` 라 런타임에
+     `display:flex` 가 붙는데, 그러면 flex 아이템의 기본값이 svg 를 컨테이너 폭에
+     맞춰 눌러 버린다(실측 2026-08-21: width 2302 인데 scrollWidth 가 1872 였다 —
+     즉 오른쪽 절반이 통째로 안 보였고 가로 스크롤도 안 생겼다). */
+  flex-shrink: 0;
+}
+
+/* ── 면은 **자기 스크롤러를 스스로 진다** ──────────────────────────────────
+ *
+ * 이 앱은 페이지가 안 흐른다(`.sr-page` 가 `height:100vh; overflow:hidden`).
+ * 그래서 긴 면이 자기 스크롤러를 안 가지면 아래가 **그냥 잘린다** — 실측
+ * 2026-08-21: 모형 면 높이 5,510px 이 911 창에서 720px 만 보였고 나머지는
+ * 스크롤로도 못 갔다. 커브 표면 레인이 855 에서 겪은 그 클립과 같은 병이다.
+ *
+ * **2026-08-24 [OWNER]: 그 스크롤러가 카드 안으로 들어갔다.** 면이 직접 구르는
+ * 것은 Main/Backtest 의 문법이 아니다 — 거기서는 내용이 카드 안에 살고 카드가
+ * 자기 스크롤을 진다(`.sr-strat-scroll` 이 「전략」 면에서 이미 그렇다).
+ * 그래서 `.sr-model-surface`/`.sr-method-surface` 는 더 이상 스크롤러가 아니고,
+ * `SurfaceShell` 의 `.sr-surface-scroll` 이 그 일을 한다. */
+.sr-model-surface,
+.sr-method-surface {
+  /* 카드가 준 높이 안에서 산다. 스크롤은 `.sr-surface-scroll` 이 진다. */
+  flex-basis: 420px;
+  word-break: keep-all;
+}
+
+/* 카드 안의 스크롤러. `.sr-strat-scroll` 과 같은 규칙이고, 같은 이유로
+   `min-height: 0` 이 필수다 — 없으면 flex 자식이 내용 높이로 부풀어 스크롤이
+   아예 안 생긴다.
+
+   `overflow-x` 는 **손대지 않는다.** `hidden` 으로 잘라 두면 이 리포의 규칙을
+   어긴다(`guards/p2-parity.test.ts` — «잘린 채로 스크롤도 안 되면 그 뒤의
+   내용은 존재하지 않는 것이 된다»). 가로로 넘치는 것은 안쪽이 각자 진다
+   (`.sr-wire-scroll` · 표의 스크롤 상자). */
+.sr-surface-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* ── 읽기 폭 한 벌 ─────────────────────────────────────────────────────────
+ *
+ * 실측 2026-08-24: `<p>` 103개 중 **101개가 900px 초과**, 최댓값 1,851px.
+ * 13px 한글은 글자당 폭이 거의 13px 라 그건 한 줄 ~140자다. 눈이 줄 끝에서
+ * 다음 줄 앞을 못 찾는다. 게다가 같은 면 안에서 어떤 블록은 760 에 갇혀
+ * 있어서, 폭이 블록마다 바뀌는 것이 더 나빴다.
+ *
+ * 상한은 **글에만** 건다. 표·그래프·스크롤 상자는 폭을 다 써야 하고, 그것이
+ * 이 앱이 4모니터에서 얻는 이득이다. 그래서 선택자가 `p`·제목·문단 줄이고
+ * `table`·`.sr-*-scroll` 은 안 건드린다. */
+.sr-read :is(p, h3, h4, h5) {
+  max-width: 760px;
+}
+
+/* 문단처럼 읽히는 flex 줄(이음매 행 · 「그 열셋」 행)도 같은 폭에 선다.
+   `HStack` 이라 위 선택자가 못 잡는다 — 클래스로 표시한다. */
+.sr-read .sr-readrow {
+  max-width: 760px;
+  width: 100%;
+}
+
+/* ── 면 안 차례 ────────────────────────────────────────────────────────────
+ *
+ * 「전략」 면의 왼쪽이 손잡이인 자리에, 읽기 전용 두 면은 차례를 세운다.
+ * 활성 표시는 유도값이라 저장하지 않는다(`SurfaceShell` 의 IntersectionObserver).
+ *
+ * 채움은 RV 표의 행 강조(`.sr-rv-row[data-on]`)와 같은 낱말인 `--sr-control` 을
+ * 쓴다 — 이 앱에서 «지금 이것» 은 늘 그 색이다. */
+.sr-model-toc button {
+  display: block;
+  width: 100%;
+  text-align: start;
+}
+
+.sr-toc-item {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: var(--color-fgMuted);
+  word-break: keep-all;
+}
+
+.sr-toc-item[data-on='true'] {
+  background: var(--sr-control);
+  color: var(--color-fg);
+}
+
+.sr-model-toc button:hover .sr-toc-item[data-on='false'] {
+  color: var(--color-fg);
+}
+
+/* ── 가정 띠 — Main/Backtest 의 통계 스트립 문법 ──────────────────────────
+ *
+ * 예전에는 열두 줄이 전부 같은 회색 13px 로 이어진 글벽이었다. 이 앱에서 여러
+ * 묶음의 사실을 눕히는 문법은 **구분선으로 나뉜 칸**이다(백테스트 카드 아래의
+ * 「이 구간 · 변화 · 52주」). 같은 문법을 쓴다.
+ *
+ * 구분선은 칸 **사이에만** 선다 — 첫 칸 앞에 서면 띠가 왼쪽으로 열린 것처럼
+ * 보이고, 마지막 칸 뒤에 서면 끝나지 않은 것처럼 보인다. */
+/* ── 커브 셋 (전략 면) ────────────────────────────────────────────────────
+ *
+ * `ModelChart` 는 `flexGrow:1 · flexBasis:0` 으로 **부모가 준 높이 안에서** 산다.
+ * 시나리오 면에서는 100vh 카드 안이라 그 높이가 있었는데, 이 면의 노트는 세로로
+ * 흐르는 칼럼이라 높이를 주는 사람이 없다 — 그래서 그림이 **0px 로 접혀서**
+ * 범례와 통계만 뜨고 선이 안 보였다(실측 2026-08-24).
+ *
+ * 흐르는 칼럼 안에서는 높이를 **정해 주는 것이 맞다.** 380 은 백테스트 카드의
+ * 종목 차트가 데스크에서 갖는 높이대이고, 그보다 낮으면 다섯 테너의 세 선이
+ * 서로 겹쳐 붙는다. */
+.sr-strat-curve {
+  height: 380px;
+  flex-shrink: 0;
+}
+
+/* ── 금통위 목록 (전략 면 왼쪽) ────────────────────────────────────────────
+ *
+ * 한 줄 = 날짜 · 결정 · **그래서 얼마가 되나**. 오른쪽의 누적 레벨 열이 곧
+ * 경로 그림이다 — 「시각적으로 어떻게 될 거다 같은 것도 없다」 는 지적이 이
+ * 열을 만들었다 [OWNER 2026-08-24].
+ *
+ * 목록이 260px 열 안에서 열다섯 줄까지 가므로 **자기 스크롤을 진다.** 이 앱은
+ * 페이지가 안 흐르니(100vh 기둥) 안 그러면 아래 회의가 그냥 잘린다. */
+.sr-mpc-list {
+  overflow-y: auto;
+  max-height: 46vh;
+  min-height: 0;
+  /* 스크롤바가 누적 레벨 열을 덮지 않게 오른쪽을 비워 둔다 — 안 비우면 `−25`
+     가 카드 경계에 붙어 잘려 보인다(실측 2026-08-24). */
+  padding-inline-end: 6px;
+}
+
+.sr-mpc-q {
+  padding-top: 8px;
+  padding-bottom: 2px;
+}
+
+.sr-mpc-row {
+  padding-block: 2px;
+}
+
+/* 날짜 열은 **고정폭**이다. `8/27` · `10/22` · `1월` 이 글자 수가 달라서, 폭을
+   안 잡으면 셀렉트가 줄마다 다른 x 에서 시작한다(실측 2026-08-24: 62 · 68 ·
+   83 · 86px). 열다섯 줄이 계단처럼 어긋나 보이던 자리다. */
+.sr-mpc-when {
+  min-width: 46px;
+  flex-shrink: 0;
+}
+
+/* 누적 레벨 열. 폭을 고정해야 열다섯 줄의 숫자가 세로로 줄을 선다 —
+   `tabular` 만으로는 자리수가 다른 줄이 안 맞는다. */
+.sr-mpc-lv {
+  min-width: 44px;
+  text-align: right;
+  margin-inline-start: auto;
+}
+
+.sr-assume-col {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding-inline: 16px;
+  word-break: keep-all;
+}
+
+.sr-assume-col:first-child {
+  padding-inline-start: 0;
+}
+
+.sr-assume-col + .sr-assume-col {
+  border-inline-start: 1px solid var(--color-bgLine);
+}
+
+
+.sr-wire-edge {
+  fill: none;
+  stroke-width: 1.4;
+  stroke-opacity: 0.75;
+}
+
+/* 장기는 실선, 단기는 점선. 논문의 설계가 여기 실린다 — 가계부채→소비가 같은
+   쌍에 두 화살표로 서고 부호가 반대인 것이 한눈에 보여야 한다. */
+.sr-wire-edge[data-horizon='SR'] {
+  stroke-dasharray: 4 3;
+}
+
+.sr-wire-hot {
+  stroke-opacity: 1;
+  stroke-width: 2.2;
+}
+
+.sr-wire-dim {
+  opacity: 0.12;
+}
+
+/* 논문이 인쇄했는데 배선이 없는 자리. 잉크로 그리되 **없다는 것이 보이게**
+   흐리고 성기게. */
+.sr-wire-ghost {
+  fill: none;
+  stroke: var(--color-fgMuted, currentColor);
+  stroke-width: 1.2;
+  stroke-dasharray: 1 5;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.sr-wire-node rect {
+  fill: var(--sr-card);
+  stroke: var(--color-bgLineHeavy);
+  stroke-width: 1;
+}
+
+.sr-wire-node text {
+  fill: var(--color-fg);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.sr-wire-node {
+  cursor: pointer;
+}
+
+.sr-wire-node:focus-visible rect,
+.sr-wire-picked rect {
+  stroke: var(--color-fg);
+  stroke-width: 2;
+}
+
+/* 블록은 **칠하지 않는다.** 색은 이 그림에서 부호 하나만 뜻한다 — 노드까지
+   칠하면 같은 팔레트가 두 가지를 말하게 되고, 그러면 둘 다 안 읽힌다.
+   블록은 노드를 눌렀을 때 상세와 스크린리더 라벨이 말한다. */
+
+.sr-wire-detail {
+  border-radius: 10px;
+  background: var(--sr-control);
+}
+
+.sr-wire-key {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 2px solid var(--color-fgMuted, currentColor);
+  flex-shrink: 0;
+}
+
+.sr-wire-key[data-kind='sr'] {
+  border-top-style: dashed;
+}
+
+.sr-wire-key[data-kind='ghost'] {
+  border-top-style: dotted;
+  opacity: 0.6;
+}
+
+.sr-wire-key[data-kind='plus'] {
+  border-top-color: var(--color-fg);
+}
+
+.sr-wire-key[data-kind='minus'] {
+  border-top-color: var(--sr-down);
+}
+
+/* 등록부·원장의 행 구분. 카드 안이라 테두리가 아니라 헤어라인 하나다. */
+.sr-eqreg > * + *,
+.sr-ledger > * + * {
+  border-top: 2px solid var(--color-bgLine);
+}
+
+/* ── 곁줄 두 종 — **세로 막대를 안 쓴다** [2026-08-24] ────────────────────
+ *
+ * 둘 다 `border-left: 2px solid var(--sr-down)` 이었다. 두 가지가 한꺼번에
+ * 틀렸다:
+ *
+ *   1. 색을 쓴 **사이드 스트라이프**는 이 리포가 따르는 디자인 규율의 절대
+ *      금지 항목이다. 「의도해서 그런 적이 없다」 는 쪽에 가깝다
+ *   2. `--sr-down` 은 이 앱에서 **「금리가 내렸다」 하나**를 뜻한다. 옆 표가
+ *      같은 파랑을 그 뜻으로 쓴다. 「인쇄된 식과 다른 자리」·「틀릴 수 있는
+ *      자리」는 방향이 아니다
+ *
+ * 대신 바탕을 깐다. `--sr-control` 은 이 앱에서 «지금 이것» 을 뜻하는 낱말이고
+ * (`.sr-freeparams` 가 이미 같은 자리에 쓴다), 곁줄은 정확히 그 성질이다.
+ * 두 곳 다 앞에 이름표(`<b>`)가 이미 서 있어서 무엇인지도 글자가 말한다. */
+.sr-eqreg-diff,
+.sr-ledger-risk {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--sr-control);
+}
+
+.sr-ledger-tag {
+  display: inline-block;
+  min-width: 92px;
+  color: var(--color-fg);
+}
+
+.sr-freeparams {
+  border-radius: 10px;
+  background: var(--sr-control);
+}
+
+/* 판정 알약. 검정/회색 두 벌 규칙 그대로 — 통과는 잉크, 나머지는 회색이고,
+   벗어남만 방향색을 쓴다. */
+.sr-verdict {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sr-control);
+  white-space: nowrap;
+}
+
+/* 미달·핀도 **방향색을 안 쓴다** [2026-08-24]. 같은 이유다 — 파랑은 「내렸다」
+   한 낱말이고, 판정은 방향이 아니다. 잉크와 테두리가 위계를 진다. */
+.sr-verdict[data-v='miss'],
+.sr-verdict[data-v='shape_miss'] {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
+.sr-verdict[data-v='pinned'] {
+  border: 1px solid var(--color-fgMuted);
+}
+
+/* ── 계수표는 **자기 스크롤러를 안 진다** [2026-08-24] ─────────────────────
+ *
+ * `max-height: 420px` 이던 시절에는 이 표가 카드 안에서 또 굴렀다 — 실측
+ * scrollHeight 7,966px 이 420px 창에 들어 있었고, 그 창이 다시 5,585px 짜리
+ * 카드 안에 있었다. 스크롤러가 둘이면 휠이 어디에 먹는지가 커서 위치로
+ * 갈리고, 안쪽이 끝에 닿아야 바깥이 움직인다.
+ *
+ * 이 앱의 규칙은 **카드 하나에 스크롤러 하나**다(Main 의 표 카드가 그렇다).
+ * 표는 카드가 준 높이 안에서 그냥 길게 서고, 132행을 줄이는 일은 **필터**가
+ * 한다 — 표 위 알약이 이미 그 일을 하고 있었는데 스크롤 상자가 그걸 가렸다. */
+.sr-coef-scroll {
+  /* 가로만 자기가 진다. 세로는 카드가 진다. */
+  overflow-x: auto;
+}
+
+/* 켜고 끄는 알약. 이 리포의 CDS 판에는 `selected` prop 이 없어서(실측
+   2026-08-21) 상태를 `aria-pressed` 로 말하고 채움을 여기서 준다. 라벨을
+   바꿔서 상태를 말하는 기존 방식(`IssuancePage` 의 «끔»)은 라벨이 길어지고
+   스크린리더에도 눌림 상태가 안 간다. */
+.sr-chip-toggle[aria-pressed='true'] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.sr-chip-toggle[aria-pressed='true'] * {
+  color: inherit;
+}
+
+/* ── 눈에는 안 보이고 낭독기에는 읽히는 텍스트 ────────────────────────────────
+ *
+ * 캔버스 차트가 들어오면서 생긴 자리다 [2026-08-26]. CDS `CartesianChart` 의
+ * `Scrubber` 는 `accessibilityLabel` 로 «지금 문 점» 을 읽어 줬는데, 캔버스에는
+ * 읽을 DOM 이 없다. 그 낭독을 잃지 않으려면 값 문장을 **DOM 어딘가에** 두고
+ * 화면에서만 감춰야 한다.
+ *
+ * `display:none` 도 `visibility:hidden` 도 안 된다 — 낭독기도 같이 못 읽는다.
+ * 그래서 «1px 로 오려 두는» 표준 수법을 쓴다.
+ *
+ * `white-space: nowrap` 이 있어야 오려진 상자 안에서 글이 접히며 잘리지 않는다.
+ */
+.sr-a11y-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── MR 통합 줄 — 랭킹 **아래**에 따로 서는 한 행 [OWNER 2026-09-01] ──────────
+ *
+ * 「밴드워치 랭킹 순위, 계열 밑에 따로 하나 빼주면 되겠다」.
+ *
+ * **같은 표 안**에 두는 이유는 열 격자다 — 표를 따로 세우면 순위·계열·늘어남
+ * 열이 위 표와 안 맞고, 그러면 두 줄을 나란히 못 읽는다. 대신 랭킹의 일부가
+ * 아니라는 것을 헤어라인 하나로 말한다(카드 안 구획의 기존 규칙 —
+ * `.sr-wf-sum`·`.sr-setting-prov` 와 같은 토큰). 색이나 사이드 스트라이프는 안
+ * 쓴다: 이 앱에서 색은 방향 하나만 나른다.
+ *
+ * **바닥에 고정한다.** 열세 행이 스크롤하는 표라 그냥 두면 통합 줄이 화면 밖에
+ * 있다(실측 2026-09-01) — 「지금 몇 개가 나가 있나」를 답하는 줄인데 그걸 보려고
+ * 매번 끝까지 굴려야 한다. 머리를 sticky 로 붙드는 것과 같은 기계이고
+ * (`TableHeader sticky`·`.sr-recon-th`), 같은 규율을 따른다: **고정 셀의 배경은
+ * 불투명이어야 한다** — 밑을 지나는 틴트가 비치면 줄이 격자처럼 읽힌다. */
+/* ⚠ **고정은 이 한 줄이 있어야 실제로 붙는다** [실측 2026-09-01].
+ *
+ * CDS `Table` 은 자기 표를 `overflow: auto` 인 상자로 감싼다. 그 상자는 여기서
+ * 안 스크롤하지만(높이 = 내용 높이) sticky 는 **가장 가까운 스크롤 컨테이너**를
+ * 기준으로 삼으므로, 기준이 바깥(`.sr-rv-rank-scroll`)이 아니라 그 상자가 된다.
+ * 굴릴 것이 없는 상자에 붙으라고 하면 아무 일도 안 일어난다.
+ *
+ * 그래서 **머리도 안 붙고 있었다** — 이 파일과 `MrPage` 주석이 「머리는 스크롤을
+ * 따라온다」고 적어 둔 채로 thead 가 −107px 까지 밀려 올라갔다(같은 실측).
+ * 통합 줄을 붙이려다 그 사실이 드러났고, 한 줄이 둘을 같이 고친다.
+ *
+ * 가로 스크롤은 안 잃는다 — 바깥 상자가 두 축 다 `auto` 다. */
+.sr-rv-rank-scroll > div {
+  overflow: visible;
+}
+
+tr.sr-mr-book > td {
+  position: sticky;
+  bottom: 0;
+  z-index: 9;
+  background: var(--sr-card);
+  /* 헤어라인은 «랭킹이 아니다», 그 안쪽의 옅은 그림자는 «밑을 지나간다».
+     `border-top` 이 아니라 그림자 두 겹인 이유는 고정 열의 그것과 같다 —
+     테두리는 레이아웃을 1px 밀고, sticky 셀에서는 그 1px 이 곧 샘이다. */
+  box-shadow:
+    0 -2px 0 var(--color-bgLine),
+    0 -8px 8px -6px var(--sr-edge-shadow);
+}

@@ -1,0 +1,17 @@
+# 의존성·빌드 산출물
+/node_modules
+/.next
+/out
+/build
+.pnpm-store
+
+# 환경
+.env*
+!.env.example
+
+# 잡동사니
+*.log
+*.tsbuildinfo
+.DS_Store
+*.bak
+*.bak-*
