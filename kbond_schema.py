@@ -94,6 +94,7 @@ class Fill(BaseModel):
     a: float | None = None
     asrc: AmountSource | None = None
     csrc: FillSource | None = Field(None, description="종목을 어떻게 알았나. level 99.4% · prev 92.9%")
+    ag: Side | None = Field(None, description="공격 방향. B=오퍼가 맞았다(누가 사 갔다) · S=비드가 맞았다(팔았다). 책에 붙지 않으면 없다")
     d: str | None = None
     k: str | None = None
     raw: str | None = Field(None, description="원문(가림이 켜져 있으면 서명은 라벨로 바뀐다)")
@@ -263,6 +264,8 @@ class ObSide(BaseModel):
     odd: int = Field(0, description="자투리")
     atmp: int = Field(0, description="«민평에» 라고만 한 호가 수")
     fresh: int = Field(0, description="그 칸에서 가장 신선한 호가의 장중 초")
+    hit: int = Field(0, description="그 칸에서 «실제로 체결된» 호가 수 (v12 체결 귀속)")
+    fhit: int = Field(0, description="그 칸의 마지막 체결 시각(장중 초). 0 이면 없음")
     who: list[str | None] = []
 
 
@@ -462,3 +465,4 @@ class View(BaseModel):
     event_counts: dict[str, int] | None = None
     curve_today: dict[str, list[CurveTodayRow]] | None = None
     leaderboard: Leaderboard | None = None
+    aggr: dict[str, int] | None = Field(None, description="당일 공격 방향 집계 {B: 사 간 체결, S: 판 체결}")

@@ -759,6 +759,8 @@ class Book:
         self.prev = None                     # 어제 책 요약 (백그라운드에서 채운다)
         self.mp31date = ref.get("mp31date", {})   # 통안 ISIN -> 그 민평의 일자
         self.kfills = {}    # code -> {"t","y"}  당일 마지막 체결
+        # v12 공격 방향 — 오퍼가 맞았으면 B(사 갔다), 비드가 맞았으면 S(팔았다)
+        self.aggr = {"B": 0, "S": 0}
         self.msb = {}       # (dealer,side,key) -> entry  (통안 레인)
         self.mfills = {}    # 통안 key -> {"t","y"}
         # 통안 사다리: 배치 enrich 와 같은 은어 규약 (만기구분 x 발행순위 -> 종목)
@@ -981,6 +983,17 @@ class Book:
         if nm is None and y is None:
             self.n_ack += 1                  # 내용 없는 'ㅎㅈ' 응답 (귀속도 안 됨)
             return
+        # ★v12 체결 귀속 [OWNER 2026-09-07 「K-Orderbook++」 → §11 «체결 귀속»]
+        #   v8 은 «종목이 없는» 체결만 직전 호가에 붙였다(_infer_fill).
+        #   여기서는 «종목이 있는» 체결을 책에 서 있는 엔트리에 붙인다.
+        #   ★붙이되 «지우지» 않는다 — RESULT_fill_attribution_2026-09-07.md 참조.
+        #   맞은 호가는 대조군보다 «같은 레벨로 다시 서는» 쪽이라, 지우면 틀린다.
+        hit = self._attach_fill(lane, code, nm, broker, y, t)
+        ag = None
+        if hit is not None:
+            # 오퍼가 맞았다 = 누가 사 갔다. 장외 책에 없던 «공격 방향» 이다.
+            ag = "B" if hit.get("s") == "S" else "S"
+            self.aggr[ag] += 1
         # 종목별 «당일 마지막 체결» — 약한 귀속은 레벨로 쓰지 않는다
         if code and y is not None:
             if lane == "ktb":
@@ -993,10 +1006,10 @@ class Book:
             b = int(t // PULSE_BIN) * PULSE_BIN
             self.act.setdefault(code, {}).setdefault(b, [0, 0, 0])[2] += 1
             self._event(t, "fill", lane, code, nm, s_, y, amt, self._disp(d, broker),
-                        {"csrc": csrc})
+                        {"csrc": csrc, "ag": ag})
         self.tape.append({
             "t": t, "sec": sec or "기타", "lane": lane, "code": code, "n": nm,
-            "s": s_, "y": y, "a": amt, "asrc": asrc,
+            "s": s_, "y": y, "a": amt, "asrc": asrc, "ag": ag,
             "csrc": (csrc if code else None),
             "d": self._disp(d, broker), "k": k,
             "raw": mask_raw(body, _raw_disp(d, broker),
@@ -1225,7 +1238,8 @@ class Book:
                      "d": self._disp(d, broker), "k": mask_key(str(broker)[:14]),
                      "code": key, "mp": mpv,
                      "mpd": self.mp31date.get(isin)}
-            self.msb[(broker, side, key)] = entry
+            self.msb[(broker, side, key)] = self._carry_hit(
+                self.msb, (broker, side, key), entry)
             self._after_quote("msb", key, entry, d["QuoteRaw"], d["AbsYield"])
             self._cur.update({"n": self.msb_names.get(key, key), "code": key, "y": y})
             return
@@ -1258,7 +1272,8 @@ class Book:
                 "mp": (round(float(d["MPYield"]), 3)
                        if d["MPYield"] is not None else None),
                 "d": self._disp(d, broker), "k": mask_key(str(broker)[:14]), "code": key}
-            self.nhb[(broker, side, key)] = entry
+            self.nhb[(broker, side, key)] = self._carry_hit(
+                self.nhb, (broker, side, key), entry)
             self._after_quote("nhb", key, entry, d["QuoteRaw"], d["AbsYield"])
             self._cur.update({"n": key, "code": key,
                               "y": (round(float(d["AbsYield"]), 3)
@@ -1285,7 +1300,8 @@ class Book:
                     "a": d["AmountEff"], "asrc": d["AmountSource"],
                     "d": self._disp(d, broker),
                     "k": mask_key(str(broker)[:14]), "code": d["BondCode"]}
-                self.ktb[(broker, side, d["BondCode"])] = entry
+                self.ktb[(broker, side, d["BondCode"])] = self._carry_hit(
+                    self.ktb, (broker, side, d["BondCode"]), entry)
                 self._after_quote("ktb", d["BondCode"], entry, d["QuoteRaw"], d["AbsYield"])
             self._cur.update({"n": d["BondCode"], "code": d["BondCode"], "y": y})
             return
@@ -1365,6 +1381,7 @@ class Book:
                        if mpq is not None else None)
                 dbp = None
                 bpv = round(float(d["SpreadValue"]), 1)
+            _prev_cr = self.credit.get((broker, label, side))
             self.credit[(broker, label, side)] = {
                 "t": t, "s": "S", "n": str(label)[:14], "bp": bpv, "dbp": dbp,
                 "unit": ("원" if _won else "bp"),
@@ -1385,6 +1402,7 @@ class Book:
                 "rt_src": ("문면" if rt else "집계"), "matd": matd,
                 "mp": (round(float(mpq), 3) if mpq is not None else None),
                 "ytm": ytm, "y": ytm}
+            self._carry_hit_cr((broker, label, side), _prev_cr)
             self._after_quote("cr", str(label)[:14], self.credit[(broker, label, side)],
                               d["QuoteRaw"], d["AbsYield"])
             self._cur.update({"n": str(label)[:16], "y": ytm, "lvl": lvl})
@@ -1492,6 +1510,83 @@ class Book:
                 self._event(t, "best", lane, code, nm, "B", e["y"], e.get("a"), e["d"],
                             {"prev": pb})
         self._best[(lane, code)] = (fa["y"] if fa else None, fb["y"] if fb else None)
+
+    @staticmethod
+    def _carry_hit(src, key, entry, lvl="y"):
+        """절대값 교체가 체결 표시를 지우지 않게 한다.
+
+        같은 (딜러, 방향, 종목) 을 «같은 레벨» 로 다시 세우면 그 레벨은 여전히
+        «오늘 실제로 체결된 레벨» 이다 — 실측에서 맞은 호가가 되세워지는 비율이
+        83.6%(대조 40.5%)라 이게 지배적인 경로다. 레벨이 바뀌면 물려주지 않는다.
+        """
+        old = src.get(key)
+        if not old or not old.get("ft"):
+            return entry
+        a, b = old.get(lvl), entry.get(lvl)
+        if a is not None and b is not None and abs(float(a) - float(b)) <= 1e-9:
+            entry["ft"], entry["fn"] = old["ft"], old.get("fn", 0)
+        return entry
+
+    def _carry_hit_cr(self, key, old):
+        """크레딧판 _carry_hit. 레벨축이 «민평 대비 bp»(bpe) 라 따로 둔다."""
+        new = self.credit.get(key)
+        if not old or not new or not old.get("ft"):
+            return
+        a, b = old.get("bpe"), new.get("bpe")
+        if a is not None and b is not None and abs(float(a) - float(b)) <= 1e-9:
+            new["ft"], new["fn"] = old["ft"], old.get("fn", 0)
+
+    def _attach_fill(self, lane, code, nm, broker, y, t):
+        """체결을 책에 서 있는 호가에 붙인다 — 지우지 않고 «맞았다» 고 적기만 한다.
+
+        키는 §11 의 (딜러, 방향, 종목).
+          국고·통안·국주 : 같은 종목 · 레벨 일치 · 같은 브로커 우선(없으면 같은 레벨의 남)
+          크레딧         : 책이 매도 일변도(99.9%)라 (브로커, 라벨) 로 붙인다
+        FILL_LEVEL_WIN(30분) 밖에는 붙이지 않는다 — v8 이 검증한 창 그대로다.
+
+        ★왜 «지우지» 않는가 (RESULT_fill_attribution_2026-09-07.md)
+          체결이 맞은 호가는 대조군보다 «같은 레벨로 다시 서는» 쪽이다.
+          장외 호가는 수량이 정해진 주문이 아니라 레벨을 내건 상시 표시라,
+          한 번 붙었다고 그 레벨이 사라지지 않는다. 지우면 있는 시장을 지운다.
+        붙은 엔트리에 ft(마지막 체결 시각)·fn(맞은 횟수) 를 적는다.
+        """
+        src = {"ktb": self.ktb, "msb": self.msb, "nhb": self.nhb,
+               "cr": self.credit}.get(lane)
+        if not src:
+            return None
+        bk = mask_key(str(broker)[:14])
+        own = other = None
+        if lane == "cr":
+            key = str(nm)[:14] if nm else None
+            if key is None:
+                return None
+            for e in src.values():
+                if e.get("n") != key or e.get("k") != bk:
+                    continue
+                if e["t"] > t or t - e["t"] > FILL_LEVEL_WIN:
+                    continue
+                if own is None or e["t"] > own["t"]:
+                    own = e
+        else:
+            if code is None or y is None:
+                return None
+            for e in src.values():
+                if e.get("code") != code or e.get("y") is None:
+                    continue
+                if e["t"] > t or t - e["t"] > FILL_LEVEL_WIN:
+                    continue
+                if abs(e["y"] - y) > 1e-9:
+                    continue          # 레벨이 다르면 그 호가의 체결이 아니다
+                if e.get("k") == bk:
+                    if own is None or e["t"] > own["t"]:
+                        own = e
+                elif other is None or e["t"] > other["t"]:
+                    other = e
+        hit = own or other
+        if hit is not None:
+            hit["ft"] = t
+            hit["fn"] = hit.get("fn", 0) + 1
+        return hit
 
     def _infer_fill(self, k, t, d):
         """종목 없는 체결을 «그 브로커의 직전 호가» 에 귀속. (lane, code, 호가, 등급)."""
@@ -1749,7 +1844,7 @@ class Book:
             "rooms": list(ROOMS),
             "hist": self.hist,
             "mp": self.mp,
-            "kfills": self.kfills,
+            "kfills": self.kfills, "aggr": dict(self.aggr),
             "mfills": self.mfills,
             "msb": list(self.msb.values()),
             "msb_mp": {k: v for k, v in

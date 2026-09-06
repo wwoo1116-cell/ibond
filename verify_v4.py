@@ -679,6 +679,28 @@ def main() -> int:
         if bad_lab:
             fails.append(f"H3 라벨 꼴이 아닌 딜러명 {len(bad_lab)}건: {bad_lab[:5]}")
 
+    # ── [I] 체결 귀속의 공격 방향 (v12) ──────────────────
+    # 귀속은 (딜러, 종목, 레벨) 셋만 쓴다 — 방향은 «안 쓴 축» 이라 검정이 된다.
+    # 문면 방향 s 와 공격 방향 ag 는 서로 반대여야 한다(오퍼가 맞았으면 사 간 것).
+    # 배치 실측 99.2% (n=24,778) — RESULT_fill_attribution_2026-09-07.md
+    print()
+    ags = [e for e in tape if e.get("ag") and e.get("s")]
+    n_ag = sum(1 for e in tape if e.get("ag"))
+    ok_ag = sum(1 for e in ags if e["s"] != e["ag"])
+    rate = ok_ag / len(ags) * 100 if ags else 100.0
+    print(f"[I] 체결 귀속 방향 — 테이프 {len(tape)}건 중 책에 붙은 것 {n_ag}건 · "
+          f"문면 방향까지 있는 것 {len(ags)}건")
+    print(f"    공격 방향이 문면과 맞음 {ok_ag}/{len(ags)} ({rate:.1f}%)"
+          f"  [귀속에 안 쓴 축 — 양성대조군]")
+    if ags and rate < 85.0:
+        fails.append(f"I1 공격 방향 일치율 {rate:.1f}% < 85% — 귀속 규칙을 의심할 것")
+    agg = book.get("aggr") or {}
+    if sum(agg.values()) != n_ag:
+        fails.append(f"I2 공격 방향 집계 불일치: 서버 {agg} 합 {sum(agg.values())}"
+                     f" != 테이프 {n_ag}")
+    else:
+        print(f"    서버 집계 {agg} — 테이프와 일치")
+
     print("\n" + "=" * 60)
     if fails:
         print(f"실패 {len(fails)}건")

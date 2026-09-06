@@ -320,6 +320,8 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
         out["event_counts"] = event_counts(snap)
         out["curve_today"] = curve_today(snap, T, mode)
         out["leaderboard"] = leaderboard(snap, cls or "all")
+        # v12 공격 방향 — 오퍼가 맞았으면 «사 갔다»(B), 비드가 맞았으면 «팔았다»(S)
+        out["aggr"] = snap.get("aggr") or {"B": 0, "S": 0}
     return out
 
 
@@ -341,8 +343,9 @@ def bin_of(y, side, agg=0.0):
 
 
 def _side_acc():
+    # hit/fhit = v12 체결 귀속. 그 칸에서 «실제로 체결된» 호가 수와 마지막 체결 시각.
     return {"n": 0, "amt": 0.0, "unk": 0, "dflt": 0, "odd": 0, "atmp": 0,
-            "fresh": 0, "who": []}
+            "fresh": 0, "hit": 0, "fhit": 0, "who": []}
 
 
 def ob_ladder(snap, lane, code, T, mode="def", agg=0.0):
@@ -379,6 +382,9 @@ def ob_ladder(snap, lane, code, T, mode="def", agg=0.0):
             if e.get("asrc") == "oddlot":
                 sd["odd"] += 1
         sd["fresh"] = max(sd["fresh"], e["t"])
+        if e.get("ft"):
+            sd["hit"] += 1
+            sd["fhit"] = max(sd["fhit"], e["ft"])
         sd["who"].append(e.get("d"))
         L[e["s"]] = sd
 
