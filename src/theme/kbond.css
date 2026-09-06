@@ -142,6 +142,12 @@
 .kb-q > span { position: relative; font-variant-numeric: tabular-nums; }
 .kb-q > span + span { margin-left: 5px; }
 .kb-q .od { font-style: italic; }
+/* 체결된 레벨 표시 (v12 체결 귀속) — 지우지 않고 «여기는 실제로 붙었다» 만 남긴다.
+   체결은 삭제가 아니라 확인이다: RESULT_fill_attribution_2026-09-07.md */
+.kb-q b.hit { position: relative; width: 4px; height: 4px; border-radius: 50%;
+  background: currentColor; opacity: .55; flex: 0 0 auto; }
+.kb-q.l b.hit { margin-left: 5px; order: 9; }
+.kb-q.r b.hit { margin-right: 5px; order: -1; }
 .kb-obsp {
   padding: 5px 12px; margin: 3px 0; font-size: 11px; text-align: center;
   color: var(--color-fgMuted);

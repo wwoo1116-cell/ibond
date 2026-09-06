@@ -282,7 +282,13 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
           </div>
           <div className="kb-kvgrid">
             {kv('호가 · 관심', `${p.nq.toLocaleString()} · ${p.na.toLocaleString()}`)}
-            {kv('체결 응답', p.nc.toLocaleString())}
+            {/* v12 체결 귀속의 부산물 — 오퍼가 맞았으면 사 간 것, 비드면 판 것.
+                장외 대화록에 없던 축이다. 서버가 세고 화면은 읽기만 한다.
+                ★합계가 체결 응답 수보다 작다: 내용 없는 «ㅎㅈ» 은 책에 못 붙는다. */}
+            {kv(
+              '체결 응답 — 사 감 · 팜',
+              `${p.nc.toLocaleString()} — ${v.aggr?.B ?? 0} · ${v.aggr?.S ?? 0}`,
+            )}
             {kv('호가/체결', p.nc ? (p.nq / p.nc).toFixed(1) : '—')}
             {kv(
               '어제 같은 시각 대비',

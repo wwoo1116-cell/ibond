@@ -53,14 +53,19 @@ function Cell({ sd, side, basis, mx, T }: {
   const tail = sd.odd ? ' +자투리' : sd.unk ? ' +?' : '';
   const txt = sd.amt ? lot(sd.amt) + tail : sd.odd ? '자투리' : '?';
   const who = (sd.who ?? []).filter(Boolean).join(', ');
+  // v12 체결 귀속 — 이 칸에서 실제로 붙은 호가. 표시만 하고 지우지 않는다.
+  const hit = sd.hit ?? 0;
+  const hitAge = sd.fhit ? T - sd.fhit : 0;
   return (
     <div
       className={`kb-q ${side === 'S' ? 'l' : 'r'}`}
-      title={`${who} · ${ageTxt(age)} 전${allDflt ? ' · 표기 없음 → 기본단위 100억' : ''}`}
+      title={`${who} · ${ageTxt(age)} 전${allDflt ? ' · 표기 없음 → 기본단위 100억' : ''}${
+        hit ? ` · 이 레벨 체결 ${hit}건 (${ageTxt(hitAge)} 전)` : ''}`}
     >
       <i style={{ width: `${w}%` }} />
       <span className={allDflt ? 'od' : undefined}>{txt}</span>
       <span className="kb-n">{sd.n}</span>
+      {hit ? <b className="hit" /> : null}
     </div>
   );
 }
