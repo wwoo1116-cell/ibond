@@ -938,6 +938,18 @@ export interface components {
              */
             fresh: number;
             /**
+             * Hit
+             * @description 그 칸에서 «실제로 체결된» 호가 수 (v12 체결 귀속)
+             * @default 0
+             */
+            hit: number;
+            /**
+             * Fhit
+             * @description 그 칸의 마지막 체결 시각(장중 초). 0 이면 없음
+             * @default 0
+             */
+            fhit: number;
+            /**
              * Who
              * @default []
              */
@@ -1334,6 +1346,13 @@ export interface components {
                 [key: string]: components["schemas"]["CurveTodayRow"][];
             } | null;
             leaderboard?: components["schemas"]["Leaderboard"] | null;
+            /**
+             * Aggr
+             * @description 당일 공격 방향 집계 {B: 사 간 체결, S: 판 체결}
+             */
+            aggr?: {
+                [key: string]: number;
+            } | null;
         };
     };
     responses: never;
