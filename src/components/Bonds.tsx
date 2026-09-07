@@ -281,6 +281,8 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
   const T = v.T;
   /* 레벨 없는 «관심» — 서버가 이미 TTL 로 거르고 최신순으로 준다 [OWNER 2026-09-07] */
   const ax = v.axes ?? [];
+  /* 오늘 날짜 — 통안 민평이 묵었는지 판정한다 [OWNER 2026-09-07] */
+  const todayYmd = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="kb-bonds">
@@ -304,6 +306,13 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
                 {r.alias ? <b className="kb-badge al">{r.alias}</b> : null}
                 {r.bench ? <b className="kb-badge">지표</b> : null}
                 {r.next ? <b className="kb-badge">차기</b> : null}
+                {/* ★[OWNER 2026-09-07] 통안 민평 적재가 멈추면 최대 30일 전 값을 끌어 쓴다.
+                    그러면 «전일 민평 대비» 가 아니므로 그 사실을 행에 적는다. */}
+                {r.mpd && v.now && r.mpd !== todayYmd ? (
+                  <b className="kb-badge stale" title={`민평 기준일 ${r.mpd} — 전일 민평이 아닙니다`}>
+                    민평 {r.mpd.slice(5)}
+                  </b>
+                ) : null}
               </span>
               <span className="v">{n3(r.mid)}</span>
               <span className="sub">

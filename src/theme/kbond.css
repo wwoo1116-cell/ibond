@@ -120,6 +120,8 @@
 /* 레벨 없는 «관심» [OWNER 2026-09-07] — 책이 아니라는 게 눈에 보여야 한다.
    그래서 값 열이 없고, 방향 낱말과 나이만 있다. */
 .kb-li.ax { grid-template-columns: minmax(0, 1fr) 40px 52px 44px; }
+/* 묵은 민평 배지 [OWNER 2026-09-07] — 경고가 아니라 «사실 표시» 라 조용하게. */
+.kb-badge.stale { color: var(--color-fgMuted); border-color: var(--color-fgMuted); }
 .kb-axl { overflow-y: auto; max-height: 220px; }
 
 .kb-big { padding: 10px 12px 0; font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
