@@ -33,8 +33,11 @@ CONFIRM 만으로 좁히지 않는 이유가 있다. «26.3.31 IBK캐피탈 +1�
 ## 한계 (읽는 사람이 알아야 할 것)
 
 - **이건 체결 «보고» 이지 체결 «확인» 이 아니다.** 같은 거래가 양쪽에서 두 번
-  보고되면 두 행이 된다. 중복 제거는 하지 않았다 — (Date, BondCode, QuoteYield,
-  Amount) 로 묶으면 후보가 보인다.
+  보고되면 두 행이 된다. **2026-09-07 부터 `DupSeq` 로 표시한다**(지우지는 않는다) —
+  같은 (일·종목·레벨·수량) 을 다른 브로커가 5초 안에 각각 보고한 것. 첫 보고가 0.
+  창을 5초로 고른 근거는 실측이다: 이웃 쌍의 «같은 수량» 비율이 기저 39.7% 인데
+  0~5초 구간만 54.1% 로 솟고 5~20초는 40.2% 로 이미 기저다.
+  ⚠수량은 «명시된 것» 으로 재야 그 솟음이 보인다(AmountEff 는 미표기를 100억으로 채운다).
 - 순수 'ㅎㅈ' 104,931행이 빠져 있으므로 **체결 건수의 하한**이다.
 - `QuoteYield` 는 호가 표와 같은 파이프라인(enrich)이 만든 값이라 그 한계를
   그대로 물려받는다.
@@ -47,6 +50,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -65,6 +69,8 @@ COLS = ["Date", "Time", "Timestamp", "Room", "Sender", "Message",
 VALUE_COLS = ["MPYield", "AbsYield", "QuoteRaw", "SpreadValue", "QuoteYield"]
 
 # '체결 후 잔존 100억' / '거래 후 잔량 50억'
+DUP_WIN = 5.0   # 양쪽 보고 중복으로 볼 시차 상한(초). 실측으로 고른 값 — 위 주석 참조
+
 RE_RESIDUAL = re.compile(r'(?:잔존|잔량|잔여)\s*(\d{1,4}(?:\.\d+)?)\s*억')
 RE_REPORTED = re.compile(r'체결|거래')
 # 체결어와 6자 이내 인접한 억 = 체결 수량(감사: 8,242행이 이 조건 충족).
@@ -138,6 +144,47 @@ def main() -> int:
         src.close()
 
     os.replace(TMP, OUT)
+
+    # ── 양쪽 보고 중복 표시 (DupSeq) [OWNER 2026-09-07] ─────────────────
+    # RepostSeq 는 «같은 발신자의 재게시» 다. 그것과 별개로, 같은 거래를 «다른
+    # 브로커» 가 각자 보고하면 두 행이 된다 — 이 표의 알려진 한계였다.
+    #
+    # ★자를 자리를 데이터에서 찾았다(2026-09-07). 같은 (일·종목·레벨·수량) 이웃 쌍의
+    #   «같은 수량» 비율은 기저 39.7% 인데, 시차 0~5초 구간만 54.1% 로 솟는다
+    #   (5~20초는 40.2% 로 이미 기저다). 그래서 창은 5초다.
+    #   ⚠수량은 «명시된 것» 으로만 재야 한다 — AmountEff 는 미표기를 100억으로 채워
+    #     «같은 수량» 이 부풀고, 그러면 짧은 구간의 솟음이 안 보인다(처음에 그렇게 놓쳤다).
+    #
+    # ★지우지 않는다. RepostSeq 선례대로 순번만 붙인다 — DupSeq==0 이 첫 보고다.
+    #   실측 2,978건(재게시 제외 체결의 4.7%) · 국고 2,343 · 통안 541 · 크레딧 94.
+    #   그중 13%는 «같은 하우스의 다른 전화선» 이다(한화 3772-737 대 3772-726).
+    fdf = pd.read_parquet(OUT)
+    fdf["DupSeq"] = 0
+    _ts = fdf["Timestamp"].astype("datetime64[ns]").astype("int64").to_numpy() / 1e9
+    _key = (fdf["BondCode"].fillna("") + "|" + fdf["BondName"].fillna("")
+            + "|" + fdf["Maturity"].fillna("")
+            + "|" + fdf["QuoteYield"].round(3).astype(str)
+            + "|" + fdf["AmountEff"].fillna(-1).astype(str))
+    _ord = np.argsort(_ts, kind="stable")
+    _seq = np.zeros(len(fdf), dtype="int64")
+    _last = {}                       # (Date, key) -> (시각, 브로커, 순번)
+    _dates = fdf["Date"].to_numpy()
+    _brk = fdf["Broker"].fillna("").to_numpy()
+    _rep = fdf["RepostSeq"].to_numpy()
+    _k = _key.to_numpy()
+    for ix in _ord:
+        if _rep[ix] > 0:
+            continue                 # 재게시는 RepostSeq 가 이미 표시한다
+        kk = (_dates[ix], _k[ix])
+        prev = _last.get(kk)
+        if prev is not None and _ts[ix] - prev[0] <= DUP_WIN and _brk[ix] != prev[1]:
+            _seq[ix] = prev[2] + 1
+        _last[kk] = (_ts[ix], _brk[ix], _seq[ix])
+    fdf["DupSeq"] = _seq
+    fdf.to_parquet(TMP, compression="zstd", index=False)
+    os.replace(TMP, OUT)
+    print(f"  양쪽 보고 중복 표시 DupSeq>0 {int((_seq > 0).sum()):,}건 "
+          f"({100 * (_seq > 0).mean():.1f}%) — 지우지 않고 표시만")
 
     print("\n" + "=" * 66)
     print(f"  CONFIRM 전체        {n_seen:,}")

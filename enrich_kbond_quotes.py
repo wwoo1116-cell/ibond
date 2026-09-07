@@ -333,6 +333,19 @@ def restore(quote_raw: pd.Series, mp: pd.Series):
     return out, method
 
 
+# 시가평가 커브 [OWNER 2026-09-07]. 없으면 조용히 건너뛴다 — 이 표가 없던 시절과
+# 산출물의 열 구성이 같아야 한다.
+try:
+    from mkt_curve_load import interp as _curve_interp, yield_at as curve_yield
+    _cv = pd.read_parquet(
+        Path(r"C:\Users\infomax\Projects\data\kbond") / "kbond_mkt_curve.parquet")
+    MKT_CURVE = {c: _curve_interp(_cv, c) for c in _cv["curve"].unique()}
+except Exception:                                        # noqa: BLE001
+    MKT_CURVE = {}
+    def curve_yield(*_a, **_k):
+        return float("nan")
+
+
 def main():
     t0 = time.time()
     print(f"[1/4] 적재 {PARQUET}")
@@ -498,6 +511,62 @@ def main():
     df.loc[m6, "QuoteYield"] = mp_any[m6]
     df.loc[m6, "QuoteMethod"] = "at_mp"
     print(f"      «민평 명시 거래» 로 추가 확정 {int(m6.sum()):,}행")
+
+    # ── 국민주택: 시가평가 커브로 축약호가 복원 [OWNER 2026-09-07 「엑셀로 줄게」] ──
+    # §10 의 「국민주택 민평 소스 부재」가 닫혔다. 소스는 있었다 —
+    # 시가평가 3사평균 «잔존 구간별» 커브 여섯(국민주택 1·2·3종·국고채권·서울도시철도·
+    # 지역개발채), 2016-01-04~ 일별. 적재는 `mkt_curve_load.py`.
+    #
+    # 종목별 민평이 아니라 «커브» 라서 잔존만 알면 된다. 국민주택 1종은 5년물 월별
+    # 발행이고 회차가 곧 발행 연월이라(bond_eval_info: 국민주택1종19-08 발행 2019-08-31)
+    # 잔존이 회차·은어에서 그대로 나온다. 은어는 당월/전월/전전월 = 0/1/2개월 전.
+    #
+    # ★잔존은 5년에 «물린다». 당월물은 잔존이 5.0을 살짝 넘는데 그러면 보간이
+    #   «5~7년» 구간으로 넘어가 기준이 튄다 — 국당 적중이 55.2% 로 떨어졌다.
+    #   물리면 97.8% 다(국전 95.6% · 국전전 91.9% · 회차 91.1%).
+    #   뜻(당월/전월/전전월)은 처음부터 맞았고 틀린 건 커브 끝단 처리였다.
+    _nhb = df["Sector"].eq("국민주택")
+    if _nhb.any() and MKT_CURVE.get("국민주택1종"):
+        _tbl = MKT_CURVE["국민주택1종"]
+        _msg = df.loc[_nhb, "Message"].astype(str)
+        _ex = _msg.str.extract(r"국주\s*(\d{2})\s*-\s*(\d{1,2})")
+        _yy = pd.to_numeric(_ex[0], errors="coerce")
+        _mm = pd.to_numeric(_ex[1], errors="coerce")
+        _ok_ser = _yy.notna() & _mm.between(1, 12)     # 13·22·50 같은 것은 월이 아니다
+        _mat = pd.Series(pd.NaT, index=_msg.index)
+        if _ok_ser.any():
+            _ix0 = _ok_ser[_ok_ser].index
+            _mat.loc[_ix0] = (pd.to_datetime(dict(
+                year=2000 + _yy[_ok_ser].astype(int) + 5,
+                month=_mm[_ok_ser].astype(int), day=1)) + pd.offsets.MonthEnd(0))
+        _sh = {"국당": 0, "국전": 1, "국전전": 2, "국전당": 1}
+        _sl = pd.Series(index=_msg.index, dtype=object)
+        for _w in ("국전전", "국전당", "국당", "국전"):
+            _m = _sl.isna() & _msg.str.contains(_w, na=False)
+            _sl[_m] = _w
+        _need = _sl.notna() & _mat.isna()
+        if _need.any():
+            _ix1 = _need[_need].index
+            _per = df.loc[_ix1, "Date"].dt.to_period("M")
+            _mat.loc[_ix1] = ((_per - _sl[_ix1].map(_sh)).dt.to_timestamp(how="end")
+                              .dt.normalize() + pd.DateOffset(years=5))
+        _ttm = ((_mat - df.loc[_msg.index, "Date"]).dt.days / 365.25).clip(upper=5.0)
+        _tgt = _msg.index[df.loc[_msg.index, "QuoteYield"].isna()
+                          & df.loc[_msg.index, "QuoteRaw"].notna()
+                          & _ttm.notna() & (_ttm > 0)]
+        if len(_tgt):
+            _base = pd.Series([curve_yield(_tbl, d, t) for d, t in
+                               zip(df.loc[_tgt, "Date"], _ttm[_tgt])], index=_tgt)
+            _bok = _base.notna()
+            if _bok.any():
+                _ix = _base.index[_bok]
+                _y, _ = restore(df.loc[_ix, "QuoteRaw"], _base[_bok])
+                df.loc[_ix, "QuoteYield"] = _y
+                df.loc[_ix, "QuoteMethod"] = "nhb_curve"
+                df.loc[_ix, "MPYieldDB"] = df.loc[_ix, "MPYieldDB"].fillna(_base[_bok])
+                print(f"      «국주 시가평가 커브» 로 추가 확정 "
+                      f"{int(df.loc[_ix, 'QuoteYield'].notna().sum()):,}행")
+
 
     # ★★[OWNER 2026-09-07] 「민평에 팔자는 건 진짜 민평에 팔자는 거야」
     #   AtMP 는 파서가 «뜻» 만 싣는 플래그였고, 여기에 그 뜻을 값으로 바꾸는 자리가
