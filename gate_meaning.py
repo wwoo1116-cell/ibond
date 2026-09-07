@@ -27,8 +27,8 @@ BASE = r"C:\Users\infomax\Projects\data\kbond"
 WIN = 7200.0
 # 기준선 — 값이 아니라 «떨어지면 안 되는 바닥» 이다. 고칠 때마다 근거와 함께 갱신할 것.
 # 2026-09-07 재파싱 «뒤» 실측으로 갱신. 앞 숫자는 재파싱 전(87.3% · 4,356)이었다.
-BASE_J, BASE_J_MIN = 91.7, 80.0
-BASE_K, BASE_K_MAX = 4710, 6000
+BASE_J, BASE_J_MIN = 92.1, 80.0
+BASE_K, BASE_K_MAX = 4712, 6000
 RE_NOUNIT = re.compile(r'민\s*평?\s*[+\-]\s*\d{1,3}(?:\.\d{1,2})?(?!\s*(?:bp|비피|빕|삡|원|\d))')
 
 

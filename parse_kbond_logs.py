@@ -269,6 +269,12 @@ def _is_prefix_junk(tok: str) -> bool:
 RE_MATURITY = re.compile(r'(?<![\d.])(\d{2})[./](\d{1,2})[./](\d{1,2})(?![\d])(?:\s*\(\s*[월화수목금토일]\s*\))?')
 # 공백 구분판은 오인을 줄이려 월·일을 두 자리 유효값으로 못 박는다.
 RE_MATURITY_SP = re.compile(r'(?<![\d.\-])([2-5]\d)\s+(0[1-9]|1[0-2])\s+(0[1-9]|[12]\d|3[01])(?![\d])')
+# ★[2026-09-07] 머리에 붙은 날짜만 따로 본다. 본 정규식은 연도 두 자리를 요구하고
+#   앞에 «.» 이 오면 lookbehind 에 막혀, 「.24.3.22 롯캐팔자」·「5.8.1 대신에프앤아이」
+#   ·「4.07.25(목) 수출입~DA7」 이 통째로 계열 미상 -> OTHER 로 떨어졌다(2,397행).
+#   ⚠문두에 «고정» 한다 — 연도 한 자리를 아무 데서나 허용하면 CP 단가(4.50)와 겹친다.
+RE_MATURITY_HEAD = re.compile(
+    r"^[\s.\-*·★☆#!]*(\d{1,2})[./](\d{1,2})[./](\d{1,2})(?![\d])")
 # ---------------------------------------------------------------- 섹터 사전
 # 'YY-N' 표기를 국고 지표물로 읽어도 되는지는 **섹터가 먼저 정해져야** 알 수 있다.
 # MBS 20-5, 국주 23-03 처럼 같은 표기를 쓰는 다른 물건이 있기 때문이다.
@@ -665,6 +671,10 @@ RE_INTEREST_ONLY = re.compile(r'관심|알아보|찾습니다|구합니다')
 # 사다리 칸 낱말 — 국민주택·지방/첨가는 이 칸이 곧 종목이다.
 RE_LADDER_RUNG = re.compile(r'전전월|전월물|전월|당월물|당월|당발|전발'
                             r'|(?<![가-힣])(?:국전전|국전당|국당|국전)')
+# ★[2026-09-07] 국주·지방은 «칸» 이 곧 종목인데 은어 낱말(당월·국전…)만 칸으로 봤다.
+#   「국주23-08 팔자」 처럼 회차로 부르는 것도 칸이다 — 이걸 못 잡아 AtMP 의
+#   «종목 있을 것» 조건에 걸려 96,199행이 레벨을 못 얻었다.
+RE_NHB_SERIES = re.compile(r"\d{2}\s*-\s*\d{1,2}(?![\d])")
 # 체결 신호어. 'ㅎㅈ'=확정, 'ㄱㅅ'=감사 (경향신문 2012-07-20 장외채권 메신저 해설).
 # ★2026-09-02 [OWNER] 「화정은 ㅎㅈ의 오타 같고」 — 2,664행, DS투자증권 CM팀
 #   한 데스크가 100% 쓴다(확정 타이핑에서 받침 ㄱ 이 빠진 꼴). 실측 정합:
@@ -878,10 +888,15 @@ def extract(body: str, date: str | None = None) -> dict:
 
     # --- 2단계: 섹터를 알고 나서 종목을 읽는다
     mc = RE_BOND_CODE.search(core)
-    mm = RE_MATURITY.search(core) or RE_MATURITY_SP.search(core)
+    # 본 정규식 둘이 못 잡으면 «문두에 고정한» 폴백을 쓴다(선행 «.»·연도 한 자리).
+    mm = (RE_MATURITY.search(core) or RE_MATURITY_SP.search(core)
+          or RE_MATURITY_HEAD.match(core))
     # 달력 검증(월<=12·일<=31): '30.40.2' 류 오타 144행이 그대로 실리던 것을 막는다.
     if mm and int(mm.group(2)) <= 12 and int(mm.group(3)) <= 31:
-        d["Maturity"] = f"{mm.group(1)}.{mm.group(2)}.{mm.group(3)}"
+        # 연도 한 자리는 «202X» 의 끝자리다 — 채권 만기는 미래라 5 는 2025, 4 는 2024.
+        # 0 으로 채우면 2005 가 되어 잔존이 음수로 실린다.
+        _yy = mm.group(1) if len(mm.group(1)) == 2 else "2" + mm.group(1)
+        d["Maturity"] = f"{_yy}.{mm.group(2)}.{mm.group(3)}"
     code_token = f"{mc.group(1)}-{mc.group(2)}" if mc else None
     if code_token is None:
         mc1 = RE_BOND_CODE_1.search(core)
@@ -1166,7 +1181,8 @@ def extract(body: str, date: str | None = None) -> dict:
     #     «민평에» 로 본다. 오너 예시가 정확히 그 꼴이다(「서철 당월 10억 팔자」).
     #     사다리 레인(국민주택·지방/첨가)은 «칸» 이 곧 종목이라 코드가 없어도 받는다.
     _lad = (d["Sector"] in ("국민주택", "지방/첨가소화")
-            and RE_LADDER_RUNG.search(core) is not None)
+            and (RE_LADDER_RUNG.search(core) is not None
+                 or RE_NHB_SERIES.search(core) is not None))
     # ★★[OWNER 2026-09-07] 「민평에 팔자는 건 진짜 민평에 팔자는 거야」 — 전 계열.
     #   09-03 규칙은 «값이 하나도 없을 것»(MPYield is None)을 요구했는데, 그건
     #   «국고 문형» 이었다. 크레딧·MBS·지방/첨가·국주는 민평을 «기준» 으로 늘 적어서
@@ -1212,6 +1228,18 @@ def extract(body: str, date: str | None = None) -> dict:
             _dy = 2000 + int(date[2:4]) + (int(date[4:6]) - 1) / 12.0
         (d["TenorLo"], d["TenorHi"],
          d["SectorCat"], d["RatingCat"]) = kbond_catcall.extract(core, _dy)
+
+    # ★[2026-09-07] 범주 콜은 «여기서야» TenorLo 가 나온다. 그 앞의 계열 추론과
+    #   MsgType 판정은 이미 끝난 뒤라, 계열 표지가 없는 「1년 롯카 사자」·「3년 은행사자」
+    #   류가 통째로 OTHER 로 떨어졌다(23,676행). 라이브는 바스켓 경로가 Sector 를 안 봐서
+    #   잡고 있었고 «원장만» 비어 있었다. 여기서 계열을 채우고 종류를 다시 매긴다.
+    #   ⚠SectorCat 은 「은행|공사」처럼 파이프로 이어질 수 있어 계열 이름으로 못 쓴다.
+    if (d["Sector"] is None and d["TenorLo"] is not None
+            and d["Position"] in ("BUY", "SELL") and d["MsgType"] == "OTHER"):
+        d["Sector"] = "크레딧/기타"
+        d["MsgType"] = "QUOTE" if any(
+            d[k] is not None for k in
+            ("MPYield", "AbsYield", "QuoteRaw", "SpreadValue", "SpreadWonAbs")) else "AXE"
 
     # --- 발행체 정본 [OWNER 2026-09-03] «서부, 중부, 남부, 남동, 동서로 파싱»
     # BondName 은 손대지 않는다. 접기가 틀렸을 때 되짚을 자리를 남긴다.
