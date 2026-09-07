@@ -499,6 +499,18 @@ def main():
     df.loc[m6, "QuoteMethod"] = "at_mp"
     print(f"      «민평 명시 거래» 로 추가 확정 {int(m6.sum()):,}행")
 
+    # ★★[OWNER 2026-09-07] 「민평에 팔자는 건 진짜 민평에 팔자는 거야」
+    #   AtMP 는 파서가 «뜻» 만 싣는 플래그였고, 여기에 그 뜻을 값으로 바꾸는 자리가
+    #   없었다 — 그래서 원장에서 AtMP 양성의 95.3%가 레벨 없이 남아 있었다.
+    #   문면 민평이 있으면 그 값, 없으면 DB 민평(국고·통안 문형)이 곧 레벨이다.
+    #   근거: 직전 호가가 레벨 없음일 때 뒤따르는 체결이 민평 ±1bp 에서 찍힌 비율
+    #   87.3%(기저 35.5%) · 배관검증 98.7% — RESULT_fill_attribution_2026-09-07.md
+    m_atmp = (df["QuoteYield"].isna() & df["AtMP"].fillna(False) & mp_any.notna()
+              & ~coupon & df["SpreadSource"].isna())
+    df.loc[m_atmp, "QuoteYield"] = mp_any[m_atmp]
+    df.loc[m_atmp, "QuoteMethod"] = "at_mp"
+    print(f"      «민평에» 로 추가 확정 {int(m_atmp.sum()):,}행")
+
     # 오버/언더 표기는 부호가 실측으로 확인된다(오버 금리상승 98.1%, 언더 하락 96.4%).
     # M9 닫힘: 한때 «+2bp» 식 기호 표기(SpreadSource='sign')는 M2 가 부호 신뢰도를
     # 55.3% 로 표시해 둔 자리라 올리지 않았는데, 전수조사로 M2 가 99.94% 로 닫혔다.

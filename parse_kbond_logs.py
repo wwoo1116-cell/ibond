@@ -436,6 +436,11 @@ RE_BARE_VETO = re.compile(r'당팔|당사|선팔|선사|역전|교체|스위치|
 RE_MP_YIELD = re.compile(r'민(?:평)?\s*(?:상단|하단)?\s*[~≈.,:/=＝]?\s*(\d\.\d{2,4})')
 # 민평 대비 스프레드  +1원 / -5빕 / +1bp / +1.75원
 RE_SPREAD = re.compile(r'([+\-])\s*(\d{1,3}(?:\.\d{1,2})?)\s*(bp|비피|빕|삡|원)')
+# ★단위 없는 민평 대비 스프레드 «민+3팔자». RE_SPREAD 는 bp/원 을 요구해 못 읽는다.
+#   단위가 데이터로 안 가려져(무단위 중앙 2.0 · bp 2.00 · 원 1.00) 값을 만들지 않는다.
+#   대신 AtMP 에서 빼서 «민평 그 자리» 로도 오해하지 않게 한다. verify [K] 가 센다.
+RE_MP_SIGNED_NOUNIT = re.compile(
+    r"민\s*평?\s*[+\-]\s*\d{1,3}(?:\.\d{1,2})?(?!\s*(?:bp|비피|빕|삡|원|\d))")
 # 절대금리  3.999% / ~3.581 / 4.094%
 RE_ABS_YIELD = re.compile(r'(?<![\d.])(\d\.\d{2,4})\s*%')
 RE_ABS_YIELD2 = re.compile(r'[~≈]\s*(\d\.\d{2,4})(?![\d])')
@@ -1162,15 +1167,26 @@ def extract(body: str, date: str | None = None) -> dict:
     #     사다리 레인(국민주택·지방/첨가)은 «칸» 이 곧 종목이라 코드가 없어도 받는다.
     _lad = (d["Sector"] in ("국민주택", "지방/첨가소화")
             and RE_LADDER_RUNG.search(core) is not None)
+    # ★★[OWNER 2026-09-07] 「민평에 팔자는 건 진짜 민평에 팔자는 거야」 — 전 계열.
+    #   09-03 규칙은 «값이 하나도 없을 것»(MPYield is None)을 요구했는데, 그건
+    #   «국고 문형» 이었다. 크레딧·MBS·지방/첨가·국주는 민평을 «기준» 으로 늘 적어서
+    #   MsgType 이 QUOTE 로 남고(실측: 전 계열에서 AXE∩문면민평 = 0건) 규칙에 안 걸렸다.
+    #   결과검정으로 뜻을 확인했다 — 직전 호가가 레벨 없음일 때 뒤따르는 체결이
+    #   민평 ±1bp 에서 찍힌 비율 87.3%(기저 35.5%), 배관검증 98.7%.
+    #   ⚠수량 요건은 «민평을 적지 않은» 행에만 남긴다 — 09-01 판정(맨 «22-15 사자»는
+    #   콜이다)을 지키기 위해서다. 민평을 적었으면 맨 콜이 아니다.
+    #   ⚠«민+3팔자» 처럼 단위 없는 스프레드는 뺀다 — 단위를 못 가려 0bp 가 아니다.
     d["AtMP"] = bool(
         d["Position"] in ("BUY", "SELL")
-        and d["Amount"] is not None
+        and (d["Amount"] is not None or d["MPYield"] is not None)
         and ((d["BondCode"] or d["BondName"] or d["Maturity"]) or _lad)
-        and d["MPYield"] is None and d["AbsYield"] is None
+        and d["AbsYield"] is None
         and d["QuoteRaw"] is None and d["SpreadValue"] is None
         and d["SpreadWonAbs"] is None
         and not d["IsInquiry"] and d["MsgType"] not in ("INQUIRY", "THANKS", "OTHER")
-        and d["Sector"] in ("국고", "통안", "국민주택", "지방/첨가소화", "크레딧/기타")
+        and d["Sector"] in ("국고", "통안", "국민주택", "지방/첨가소화", "크레딧/기타",
+                            "MBS", "국고이자채")
+        and not RE_MP_SIGNED_NOUNIT.search(core)
         and not RE_INTEREST_ONLY.search(core))
 
     d["BrokerKey"] = broker_key(d["Broker"])
