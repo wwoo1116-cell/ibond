@@ -818,6 +818,11 @@ class Book:
                 self.msb_names.setdefault(str(r.만기일)[:10], str(r.종목명))
                 self.msb_kind.setdefault(str(r.만기일)[:10],
                                          str(r.인포맥스소분류).lower().replace(".0", ""))
+        # ★[OWNER 2026-09-07] 「«관심» 면으로 보이기」 — 종목·방향·딜러·시각은 있는데
+        #   레벨만 없는 호가(국고 211,520 · 통안 70,356). 09-01 판정대로 «호가» 로
+        #   부르지 않으므로 책(사다리·최우선)에는 안 올린다. 다만 «누가 무엇을
+        #   하려는가» 는 정보라 따로 세워 보인다 — 크레딧 매수 바구니와 같은 성격.
+        self.axes = {}      # (dealer,side,code) -> 레벨 없는 관심
         self.ktb = {}       # (dealer,side,code) -> entry
         self.credit = {}    # (dealer,label,side) -> entry
         self.baskets = {}   # (dealer,sec,lo,rt) -> entry
@@ -1262,9 +1267,13 @@ class Book:
                      "d": self._disp(d, broker), "k": mask_key(str(broker)[:14]),
                      "code": key, "mp": mpv,
                      "mpd": self.mp31date.get(isin)}
+            if y is not None:
+                self.axes.pop((broker, side, key), None)
             self.msb[(broker, side, key)] = self._carry_hit(
                 self.msb, (broker, side, key), entry)
             self._after_quote("msb", key, entry, d["QuoteRaw"], d["AbsYield"])
+            if y is None:
+                self._axis(t, "msb", key, self.msb_names.get(key, key), side, d, broker)
             self._cur.update({"n": self.msb_names.get(key, key), "code": key, "y": y})
             return
 
@@ -1330,9 +1339,12 @@ class Book:
                     "a": d["AmountEff"], "asrc": d["AmountSource"],
                     "d": self._disp(d, broker),
                     "k": mask_key(str(broker)[:14]), "code": d["BondCode"]}
+                self.axes.pop((broker, side, d["BondCode"]), None)
                 self.ktb[(broker, side, d["BondCode"])] = self._carry_hit(
                     self.ktb, (broker, side, d["BondCode"]), entry)
                 self._after_quote("ktb", d["BondCode"], entry, d["QuoteRaw"], d["AbsYield"])
+            else:
+                self._axis(t, "ktb", d["BondCode"], d["BondCode"], side, d, broker)
             self._cur.update({"n": d["BondCode"], "code": d["BondCode"], "y": y})
             return
 
@@ -1584,6 +1596,21 @@ class Book:
         a, b = old.get("bpe"), new.get("bpe")
         if a is not None and b is not None and abs(float(a) - float(b)) <= 1e-9:
             new["ft"], new["fn"] = old["ft"], old.get("fn", 0)
+
+    def _axis(self, t, lane, code, nm, side, d, broker):
+        """레벨 없는 관심을 따로 적는다. 책이 아니라 «누가 무엇을 하려는가» 의 목록이다.
+
+        [OWNER 2026-09-07] 09-01 판정(값이 하나도 없으면 호가라 부르지 않는다)은 그대로 두고,
+        종목·방향·딜러·시각만으로도 쓸모가 있으니 보이게만 한다. 최우선·스프레드·사다리
+        어디에도 안 들어간다 — 레벨이 없으니 넣을 자리도 없다.
+        """
+        if code is None or side not in ("BUY", "SELL"):
+            return
+        self.axes[(broker, side, code)] = {
+            "t": t, "lane": lane, "code": code, "n": nm,
+            "s": "B" if side == "BUY" else "S",
+            "a": d["AmountEff"], "asrc": d["AmountSource"],
+            "d": self._disp(d, broker), "k": mask_key(str(broker)[:14])}
 
     def _attach_fill(self, lane, code, nm, broker, y, t):
         """체결을 책에 서 있는 호가에 붙인다 — 지우지 않고 «맞았다» 고 적기만 한다.
@@ -1894,6 +1921,7 @@ class Book:
             "hist": self.hist,
             "mp": self.mp,
             "kfills": self.kfills, "aggr": dict(self.aggr),
+            "axes": list(self.axes.values()),
             "mfills": self.mfills,
             "msb": list(self.msb.values()),
             "msb_mp": {k: v for k, v in

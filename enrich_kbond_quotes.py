@@ -505,8 +505,12 @@ def main():
     #   문면 민평이 있으면 그 값, 없으면 DB 민평(국고·통안 문형)이 곧 레벨이다.
     #   근거: 직전 호가가 레벨 없음일 때 뒤따르는 체결이 민평 ±1bp 에서 찍힌 비율
     #   87.3%(기저 35.5%) · 배관검증 98.7% — RESULT_fill_attribution_2026-09-07.md
+    # ⚠쿠폰 가드는 여기 걸면 «안 된다». m6 는 문면 정규식(민평팔자)으로 승격하니
+    #   쿠폰 숫자에 오염될 수 있지만, 여기는 레벨을 «민평» 에서 가져온다 —
+    #   크레딧 문면은 쿠폰을 채권 «속성» 으로 늘 적는다(「민 3.884 끝.62 / 쿠폰 1.789」).
+    #   가드를 걸었더니 143,233행이 근거 없이 탈락했다(2026-09-07 실측, 자가 검출).
     m_atmp = (df["QuoteYield"].isna() & df["AtMP"].fillna(False) & mp_any.notna()
-              & ~coupon & df["SpreadSource"].isna())
+              & df["SpreadSource"].isna())
     df.loc[m_atmp, "QuoteYield"] = mp_any[m_atmp]
     df.loc[m_atmp, "QuoteMethod"] = "at_mp"
     print(f"      «민평에» 로 추가 확정 {int(m_atmp.sum()):,}행")

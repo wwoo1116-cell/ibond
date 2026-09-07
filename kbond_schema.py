@@ -187,6 +187,22 @@ class Basket(BaseModel):
 
 
 # ── 계산된 뷰 (/api/view) ────────────────────────────────────────────
+class Axis(BaseModel):
+    """레벨 없는 «관심». 종목·방향은 정해졌는데 값이 없는 호가 [OWNER 2026-09-07].
+
+    09-01 판정으로 «호가» 라 부르지 않으므로 책에는 안 들어간다 — 이 목록에만 있다.
+    """
+    t: int
+    lane: Lane | None = None
+    code: str | None = None
+    n: str | None = None
+    s: Side | None = None
+    a: float | None = None
+    asrc: AmountSource | None = None
+    d: str | None = None
+    k: str | None = None
+
+
 class BondRow(BaseModel):
     """종목 한 줄 — 서버가 활성 필터·무크로스·최우선·mid 를 계산해 준 것."""
     c: str
@@ -450,6 +466,7 @@ class View(BaseModel):
     counts: dict[str, int]
     heat: Heat
     rows: list[BondRow] | None = Field(None, description="lane 이 ktb·msb·nhb 일 때")
+    axes: list[Axis] | None = Field(None, description="레벨 없는 «관심» — 책이 아니다")
     buckets: list[CreditBucket] | None = Field(None, description="lane 이 cr 일 때")
     curve: Curve | None = None
     mtx_group: str | None = Field(None, description="credit_matrix 의 bond_type(등급 커브)")

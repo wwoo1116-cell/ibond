@@ -116,6 +116,18 @@ def _lane_meta(snap, lane):
             "mats": snap.get("mats") or {}}
 
 
+def axes(snap, lane, T, mode="def"):
+    """레벨 없는 «관심» — 종목·방향·딜러·나이만. [OWNER 2026-09-07]
+
+    책이 아니다. 최우선·스프레드·사다리 어디에도 안 들어간다 — 레벨이 없으니
+    넣을 자리가 없다. 「누가 무엇을 하려는가」만 보이는 목록이다.
+    수명은 호가와 같은 TTL 을 쓴다(30분).
+    """
+    out = [e for e in (snap.get("axes") or [])
+           if e.get("lane") == lane and alive(e, "ktb", T, mode)]
+    return sorted(out, key=lambda e: -e["t"])[:80]
+
+
 def bond_rows(snap, lane, T, mode="def"):
     """종목별 한 줄. 화면 bondRows 를 그대로 옮긴 것."""
     M = _lane_meta(snap, lane)
@@ -307,6 +319,7 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
            "heat": heat_cells(snap, T, mode)}
     if lane in ("ktb", "msb", "nhb"):
         out["rows"] = bond_rows(snap, lane, T, mode)
+        out["axes"] = axes(snap, lane, T, mode)
         # 종목을 고른 상태면 그 종목의 사다리·딜러·교체까지 같이 낸다.
         if code:
             out["ob"] = ob_ladder(snap, lane, code, T, mode, agg)
