@@ -273,6 +273,12 @@ export interface components {
             /** N */
             n: number;
             /**
+             * Nat
+             * @description 그중 «민평에» 오퍼 수 — 중앙값에서는 뺀다 [OWNER 2026-09-07]
+             * @default 0
+             */
+            nat: number;
+            /**
              * Mb
              * @default 0
              */
@@ -305,6 +311,11 @@ export interface components {
              * @description 문면 표기 단위
              */
             unit?: ("bp" | "원") | null;
+            /**
+             * Atmp
+             * @description 문면에 값이 없어 «민평 그 자리» 로 읽은 오퍼 [OWNER 2026-09-07]
+             */
+            atmp?: boolean | null;
             /**
              * Bp
              * @description 민평 대비 bp (bp 표기 행)

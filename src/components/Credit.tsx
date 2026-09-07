@@ -178,6 +178,11 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
               key={b.k}
               className={`kb-li cr${cls === b.cls && rt === b.rt ? ' on' : ''}`}
               onClick={() => { setCls(b.cls ?? null); setRt(b.rt ?? null); }}
+              title={
+                b.nat
+                  ? `${b.n}건 중 ${b.nat}건이 «민평에» — 중앙 bp 는 값을 부른 ${b.n - b.nat}건으로 잽니다`
+                  : undefined
+              }
             >
               <span className="nm">
                 {b.cls} {b.rt}
@@ -296,8 +301,10 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
                   <tr key={i} title={`${e.d ?? ''}`}>
                     <td className="l">{e.n}</td>
                     <td className="num kb-n">{ttmTxt(e.ttm)}</td>
-                    <td className={`num ${e.bpe == null ? '' : e.bpe < 0 ? 'sr-down' : 'sr-up'}`}>
-                      {e.bpe != null ? `${sbp(e.bpe)}bp` : e.won != null ? `${sbp(e.won)}원` : ''}
+                    {/* «민평에 팔자» 는 +0.0bp 가 아니라 «민평» 으로 읽어야 한다 —
+                        0.0 으로 쓰면 딜러가 정확히 0 을 부른 것처럼 보인다 [OWNER 2026-09-07] */}
+                    <td className={`num ${e.atmp ? 'kb-n' : e.bpe == null ? '' : e.bpe < 0 ? 'sr-down' : 'sr-up'}`}>
+                      {e.atmp ? '민평' : e.bpe != null ? `${sbp(e.bpe)}bp` : e.won != null ? `${sbp(e.won)}원` : ''}
                     </td>
                     <td className={`num${e.lvl === 'est' ? ' kb-n' : ''}`}>
                       {n3(e.ytm)}
