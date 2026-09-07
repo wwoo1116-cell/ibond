@@ -174,9 +174,16 @@ def cr_buckets(snap, T, mode="def"):
         b = m.setdefault(k, {"k": k, "cls": e.get("cls") or "회사채",
                              "rt": e.get("rt") or "미상",
                              "est": e.get("rt_src") == "집계",
-                             "n": 0, "bps": [], "ytms": [], "ttms": [], "mb": 0})
+                             "n": 0, "nat": 0, "bps": [], "ytms": [], "ttms": [],
+                             "mb": 0})
         b["n"] += 1
-        if e.get("bpe") is not None:
+        # ★[OWNER 2026-09-07] «민평에 팔자» 를 0bp 로 받으면(맞다) 버킷의 절반~8할이
+        #   0 이 되어 중앙값이 통째로 0 으로 눌린다(실측 버킷마다 민평 52~83%).
+        #   중앙값은 «값을 부른 오퍼» 로만 재고, 민평 오퍼는 따로 센다 —
+        #   둘은 다른 관측이다(하나는 가격, 하나는 «기준 그 자리»).
+        if e.get("atmp"):
+            b["nat"] += 1
+        elif e.get("bpe") is not None:
             b["bps"].append(e["bpe"])
         if e.get("ytm") is not None:
             b["ytms"].append(e["ytm"])

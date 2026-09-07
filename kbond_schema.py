@@ -57,6 +57,7 @@ class CreditQuote(BaseModel):
     s: Side | None = None
     n: str | None = Field(None, description="종목/발행체 표시명")
     unit: Literal["bp", "원"] | None = Field(None, description="문면 표기 단위")
+    atmp: bool | None = Field(None, description="문면에 값이 없어 «민평 그 자리» 로 읽은 오퍼 [OWNER 2026-09-07]")
     bp: float | None = Field(None, description="민평 대비 bp (bp 표기 행)")
     dbp: float | None = Field(None, description="민평 대비 bp (원 표기 행 — 끝전 환산 또는 문면 Δ)")
     bpe: float | None = Field(None, description="하류가 하나로 쓰는 민평 대비 bp")
@@ -217,6 +218,7 @@ class CreditBucket(BaseModel):
     rt: str
     est: bool = Field(False, description="등급이 문면이 아니라 집계에서 온 것")
     n: int
+    nat: int = Field(0, description="그중 «민평에» 오퍼 수 — 중앙값에서는 뺀다 [OWNER 2026-09-07]")
     mb: int = 0
     bp_med: float | None = None
     ytm_med: float | None = None

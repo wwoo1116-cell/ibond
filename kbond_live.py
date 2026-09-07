@@ -1309,6 +1309,22 @@ class Book:
         # 크레딧 매도 호가. «원» 단위도 받는다(매도의 65%가 원).
         #   ★[OWNER 2026-09-03] v7 사양3 «환산하지 않는다» 는 폐기. 끝전으로 절사 보정해
         #   환산한다 — 실제 민평 대비 단가차 = 호가 원 − 끝전. 위 mp_frac 주석 참조.
+        # ★★[OWNER 2026-09-07] 「민평에 팔자는 건 진짜 민평에 팔자는 거야」
+        #   크레딧은 민평을 «기준» 으로 «늘» 적는다 — 그래서 09-03 의 AtMP 규칙이
+        #   요구하는 `MPYield is None` 이 크레딧에선 사실상 안 걸렸고(전 이력 118행),
+        #   스프레드가 없는 매도 268만 행(크레딧 매도의 67.1%)이 통째로 책 밖에 있었다.
+        #   실측: 호가·관심 행 중 «테너+레벨» 이 둘 다 잡히는 비율 48.5% → 89.0%.
+        #   레벨이 하나도 없고 문면 민평만 있으면 그건 «민평 그 자리» 의 오퍼다.
+        #   ⚠AXE(관심)와 문의는 뺀다 — 그건 재고 표시이지 값을 낸 호가가 아니다.
+        _cr_atmp = False
+        if (d["Sector"] == "크레딧/기타" and side == "SELL"
+                and d["MsgType"] == "QUOTE" and d["MPYield"] is not None
+                and d["SpreadValue"] is None and d["SpreadWonAbs"] is None
+                and d["AbsYield"] is None and d["QuoteRaw"] is None
+                and not d["IsInquiry"]):
+            d = dict(d, SpreadValue=0.0, SpreadUnit="bp", SpreadSource="overunder")
+            _cr_atmp = True
+
         if d["Sector"] == "크레딧/기타" and d["SpreadValue"] is not None \
                 and d["SpreadUnit"] in ("bp", "원") and side == "SELL" \
                 and d["SpreadSource"] in ("sign", "overunder"):
@@ -1383,6 +1399,7 @@ class Book:
                 bpv = round(float(d["SpreadValue"]), 1)
             _prev_cr = self.credit.get((broker, label, side))
             self.credit[(broker, label, side)] = {
+                "atmp": _cr_atmp,        # 문면에 값이 없어 «민평 그 자리» 로 읽은 것
                 "t": t, "s": "S", "n": str(label)[:14], "bp": bpv, "dbp": dbp,
                 "unit": ("원" if _won else "bp"),
                 # 하류가 하나로 쓸 «민평 대비 bp». 원 행은 문면 금리 기준 Δ 다.
