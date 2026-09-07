@@ -442,6 +442,11 @@ RE_BARE_VETO = re.compile(r'당팔|당사|선팔|선사|역전|교체|스위치|
 RE_MP_YIELD = re.compile(r'민(?:평)?\s*(?:상단|하단)?\s*[~≈.,:/=＝]?\s*(\d\.\d{2,4})')
 # 민평 대비 스프레드  +1원 / -5빕 / +1bp / +1.75원
 RE_SPREAD = re.compile(r'([+\-])\s*(\d{1,3}(?:\.\d{1,2})?)\s*(bp|비피|빕|삡|원)')
+# ★[OWNER 2026-09-07] 「민+3팔자」·「40억 +10 팔자」 처럼 «단위가 없는» 민평 대비.
+#   값 분포로는 못 갈랐다(무단위 중앙 2.0 · bp 2.00 · 원 1.00 사이) — 오너 판정 = bp.
+#   ⚠«민» 또는 수량 표기 뒤에 붙은 것만 본다. 전화번호·날짜의 부호와 섞이면 안 된다.
+RE_SPREAD_NOUNIT = re.compile(
+    r'(?:민\s*평?|억|장)\s*([+\-])\s*(\d{1,2}(?:\.\d{1,2})?)(?!\s*(?:bp|비피|빕|삡|원|\d))')
 # ★단위 없는 민평 대비 스프레드 «민+3팔자». RE_SPREAD 는 bp/원 을 요구해 못 읽는다.
 #   단위가 데이터로 안 가려져(무단위 중앙 2.0 · bp 2.00 · 원 1.00) 값을 만들지 않는다.
 #   대신 AtMP 에서 빼서 «민평 그 자리» 로도 오해하지 않게 한다. verify [K] 가 센다.
@@ -946,6 +951,7 @@ def extract(body: str, date: str | None = None) -> dict:
     if my:
         d["MPYield"] = to_float(my.group(1))
     ms = None
+    _nounit_tok = None          # 무단위 스프레드가 집어간 숫자
     for _cand in RE_SPREAD.finditer(core):
         if RE_INDEX_CTX.search(core[max(0, _cand.start() - 10):_cand.start()]):
             continue                  # FRN/변동 지수 리셋식 — 스프레드가 아니다
@@ -981,6 +987,19 @@ def extract(body: str, date: str | None = None) -> dict:
                         d["SpreadValue"], d["SpreadUnit"] = sv, "bp"
                         d["SpreadBp"] = int(round(sv))
                         d["SpreadSource"] = "swap"
+        else:
+            # ★[OWNER 2026-09-07] 단위 없는 민평 대비 = bp. 「민+3팔자」·「40억 +10 팔자」.
+            #   값 분포로는 못 갈랐다(무단위 중앙 2.0 · bp 표기 2.00 · 원 표기 1.00 사이라
+            #   어느 쪽으로도 안 붙는다) — 관행이라 오너가 정했다. 7,910행.
+            mn = RE_SPREAD_NOUNIT.search(core)
+            if mn:
+                v = to_float(mn.group(2))
+                if v is not None:
+                    d["SpreadValue"] = v if mn.group(1) == "+" else -v
+                    d["SpreadUnit"] = "bp"
+                    d["SpreadBp"] = int(round(d["SpreadValue"]))
+                    d["SpreadSource"] = "nounit"
+                    _nounit_tok = mn.group(2)
     if ms:
         # 교체 판정은 Position 과 같은 근거를 쓴다(낱말 or 양방향 동사 동시).
         # 교체 bp 는 종목간 수익률차라 민평 대비가 아니다 — enrich 가 이 값으로
@@ -1058,6 +1077,12 @@ def extract(body: str, date: str | None = None) -> dict:
             if mv:
                 # 틱판보다 확실치 않다. 출처를 남겨 하류가 가려 쓸 수 있게 한다.
                 d["QuoteRaw"], d["QuoteRawSource"] = mv.group(1), "verb"
+
+    # ★[OWNER 2026-09-07] 무단위 스프레드가 집어간 숫자를 축약호가가 다시 물면 안 된다.
+    #   「40억 +10 팔자」의 «10» 이 QuoteRaw 로도 읽히고 있었다(그래서 그 모집단의
+    #   복원 적중이 26.5% 였다). 스프레드가 이겼으면 축약호가는 비운다.
+    if _nounit_tok is not None and d["QuoteRaw"] == _nounit_tok:
+        d["QuoteRaw"], d["QuoteRawSource"] = None, None
 
     # ★P3: 두 다리를 그대로 남긴다(슬래시·공백 둘 다). 간격이 정확히 0.5bp 일 때만.
     # 중간값은 여기서 계산하지 않는다 — 522.5 는 restore() 의 handle2/3 규약에

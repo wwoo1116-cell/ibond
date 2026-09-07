@@ -243,9 +243,94 @@ def load_msb(dates):
     return mst, mp
 
 
+def load_strips(dates):
+    """국고채 이자·원금 분리채(STRIPS) 마스터 + 민평. [2026-09-07]
+
+    ★`국고통_민평` 의 `KRC0` 656,405행 · 317종목 · 2006~ 이 바로 이것이다.
+      표 이름이 «국고통» 이라 국고·통안만 있는 줄 알았는데 세 번째 계열이 있었다.
+    국고이자채 호가는 종목을 «만기» 로 부른다(「24.9.10 국고이자 -4원 팔자」) —
+    그래서 (종류, 만기일) 로 표준코드를 찾는다. 이자와 원금은 갈라 둔다.
+    """
+    with engine().connect() as c:
+        mst = pd.read_sql(text(
+            "SELECT 표준코드, 종목명, 만기일 FROM `국채_발행정보` "
+            "WHERE 표준코드 LIKE 'KRC0%'"), c)
+        mp = pd.read_sql(text(
+            "SELECT 일자, 종목코드, 민평 FROM `국고통_민평` "
+            "WHERE 종목코드 LIKE 'KRC0%' AND 일자 BETWEEN :a AND :b"),
+            c, params={"a": str(dates.min()), "b": str(dates.max())})
+    mst["만기일"] = pd.to_datetime(mst["만기일"])
+    mst["kind"] = np.where(mst["종목명"].astype(str).str.contains("원금"), "원금", "이자")
+    mp["일자"] = pd.to_datetime(mp["일자"])
+    mp = mp[mp["민평"].between(0.3, 9)]
+    print(f"  분리채 마스터 {len(mst):,}종 · 민평 {len(mp):,}행")
+    return mst, mp
+
+
+def strips_join(df, mst, mp):
+    """국고이자채 행에 분리채 민평을 붙인다. (종류, 만기일) -> 표준코드 -> 그날 민평."""
+    if not len(mst) or not len(mp):
+        return 0
+    code = {(r.kind, r.만기일): r.표준코드 for r in mst.itertuples()}
+    asof = {}
+    for c_, g in mp.sort_values("일자").groupby("종목코드", sort=False):
+        asof[c_] = (g["일자"].to_numpy(), g["민평"].to_numpy())
+
+    def at(day, c_, win=30):
+        g = asof.get(c_)
+        if g is None:
+            return None
+        d_, y_ = g
+        j = int(np.searchsorted(d_, np.datetime64(day), side="right")) - 1
+        if j < 0:
+            return None
+        if (np.datetime64(day) - d_[j]).astype("timedelta64[D]").astype(int) > win:
+            return None
+        return float(y_[j])
+
+    m = df["Sector"].eq("국고이자채") & df["MPYieldDB"].isna() & df["Maturity"].notna()
+    if not m.any():
+        return 0
+    mat = pd.to_datetime(df.loc[m, "Maturity"].map(maturity_to_ts), errors="coerce")
+    core = df.loc[m, "Message"].astype(str)
+    kind = np.where(core.str.contains("원금"), "원금", "이자")
+    got = [None if pd.isna(dt) else at(day, code.get((k, dt)))
+           for day, dt, k in zip(df.loc[m, "Date"], mat, kind)]
+    got = pd.Series(got, index=df.index[m], dtype="float64")
+    n = int(got.notna().sum())
+    if n:
+        df.loc[got.index[got.notna()], "MPYieldDB"] = got[got.notna()]
+    print(f"      분리채 민평 조인 {n:,}행")
+    return n
+
+
 def msb_join(df, mst, mp):
     """통안 행에 민평을 붙인다. 두 경로 — 은어 사다리, 종목 직접 표기."""
     mpmap = {(r.일자, r.종목코드): r.민평 for r in mp.itertuples()}
+    # ★[2026-09-07] 정확 일치만 보면 «그날 그 종목 민평이 없는 날» 이 통째로 빠진다.
+    #   실측: 통안 여섯 만기 중 넷의 민평이 2026-08-26 에 멈춰 있었고, 그 뒤 호가가
+    #   전부 레벨을 못 얻었다(축약호가는 있는데 기준이 없어서). 라이브는 30일 폴백을
+    #   두는데(kbond_live.MSB_MP_WIN) 배치엔 없었다 — 같은 규약으로 맞춘다.
+    #   ⚠묵은 민평이라 «전일 민평 대비» 는 아니다. 레벨이 아예 없는 것보다 낫다는 판단.
+    _asof = {}                       # 종목코드 -> (일자배열, 민평배열) 오름차순
+    for _c, _g in mp.sort_values("일자").groupby("종목코드", sort=False):
+        _asof[_c] = (_g["일자"].to_numpy(), _g["민평"].to_numpy())
+
+    def mp_at(day, code, win=30):
+        """그날 값이 없으면 win 일 안의 «마지막» 값으로 물린다."""
+        v = mpmap.get((day, code))
+        if v is not None:
+            return v
+        g = _asof.get(code)
+        if g is None:
+            return None
+        d_, y_ = g
+        j = int(np.searchsorted(d_, np.datetime64(day), side="right")) - 1
+        if j < 0:
+            return None
+        if (np.datetime64(day) - d_[j]).astype("timedelta64[D]").astype(int) > win:
+            return None
+        return float(y_[j])
     # 날짜 x 만기구분 -> 발행일 내림차순 표준코드
     ladder = {}
     for d in pd.to_datetime(sorted(mp["일자"].unique())):
@@ -283,7 +368,7 @@ def msb_join(df, mst, mp):
                 isin.loc[i], src.loc[i] = lad[rank], "slang"
         need = isin.isna()
 
-    mpv = pd.Series([mpmap.get((pd.Timestamp(d), c_)) if c_ is not pd.NA else None
+    mpv = pd.Series([mp_at(pd.Timestamp(d), c_) if c_ is not pd.NA else None
                      for d, c_ in zip(df["Date"], isin)], index=df.index, dtype="float64")
     return isin, src, mpv
 
@@ -391,6 +476,13 @@ def main():
         print(f"      통안 민평 조인 {int(_mpv.notna().sum()):,}행 "
               f"(종목표기 {int((_src == 'item').sum()):,} · "
               f"은어 {int((_src == 'slang').sum()):,})")
+
+    # ★[2026-09-07] 국고채 이자·원금 분리채. `국고통_민평` 의 KRC0 65만행이 이것이다 —
+    #   표 이름이 «국고통» 이라 두 계열뿐인 줄 알았는데 세 번째가 있었다.
+    _st = df["Sector"].eq("국고이자채")
+    if _st.any():
+        mst_s, mp_s = load_strips(df.loc[_st, "Date"])
+        strips_join(df, mst_s, mp_s)
 
     # ★2026-09-02 [OWNER 「붙이세요」]: '국딱' = 그날 입찰된 국고채(§10).
     # 만기가 아니라 상태라서 고정 사다리로는 못 붙이고, 그날 입찰 종목으로 붙는다.
@@ -588,8 +680,9 @@ def main():
     # M9 닫힘: 한때 «+2bp» 식 기호 표기(SpreadSource='sign')는 M2 가 부호 신뢰도를
     # 55.3% 로 표시해 둔 자리라 올리지 않았는데, 전수조사로 M2 가 99.94% 로 닫혔다.
     # 지금은 위 (가) m4 가 sign 도 올린다. 이 블록은 overunder 몫만 맡는다.
+    # ★[OWNER 2026-09-07] 무단위 스프레드(nounit)도 여기로 온다 — 단위는 bp 로 정해졌다.
     m3 = (df["QuoteYield"].isna() & mp_any.notna() & df["SpreadBpEst"].notna()
-          & df["SpreadUnit"].eq("bp") & df["SpreadSource"].eq("overunder"))
+          & df["SpreadUnit"].eq("bp") & df["SpreadSource"].isin(("overunder", "nounit")))
     df.loc[m3, "QuoteYield"] = mp_any[m3] + df.loc[m3, "SpreadBpEst"] / 100.0
     df.loc[m3, "QuoteMethod"] = "over_under"
     print(f"      «민평 + 오버/언더 bp» 로 추가 확정 {int(m3.sum()):,}행")

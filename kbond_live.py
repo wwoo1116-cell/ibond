@@ -1370,7 +1370,7 @@ class Book:
 
         if d["Sector"] in CR_LANE and d["SpreadValue"] is not None \
                 and d["SpreadUnit"] in ("bp", "원") and side == "SELL" \
-                and d["SpreadSource"] in ("sign", "overunder"):
+                and d["SpreadSource"] in ("sign", "overunder", "nounit"):
             label = d["BondName"] or issuer_guess(body, _raw_disp(d, broker))                 or d["Maturity"] or (body.split()[0][:14] if body.split() else "?")
             # ★[OWNER 2026-09-03] 발전 5사 정본화. 이름이 한 글자씩만 달라서
             #   접두·편집거리로 접으면 다섯이 한 통이 된다 — `kbond_issuer` 참조.
