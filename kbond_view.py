@@ -28,7 +28,8 @@
 from __future__ import annotations
 
 # 화면 상수와 같은 값 (kbond_live.html 의 CLSORD·RTORD·NHBORD·BUCKETS·HMROWS)
-CLSORD = ["지방채", "공사채", "특은채", "은행채", "여전채", "회사채"]
+CLSORD = ["지방채", "공사채", "특은채", "은행채", "여전채", "회사채",
+          "MBS", "국고이자채"]
 RTORD = ["AAA", "AA+", "AA0", "AA-", "A+", "A0", "A-",
          "BBB+", "BBB0", "BBB-", "BBB", "미상"]
 NHBORD = ["국당", "국전", "국전전", "국전당"]

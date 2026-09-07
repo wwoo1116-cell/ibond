@@ -74,6 +74,13 @@ REPLAY_AT = None
 POLL_S = 0.4
 VIEWER = Path(__file__).parent / "kbond_live.html"
 TTL_DEFAULT = {"ktb": 1800, "credit": 7200}      # 리서치 결과 (독스트링)
+# 크레딧 책에 합류하는 계열 [OWNER 2026-09-07 「저것도 책 경로 열어주고」].
+# 문면 꼴이 크레딧과 «똑같다» — 만기 + 민평 + 끝전 + 등급 + 팔자. 새 탭을 만드는 대신
+# 같은 경로로 접으면 히트맵·버킷·커브·수요매칭이 전부 따라온다.
+MSB_MP_WIN = 30          # 통안 민평 폴백 창(일). 7일은 실측에서 모자랐다
+CR_LANE = ("크레딧/기타", "MBS", "지방/첨가소화", "국고이자채")
+# 종별은 계열에서 강제한다 — 발행체명 규칙에 안 걸린다("주금공MBS" 는 규칙상 회사채).
+CR_CLS = {"MBS": "MBS", "지방/첨가소화": "지방채", "국고이자채": "국고이자채"}
 # ★v8 TTL 재검토 (2026-09-03 실측, 21영업일 국고 재게시 44,515쌍 — RESULT_ttl_review.md)
 #   같은 (딜러,종목,방향) 재게시에서 «레벨이 1bp 이상 움직였을» 확률, 나이 구간별.
 #   0-5분 0.7% · 5-15분 5.1% · 15-30분 14.1% · 30-60분 25.9% · 1-2시간 41.8% · 2h+ 54.2%
@@ -181,15 +188,19 @@ def load_mp_latest():
         msb_mst = pd.read_sql(text(
             "SELECT 표준코드, 종목명, 발행일, 만기일, 인포맥스소분류 "
             "FROM `통안채_발행정보` WHERE 만기일 >= CURDATE()"), c)
-        # ★통안 최신물은 민평 적재가 며칠 늦는다(실측: 28.07.02통이 최신일에
-        #   없고 8/26 이 마지막). ISIN 별 «최근 7일 내 마지막» 민평로 폴백.
+        # ★통안 최신물은 민평 적재가 며칠 늦는다. 7일 창으로는 모자랐다 —
+        #   실측 2026-09-07: 통안 여섯 만기 중 넷(28.04.02·28.07.02·28.09.03·29.03.03)의
+        #   마지막 민평이 2026-08-26 에 멈춰 있어, 09-03 기준 7일 창(08-27~)에서
+        #   «하루 차이로» 빠졌다. 그 결과 통안 책 61칸 중 44칸(72%)에 레벨이 없었다.
+        #   ⚠묵은 민평이라 «전일 민평 대비» 가 아니다 — 엔트리의 mpd(민평 일자)를
+        #   화면이 표시한다. 레벨이 아예 없는 것보다 낫다는 판단.
         mp31 = pd.read_sql(text(
             "SELECT t.종목코드, t.민평, t.일자 FROM `국고통_민평` t "
             "JOIN (SELECT 종목코드, MAX(일자) d FROM `국고통_민평` "
             "      WHERE 종목코드 LIKE 'KR31%' "
-            "        AND 일자 >= DATE_SUB(:d, INTERVAL 7 DAY) GROUP BY 종목코드) x "
+            "        AND 일자 >= DATE_SUB(:d, INTERVAL :w DAY) GROUP BY 종목코드) x "
             "ON t.종목코드 = x.종목코드 AND t.일자 = x.d"),
-            c, params={"d": str(d0)})
+            c, params={"d": str(d0), "w": MSB_MP_WIN})
     otr["BondCode"] = otr["종목명"].str.extract(r'\((\d{2}-\d{1,2})\)')
     otr = otr.dropna(subset=["BondCode"])
     # ★물가채(TIPS)는 민평이 «실질금리» 다(0.6~1.8%). 명목 커브에 섞으면 톱니가 된다.
@@ -1098,7 +1109,8 @@ class Book:
             "i": self.n_seq, "t": t, "r": room, "k": d["MsgType"],
             "sec": d["Sector"], "n": None, "code": None,
             "s": ("B" if side == "BUY" else "S" if side == "SELL" else None),
-            "y": None, "atmp": bool(d["AtMP"]),
+            "y": (round(float(d["AbsYield"]), 3) if d["AbsYield"] is not None else None),
+            "atmp": bool(d["AtMP"]),
             "a": d["AmountEff"], "asrc": d["AmountSource"],
             "bp": d["SpreadValue"],
             "d": self._disp(d, broker),
@@ -1263,11 +1275,17 @@ class Book:
                 self.nhb_mp[key] = round(float(d["MPYield"]), 3)
                 if self.nhb_ref is None or d["MPYield"] > self.nhb_ref:
                     self.nhb_ref = round(float(d["MPYield"]), 3)
+            # ★[OWNER 2026-09-07] 국주도 크레딧과 같은 꼴이 있다 —
+            #   «30.9.30 국주1종25-09 (민4.105) 팔자» 처럼 문면 민평만 적고 레벨이 없다.
+            #   09-03 AtMP 규칙은 MPYield is None 을 요구해 이걸 못 잡는다(전 이력 35,829행).
+            _nhb_atmp = (d["MsgType"] == "QUOTE" and d["MPYield"] is not None
+                         and d["AbsYield"] is None and d["QuoteRaw"] is None
+                         and d["SpreadValue"] is None and not d["IsInquiry"])
             entry = {
                 "t": t, "s": "B" if side == "BUY" else "S",
-                "y": (round(float(d["AbsYield"]), 3)
-                      if d["AbsYield"] is not None else None),
-                "qr": d["QuoteRaw"], "atmp": bool(d["AtMP"]), "a": d["AmountEff"],
+                "y": (round(float(d["AbsYield"]), 3) if d["AbsYield"] is not None
+                      else round(float(d["MPYield"]), 3) if _nhb_atmp else None),
+                "qr": d["QuoteRaw"], "atmp": bool(d["AtMP"]) or _nhb_atmp, "a": d["AmountEff"],
                 "asrc": d["AmountSource"],
                 "mp": (round(float(d["MPYield"]), 3)
                        if d["MPYield"] is not None else None),
@@ -1277,7 +1295,7 @@ class Book:
             self._after_quote("nhb", key, entry, d["QuoteRaw"], d["AbsYield"])
             self._cur.update({"n": key, "code": key,
                               "y": (round(float(d["AbsYield"]), 3)
-                                    if d["AbsYield"] is not None else None)})
+                                    if d["AbsYield"] is not None else round(float(d["MPYield"]), 3) if _nhb_atmp else None)})
             return
 
         # 국고: 축약호가를 민평으로 복원, 또는 문면 절대금리
@@ -1317,7 +1335,7 @@ class Book:
         #   레벨이 하나도 없고 문면 민평만 있으면 그건 «민평 그 자리» 의 오퍼다.
         #   ⚠AXE(관심)와 문의는 뺀다 — 그건 재고 표시이지 값을 낸 호가가 아니다.
         _cr_atmp = False
-        if (d["Sector"] == "크레딧/기타" and side == "SELL"
+        if (d["Sector"] in CR_LANE and side == "SELL"
                 and d["MsgType"] == "QUOTE" and d["MPYield"] is not None
                 and d["SpreadValue"] is None and d["SpreadWonAbs"] is None
                 and d["AbsYield"] is None and d["QuoteRaw"] is None
@@ -1325,7 +1343,7 @@ class Book:
             d = dict(d, SpreadValue=0.0, SpreadUnit="bp", SpreadSource="overunder")
             _cr_atmp = True
 
-        if d["Sector"] == "크레딧/기타" and d["SpreadValue"] is not None \
+        if d["Sector"] in CR_LANE and d["SpreadValue"] is not None \
                 and d["SpreadUnit"] in ("bp", "원") and side == "SELL" \
                 and d["SpreadSource"] in ("sign", "overunder"):
             label = d["BondName"] or issuer_guess(body, _raw_disp(d, broker))                 or d["Maturity"] or (body.split()[0][:14] if body.split() else "?")
@@ -1407,11 +1425,12 @@ class Book:
                 "won": (round(float(d["SpreadValue"]), 2) if _won else None),
                 "a": d["AmountEff"], "asrc": d["AmountSource"], "d": disp[:12],
                 "k": mask_key(str(broker)[:14]),
-                "cls": classify_issuer(label),
+                "cls": CR_CLS.get(d["Sector"]) or classify_issuer(label),
                 # 히트맵은 카드채를 여전채(캐피탈)와 갈라 본다 [OWNER]
-                "cls2": ("카드채" if (classify_issuer(label) == "여전채"
-                                    and "카드" in str(label)) else
-                         classify_issuer(label)),
+                "cls2": (CR_CLS.get(d["Sector"]) or
+                         ("카드채" if (classify_issuer(label) == "여전채"
+                                     and "카드" in str(label)) else
+                          classify_issuer(label))),
                 "ttm": ttm, "cats": cats,
                 # 끝전 환산의 근거 — 화면 배지·툴팁과 verify [F] 가 읽는다
                 "frac": frac, "fsrc": frac_src, "lvl": lvl, "chk": chk_bp,

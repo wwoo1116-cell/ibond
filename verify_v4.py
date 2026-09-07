@@ -218,6 +218,12 @@ def main() -> int:
             exp = None if pd.isna(arr[0]) else round(float(arr[0]), 3)
         if exp is None and d["AbsYield"] is not None:
             exp = round(float(d["AbsYield"]), 3)
+        # ★[OWNER 2026-09-07] 국주도 «문면 민평만 적고 팔자» 꼴이 있다 —
+        #   그 경우 레벨은 그 메시지가 적은 민평 그 자리다(책과 같은 규칙).
+        if (exp is None and d["MPYield"] is not None and d["MsgType"] == "QUOTE"
+                and d["QuoteRaw"] is None and d["SpreadValue"] is None
+                and not d["IsInquiry"]):
+            exp = round(float(d["MPYield"]), 3)
         if (e["y"] is None) != (exp is None) or (
                 e["y"] is not None and abs(e["y"] - exp) > 1e-9):
             fails.append(f"B4 복원값 불일치 {rung} {t} :: {body[:40]} : "
@@ -497,8 +503,8 @@ def main() -> int:
         cands = [(t, d) for (t, d) in cands if t >= lo]
         if e["csrc"] == "level":
             # 레벨이 적힌 체결 -> 같은 QuoteRaw(또는 절대금리) 를 가진 호가
-            raw = next((d for (t, d) in idx.get((e["t"], e["room"], e["raw"][:170]), [(None, None, None)])
-                        if d is not None for d in [d]), None)
+            raw = next((dd for (_tm, dd, _b) in idx.get(
+                (e["t"], e["room"], e["raw"][:170]), []) if dd is not None), None)
             cands2 = cands
             if raw is not None and raw["QuoteRaw"] is not None:
                 cands2 = [(t, d) for (t, d) in cands if d["QuoteRaw"] == raw["QuoteRaw"]]
