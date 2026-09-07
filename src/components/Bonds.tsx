@@ -279,6 +279,8 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
   /* 피드에서 이 종목만 고른다. 접거나 세지 않으니 서버 계산과 겹치지 않는다. */
   const tape = code ? feed.filter((e) => e.code === code).slice(-200).reverse() : [];
   const T = v.T;
+  /* 레벨 없는 «관심» — 서버가 이미 TTL 로 거르고 최신순으로 준다 [OWNER 2026-09-07] */
+  const ax = v.axes ?? [];
 
   return (
     <div className="kb-bonds">
@@ -476,6 +478,33 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           </div>
           {v.dealers ? <Dealers d={v.dealers} T={T} /> : null}
         </div>
+
+        {/* ★[OWNER 2026-09-07] 레벨 없는 «관심» — 책이 아니다.
+            종목·방향은 정해졌는데 값이 없는 호가(「19-1 사자」·「25.4.2통 팔자」).
+            09-01 판정대로 사다리·최우선에는 안 올리고 여기서만 보인다. */}
+        {ax.length ? (
+          <div className="kb-card">
+            <div className="kb-ch">
+              <Text as="span" font="label2">관심</Text>
+              <Text as="span" font="legal" color="fgMuted">
+                레벨 없는 호가 {ax.length}건 · 책에는 안 들어갑니다
+              </Text>
+            </div>
+            <div className="kb-axl">
+              {ax.slice(0, 24).map((e, i2) => (
+                <div className="kb-li ax" key={i2} title={`${e.d ?? ''} · ${ageTxt(T - e.t)} 전`}>
+                  <span className="nm">{e.n}</span>
+                  {/* ★방향색은 데스크 관례 — 매수 빨강(sr-up) · 매도 파랑(sr-down) */}
+                  <span className={`num ${e.s === 'B' ? 'sr-up' : 'sr-down'}`}>
+                    {e.s === 'B' ? '사자' : '팔자'}
+                  </span>
+                  <span className="num kb-n">{e.a ? `${e.a}억` : ''}</span>
+                  <span className="num kb-n">{ageTxt(T - e.t)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -143,6 +143,32 @@ export interface components {
             tot: number;
         };
         /**
+         * Axis
+         * @description 레벨 없는 «관심». 종목·방향은 정해졌는데 값이 없는 호가 [OWNER 2026-09-07].
+         *
+         *     09-01 판정으로 «호가» 라 부르지 않으므로 책에는 안 들어간다 — 이 목록에만 있다.
+         */
+        Axis: {
+            /** T */
+            t: number;
+            /** Lane */
+            lane?: ("ktb" | "msb" | "nhb" | "cr" | "muni") | null;
+            /** Code */
+            code?: string | null;
+            /** N */
+            n?: string | null;
+            /** S */
+            s?: ("S" | "B") | null;
+            /** A */
+            a?: number | null;
+            /** Asrc */
+            asrc?: ("stated" | "implied" | "bare" | "default" | "oddlot" | "inherit") | null;
+            /** D */
+            d?: string | null;
+            /** K */
+            k?: string | null;
+        };
+        /**
          * Basket
          * @description 범주 콜 = 크레딧의 «매수면». 종목을 안 찍고 (잔존, 섹터, 등급)으로 온다.
          */
@@ -1314,6 +1340,11 @@ export interface components {
              * @description lane 이 ktb·msb·nhb 일 때
              */
             rows?: components["schemas"]["BondRow"][] | null;
+            /**
+             * Axes
+             * @description 레벨 없는 «관심» — 책이 아니다
+             */
+            axes?: components["schemas"]["Axis"][] | null;
             /**
              * Buckets
              * @description lane 이 cr 일 때
