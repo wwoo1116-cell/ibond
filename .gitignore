@@ -16,3 +16,15 @@ __pycache__/
 *.parquet
 *.csv
 *.bak.html
+
+# ★[OWNER 2026-09-09] 벤더 원장(인포맥스·KOFIA)에서 구운 사전은 리포에 안 넣는다.
+#   유료 자료를 배포하는 셈이 되고, 코드만 있으면 언제든 다시 굽는다:
+#       python kbond_issuer_dict.py     # 표제어 9,872 · 이형태
+#       python kbond_issuer_derive.py   # 민평 검정층
+#       python kbond_issuer_near.py     # 근접층
+#       python kbond_sector.py          # 계열 대조표
+kbond_issuer_dict.json
+kbond_issuer_derived.json
+kbond_issuer_near.json
+kbond_sector.json
+issuer_ratings.json
