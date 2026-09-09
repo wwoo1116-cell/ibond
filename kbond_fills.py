@@ -157,7 +157,7 @@ def main() -> int:
     #
     # ★지우지 않는다. RepostSeq 선례대로 순번만 붙인다 — DupSeq==0 이 첫 보고다.
     #   실측 2,978건(재게시 제외 체결의 4.7%) · 국고 2,343 · 통안 541 · 크레딧 94.
-    #   그중 13%는 «같은 하우스의 다른 전화선» 이다(한화 3772-737 대 3772-726).
+    #   그중 13%는 «같은 하우스의 다른 전화선» 이다(서명 XXXX-XXXX).
     fdf = pd.read_parquet(OUT)
     fdf["DupSeq"] = 0
     _ts = fdf["Timestamp"].astype("datetime64[ns]").astype("int64").to_numpy() / 1e9

@@ -8,7 +8,7 @@
 
 **동시 세션 주의: 다른 세션이 `kbond_live.py` 의 `feed()` 계열(다리 분할)과
 `kbond_live.html` 을 만지고 있다(`PROMPT_legs_live_2026-09-03.md`). 이 레인이 만지는 곳은
-`kbond_live.py` 의 `Handler`(약 1694~1790)와 HTML 의 fetch/EventSource 네 줄뿐이다.
+`kbond_live.py` 의 `Handler`(서명 XXXX-XXXX)와 HTML 의 fetch/EventSource 네 줄뿐이다.
 겹치지 않지만 같은 파일이다 — exact-match 치환만, 통째 재작성 금지, 시작 전 두 파일 mtime 을 적어 둘 것.**
 
 ---
@@ -27,7 +27,7 @@ K-Bond 라이브 화면을 Vercel 에 배포한다. sauron-v2(rateslab) 와 **�
   이 셋이 흉내 낼 규율이다. 특히 cors.py 가 «왜 * 가 아닌가» 를 이미 적어 뒀다.
 
 동시 세션 주의: 다른 세션이 kbond_live.py 의 feed()/_feed_one/message_legs 와
-kbond_live.html 을 만지고 있다. 이 레인은 kbond_live.py 의 Handler(약 1694~1790)와
+kbond_live.html 을 만지고 있다. 이 레인은 kbond_live.py 의 Handler(서명 XXXX-XXXX)와
 HTML 의 fetch/EventSource 네 줄만 만진다. exact-match 함수 단위 치환만.
 프로덕션 :8301 은 죽이지 않는다. 검증은 :8305 로 따로 띄운다.
 

@@ -555,7 +555,7 @@ def main():
     print(f"      «민평 + 원 스프레드» 로 추가 확정 {int(m2.sum()):,}행")
 
     # ---- 전수조사 승격 3종 (2026-09-01) ----
-    # ★2026-09-01 감사: 원문 Message 에 걸어 '(메리츠 CMS 6454-4035)' 같은
+    # ★2026-09-01 감사: 원문 Message 에 걸어 '(서명 XXXX-XXXX)' 같은
     # 데스크 이름의 'CMS' 가 쿠폰 문맥으로 잡혀 12,312행이 근거 없이 탈락했다.
     # 파서와 같은 core(브로커 태그 제거본)에 건다.
     _core = df["Message"].astype(str).map(lambda m: split_broker(m)[1])

@@ -70,7 +70,7 @@ feed / _feed_inner / _block_unbooked / kbond_legs.py 는 손대지 않는다.
       피드 행(/feed.json)의 y 도 ytm 을 따른다(지금은 AbsYield 만 싣는다). 피드 행에도 lvl 을 싣는다.
     - 매수(BUY) 원 호가 · 교체 · 국고·통안은 이 레인 밖이다. 넓히지 않는다.
 
-[3] 화면 — kbond_live.html 크레딧 호가창(745~775행 부근) + 상태줄 sOb + 각주(1289·1309행).
+[3] 화면 — kbond_live.html 크레딧 호가창(서명 XXXX-XXXX) + 상태줄 sOb + 각주(1289·1309행).
     - YTM 칸: lvl=conv → 값 + 작은 배지 «환». lvl=est → 흐리게(mut) + 배지 «추». quoted 는 현행.
     - 민평대비 칸의 툴팁 «원은 가격 단위라 환산하지 않습니다» 를 지운다. lvl 별 툴팁:
         conv: «끝전 {frac} 반영 환산 · 민평 {mp} + ({won} − {frac})원 × {r}bp/원»
@@ -185,9 +185,9 @@ quoted 129 의 dbp 는 딜러가 적어 준 결과금리에서 온 것이지 라
 
 - 정규식: `enrich_kbond_quotes.py` RE_MP_FRAC(92행 부근, 두 갈래) · `parse_kbond_logs.py` RE_LIST_FRAC(444) · RE_FRAC_WON(438, 스프레드 오인 방지용 «지우기» 전용).
 - 환산: `enrich_kbond_quotes.py` won_to_bp(111) · TTM_GRID/BP_PER_WON(79~80). 본표 적용부 415~437(MPPriceFrac 추출 → SpreadBpEst → QuoteMethod='spread_won').
-- 라이브: `kbond_live.py` _feed_one(792) 크레딧 분기(1003~) · ttm 계산(1019, pd.Timestamp.today()) · mpq/_won(1030~1031) · 엔트리 dict(1043 부근) · _after_quote 호출.
+- 라이브: `kbond_live.py` _feed_one(792) 크레딧 분기(1003~) · ttm 계산(1019, pd.Timestamp.today()) · mpq/_won(서명 XXXX-XXXX) · 엔트리 dict(1043 부근) · _after_quote 호출.
   feed(716) · _block_unbooked(725) · _feed_inner(740) 은 09-03 13:09 다른 세션이 만든 것 — 손대지 않는다.
-- 화면: `kbond_live.html` 크레딧 호가창(745~775) · 상태줄 sOb(338) · 각주(1289 · 1309).
-- 리플레이 플래그: `--replay YYYYMMDD --at HH:MM --port N`(1652~1660). REPLAY_AT 은 동결.
+- 화면: `kbond_live.html` 크레딧 호가창(서명 XXXX-XXXX) · 상태줄 sOb(338) · 각주(1289 · 1309).
+- 리플레이 플래그: `--replay YYYYMMDD --at HH:MM --port N`(서명 XXXX-XXXX). REPLAY_AT 은 동결.
 - 검증: `verify_v4.py` [A]~[E](100 · 173 · 258 · 264 · 333행). `kbond_test.py` 는 GUI 자동화라 단위시험 자리가 아니다 → test_frac.py 신설.
 - 원문 로그: `C:\Users\infomax\Documents\K-Bond Messenger Chat\채권_<방>_<YYYYMMDD>_*.txt` (cp949).

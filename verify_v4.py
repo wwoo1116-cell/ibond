@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from parse_kbond_logs import ROOMS, SRC_DIR, extract, split_messages   # noqa: E402
 from enrich_kbond_quotes import restore, norm_code                     # noqa: E402
 import kbond_live as KL                                                # noqa: E402
+import kbond_issuer                                                    # noqa: E402
 
 NHB_ORDER = KL.NHB_ORDER
 
@@ -634,7 +635,7 @@ def main() -> int:
         print("[H] 가림 꺼짐 — 딜러 실명·전화가 그대로 나간다(로컬 확인용)")
     else:
         # ★딜러가 실릴 수 있는 «자리» 만 본다. 책 전체를 훑으면 국고 정식표기
-        #   («국고0425-1212») 가 전화번호로, 발행사명(«아이엠캐피탈143-2») 이
+        #   (서명 XXXX-XXXX) 가 전화번호로, 발행사명(«아이엠캐피탈143-2») 이
         #   데스크명으로 잡힌다 — 둘 다 가릴 대상이 아니다(실측 오탐 46+1건).
         # ★자리마다 잣대가 다르다.
         #   spots  = 라벨이어야 하는 자리(d·bk·h·k·vd) — 데스크명이 조금이라도 있으면 누출.
@@ -674,7 +675,14 @@ def main() -> int:
             nm = KL._raw_disp(d, brk)
             if nm and len(nm) >= 3:
                 names.add(nm)
-        leaked = sorted(n for n in names if n in blob or n in labels)
+        # ★[2026-09-09] 종목 이름 자리는 «데스크명과 완전 일치» 로 봤는데, 발행체를
+        #   정본화한 뒤로 증권사가 **발행체이면서 동시에 데스크명** 인 자리가 생겼다
+        #   (실측: n='신한투자증권' 회사채 AA0 오퍼 3.602 — 딜러는 H09-10 로 제대로
+        #   가려져 있었다). 예전엔 라벨에 회차가 붙어 완전 일치가 안 났을 뿐이다.
+        #   사전이 «발행체» 라고 아는 이름은 누출이 아니다. 원문(blob)은 그대로 본다.
+        _iss_labels = {x for x in labels
+                       if kbond_issuer.canon_issuer(x)[1] not in (None, "raw")}
+        leaked = sorted(n for n in names if n in blob or n in (labels - _iss_labels))
         labs = {d.get("d") for d in (book.get("dealers") or [])}
         bad_lab = sorted(x for x in labs if x and not _re.fullmatch(r"H\d+-\d+", x))
         print(f"[H] 가림 — 딜러 라벨 {len(labs)}개 · 전화번호꼴 {len(tel)} · 실명 노출 {len(leaked)}")

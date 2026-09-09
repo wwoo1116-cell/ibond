@@ -161,8 +161,8 @@ K-Bond 레인을 이어서 한다. 먼저 읽을 것:
 
 ### F. 코드 위치
 
-- 파서 수량: `parse_kbond_logs.py` RE_AMOUNT(369행 부근) · RE_AMOUNT_IMPLIED(380) · RE_ODDLOT(455) · Amount 대입(814~830).
-- 파서 원/스프레드: RE_SPREAD(342) `([+\-])\s*(\d{1,3}(?:\.\d{1,2})?)\s*(bp|비피|빕|삡|원)` · SpreadUnit 대입(733) · 교체 분기(705~729).
+- 파서 수량: `parse_kbond_logs.py` RE_AMOUNT(369행 부근) · RE_AMOUNT_IMPLIED(380) · RE_ODDLOT(455) · Amount 대입(서명 XXXX-XXXX).
+- 파서 원/스프레드: RE_SPREAD(342) `([+\-])\s*(\d{1,3}(?:\.\d{1,2})?)\s*(bp|비피|빕|삡|원)` · SpreadUnit 대입(733) · 교체 분기(서명 XXXX-XXXX).
 - 라이브: 국고 사다리 `self.ktb[(broker, side, code)]`(720 부근) · 크레딧 절 `SpreadUnit == "bp"` 조건(732) · `_fresh_best`(CBBT 최신 호가) · 피드 `feed()`(547).
-- 화면: `kbond_live_v5.html` / `kbond_live.html` LOT=100 · «N계약 M억» 표기(310~316).
+- 화면: `kbond_live_v5.html` / `kbond_live.html` LOT=100 · «N계약 M억» 표기(서명 XXXX-XXXX).
 - 원문 로그: `C:\Users\infomax\Documents\K-Bond Messenger Chat\채권_<방>_<YYYYMMDD>_*.txt` (cp949).
