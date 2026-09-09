@@ -114,21 +114,47 @@ RE_SIDE = re.compile(
     r'[^/,]*?\d[\d.]*\s*%?\s*[^/,]{0,12}?(?:팔자|사자|매도|매수)[^/,]{0,8}')
 
 
+def _mask_parens(body: str) -> str:
+    """괄호 안을 가린다(길이는 그대로). 조각이 괄호 안에서 시작하는 것을 막는다."""
+    out, depth = [], 0
+    for ch in body:
+        if ch in "([{":
+            depth += 1
+            out.append(ch)
+        elif ch in ")]}":
+            depth = max(0, depth - 1)
+            out.append(ch)
+        else:
+            out.append(" " if depth else ch)
+    return "".join(out)
+
+
 def _split_two_sided(body: str):
-    """한 종목에 양쪽 호가가 다 적힌 줄을 (머리말, 다리들) 로 쪼갠다. 아니면 (None, [])."""
-    ms = list(RE_SIDE.finditer(body))
+    """한 종목에 양쪽 호가가 다 적힌 줄을 (머리말, 다리들) 로 쪼갠다. 아니면 (None, []).
+
+    ★[OWNER 2026-09-09] 예전에는 조각이 괄호 안에서 시작하면 **분해를 포기**했다
+      (2026-09-01 감사: 'AA-) 팔자' 처럼 잘려 다리 16,301개의 짝이 깨졌다).
+      그런데 그 포기 때문에 «(민평 3.665%/ 끝.45/ AAA) 오버6.5팔자동/오버7사자동» 처럼
+      **괄호 뒤에 양면이 오는** 줄이 통째로 SWAP 한 줄이 됐다.
+      포기하는 대신 **괄호 안을 가려 놓고** 조각을 찾는다 — 그러면 조각이 괄호 안에서
+      시작할 수가 없고, 괄호 짝도 안 깨진다. 종목명·민평은 머리말로 보존된다.
+    """
+    masked = _mask_parens(body)
+    ms = list(RE_SIDE.finditer(masked))
     if len(ms) < 2:
         return None, []
-    sides = {"S" if RE_SELL.search(m.group(0)) else "B" for m in ms}
+    # ★★매치 구간을 **다리 본문으로 쓰면 안 된다.** `RE_SIDE` 는 동사 뒤를 8자만 물어서
+    #   결과금리가 반토막 난다(실측: 「팔자+3원  3.267%」 -> 「팔자+3원  3.2」).
+    #   그러면 그 다리는 문면 금리를 잃고 «원 환산» 으로 떨어져 값이 달라진다
+    #   (verify [F2c] 가 잡았다 — 롯데카드540-1 conv 3.275 대 문면 3.267).
+    #   매치는 **자를 자리**로만 쓰고, 본문은 자리 사이를 통째로 잘라 준다.
+    cuts = [m.start() for m in ms]
+    pieces = [body[a:b] for a, b in zip(cuts, cuts[1:] + [len(body)])]
+    sides = {"S" if RE_SELL.search(x) else "B" for x in pieces}
     if len(sides) < 2:                            # 양쪽이 다 있어야 다리다
         return None, []
-    # ★괄호 깊이 검사(2026-09-01): 이게 없으면 'AA-) 팔자' 처럼 괄호 안에서 잘려
-    # 다리 16,301개의 짝이 깨진다. 조각 시작점이 괄호 안이면 분해를 포기한다.
-    for m in ms:
-        if body[:m.start()].count("(") - body[:m.start()].count(")") > 0:
-            return None, []
-    head = body[:ms[0].start()].strip()           # 종목명은 머리말로 보존한다
-    return head, [m.group(0).strip() for m in ms]
+    head = body[:cuts[0]].strip()                 # 종목명은 머리말로 보존한다
+    return head, [x.strip() for x in pieces]
 
 
 def split_legs(message: str):
@@ -143,6 +169,16 @@ def split_legs(message: str):
         # **값+동사 쌍이 둘 이상이면** 다리로 쪼갠다.
         h2, two = _split_two_sided(body)
         return (broker, h2, two) if two else (broker, "", [body])
+    # ★[OWNER 2026-09-09 「두 다리로 갈라 책에 올린다」] 앵커가 **있어도** 양면일 수 있다.
+    #   예전에는 앵커가 없을 때만 양면 분할을 시도해서, 종목 이름이 적힌 양면 호가가
+    #   통째로 SWAP 한 줄이 됐다(실측 28,442행 — 사자 다리의 레벨이 버려졌다):
+    #     오버6.5팔자동/오버7사자동
+    #     100억 팔자 +14원 2.709% /+8원사자 2.814%
+    #   앵커가 하나뿐이면(= 종목이 하나) 양면 분할을 덧대어 본다.
+    if len(ap) == 1:
+        h2, two = _split_two_sided(body)
+        if len(two) > 1:
+            return broker, h2, two
 
     head = body[:ap[0]].strip()
     cuts = [ap[0]]
