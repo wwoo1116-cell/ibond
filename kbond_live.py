@@ -369,21 +369,11 @@ class Tail:
 
 
 # ───────────────────────────────────────────── 책 접기
-# ★[OWNER v2.2] 블로터 종목이 «29.8.31» 로 나오던 뿌리: BondName 은 «발행체명+
-# 숫자-숫자» 만 잡아서(M6), 회차 없는 «29.8.31(월) 농협금융지주 팔자» 는 이름이
-# 비고 만기 날짜가 라벨로 흘렀다. 머리의 날짜·요일·괄호를 걷고 첫 한글 낱말
-# 뭉치를 발행사로 추정한다.
-# 요일 괄호가 안 닫힌 채 이어지는 행이 있다(«28.8.28(월 우리금융…») — 닫는
-# 괄호를 선택으로 둔다.
-# ★[OWNER 2026-09-07] 「27.1.14만기 한전(...) 팔자」 의 발행사가 «만기» 로 잡혔다
-#   (전 이력 4,832행). 날짜 바로 뒤의 «만기/만기일» 은 날짜의 일부다 — 같이 걷는다.
-#   걷어내면 한전 -> _ALIAS_OFFICIAL 로 «한국전력» 까지 자동으로 간다.
-RE_LEAD_DATE = re.compile(
-    r"^[\s\d.\-/*#!·★☆]*(?:[(][월화수목금토일,휴평일\s]*[)]?)?\s*"
-    r"(?:만기일?)?[\s.\-/]*")
-RE_ISSUER = re.compile(r"^([가-힣A-Za-z][가-힣A-Za-z&]*\d*(?:-\d+)?)")
-_ISSUER_STOP = {"팔자", "사자", "매도", "매수", "민평", "오버", "언더", "교체",
-                "만기", "만기일", "잔존", "이표", "쿠폰", "휴일", "평일"}
+# ★[2026-09-09] 본문 머리 발행사 추정기(RE_LEAD_DATE·RE_ISSUER·issuer_guess)는
+#   `kbond_issuer` 로 옮겼다 — 원장(parse_kbond_logs)도 같은 것을 써야 하는데
+#   kbond_live 는 parse 를 import 하므로 거꾸로는 못 부른다.
+from kbond_issuer import (RE_ISSUER, RE_LEAD_DATE, issuer_guess,   # noqa: E402,F401
+                          issuer_of)
 
 
 # 종별 분류 — 발행사 이름의 키워드 규칙. 순서가 우선순위다(여전채가 은행채보다 앞:
@@ -395,43 +385,62 @@ _ISSUER_STOP = {"팔자", "사자", "매도", "매수", "민평", "오버", "언
 #   2026-09-02 전량 분류 실측: 회사 861 · 여전 758 · 은행 462 · 특은 359 ·
 #   공사 313 · 지방 252 (미분류 0).
 _SECTOR_RULES = [
-    ("여전채", ("캐피탈", "카드", "할부", "리스", "커머셜", "에프앤아이", "파이낸셜")),
-    # 특수은행 = 산금(산업)·중금(기업)·수은(수출입)·농금(농협)·수금(수협)
-    ("특은채", ("산업은행", "산금", "중소기업은행", "중금", "기업은행", "수출입",
-               "농협", "농금", "농업금융", "수협", "수금", "수산금융",
-               "산은", "기은", "수은")),
-    ("지방채", ("도시공사", "교통공사", "도시개발", "도시철도", "시설관리공단",
-               "특별시", "광역시", "경기도", "강원", "제주", "전주시",
-               "충청", "전라", "경상")),
-    ("공사채", ("공사", "공단", "한국전력", "발전", "수력원자력", "가스", "지역난방",
-               "도로", "철도", "수자원", "토지주택", "주택금융", "예금보험",
-               "장학재단", "자산관리", "무역보험", "관광", "농어촌", "환경",
-               "항만", "공항", "진흥원", "중소벤처", "해양진흥")),
-    ("은행채", ("은행", "금융지주", "뱅크", "씨티", "SC")),
+    # ★[2026-09-09 4차] 부분문자열 -> **앵커 붙인 정규식**. 이유는 위 주석 참조.
+    #   `$`(이름 끝)·`^`(이름 시작)이 남의 이름 안에 사는 것을 원천봉쇄한다.
+    # ⚠ 꼬리에 «코리아»·«서비스» 가 더 붙는 회사가 있다(오릭스캐피탈코리아 ·
+    #   알씨아이파이낸셜서비스코리아) — 벤더 표와의 대조가 잡아 줬다.
+    ("여전채", (r"캐피탈(?:코리아)?$", r"카드$", r"할부금융", r"리스$", r"커머셜$",
+               r"에프앤아이$", r"파이낸셜(?:서비스(?:코리아)?)?$", r"파이낸스$")),
+    # ★[OWNER] 특은채는 셋뿐이다 — 산금·중금·수은. 이름을 통째로 적는다.
+    ("특은채", (r"^한국산업은행$", r"^KDB산업은행$", r"^IBK기업은행$",
+               r"^중소기업은행$", r"^한국수출입은행$")),
+    ("지방채", (r"도시공사$", r"교통공사$", r"도시개발공사$", r"도시철도공사$",
+               r"도시관리공사$", r"시설관리공단$", r"개발공사$", r"주택도시공사$",
+               r"특별시$", r"광역시$", r"^전주시$",
+               # ⚠ «도$» 로 쓰면 HL만**도** 가 지방채가 된다(대조가 잡았다).
+               #   광역자치단체는 이름을 통째로 적는다.
+               r"^경기도$", r"^강원도$", r"^강원특별자치도$", r"^제주도$",
+               r"^제주특별자치도$", r"^충청북도$", r"^충청남도$", r"^전라북도$",
+               r"^전북특별자치도$", r"^전라남도$", r"^경상북도$", r"^경상남도$")),
+    # ★[OWNER] 농업협동조합중앙회·수산업협동조합중앙회는 공사채.
+    ("공사채", (r"^농협중앙회$", r"^수협중앙회$", r"^농업협동조합중앙회$",
+               r"^수산업협동조합중앙회$", r"발전$", r"수력원자력$",
+               r"공사$", r"공단$", r"^한국전력", r"지역난방", r"^한국가스공사$",
+               r"주택금융공사", r"예금보험공사$", r"장학재단$", r"자산관리공사$",
+               r"무역보험공사$", r"관광공사$", r"농어촌공사$", r"환경공단$",
+               r"항만공사$", r"공항공사$", r"진흥원$", r"진흥공단$", r"진흥공사$",
+               r"^외국환평형기금", r"^재정증권$")),
+    # ⚠ «뱅크$» 는 현대오일**뱅크** 를 문다(대조가 잡았다).
+    ("은행채", (r"은행$", r"금융지주$", r"^신한지주$", r"(?<!오일)뱅크$",
+               r"^SC제일은행$")),
 ]
+# ★벤더 분류와의 «독립 대조» — `kbond_sector.py` 가 표를 굽고 어긋난 자리를 센다.
+#   규칙을 고칠 때마다 돌려서 «다음 부산은행» 을 사람이 아니라 대조가 찾게 한다.
+
+
+def _sector_by_rule(n):
+    for sec, pats in _SECTOR_RULES:
+        for rx in pats:
+            if re.search(rx, n):
+                return sec
+    return "회사채"
+
 # 화면·버킷 정렬 순서 (오너 목록 순서 그대로)
 SECTOR_ORDER = ["지방채", "공사채", "특은채", "은행채", "여전채", "회사채"]
 
 
 def classify_issuer(name):
-    n = str(name)
-    for sec, kws in _SECTOR_RULES:
-        for k in kws:
-            if k in n:
-                return sec
-    return "회사채"
+    """발행체 **정본**의 계열. 라벨(회차·구조가 붙은 것)이 아니라 정본을 줘야 한다 —
+    앵커(`$`)가 회차에 막힌다."""
+    return _sector_by_rule(str(name))
 
 
-# 은어 -> 정식 발행사명 (2026-09-02 별칭 검증분)
-_ALIAS_OFFICIAL = {
-    "한전": "한국전력", "농중": "농협중앙회", "농중회": "농협중앙회",
-    "삼카": "삼성카드", "국카": "국민카드", "신카": "신한카드", "우카": "우리카드",
-    "신한채": "신한은행", "하나채": "하나은행", "우리채": "우리은행",
-    "국은채": "국민은행", "국은": "국민은행", "수금은행": "수협은행",
-    "인도공": "인천도시공사", "인국공": "인천국제공항공사",
-    "수출입채": "수출입은행", "농금": "농업금융채권", "수금": "수산금융채권",
-    "중벤공": "중소벤처기업진흥공단", "도공": "한국도로공사",
-}
+# ★[OWNER 2026-09-09] `_ALIAS_OFFICIAL` 을 걷어냈다 — `kbond_issuer.OWNER` 로 갔다.
+#
+# 여기 있던 25항목은 «화면에서만» 접혔고, 원장(`IssuerCanon`)은 다른 표를 썼다.
+# 게다가 이 루프는 첫 일치이지 최장 일치가 아니라서 사전 순서가 곧 규칙이었다 —
+# 「농중」이 「농중회」보다 앞에 있어 **«농협중앙회회» 3,595행**이 화면에 떠 있었다.
+# 이제 접는 자리는 `kbond_issuer.canon_label` 하나뿐이다(층 순서: owner > mp-test > master).
 
 _RATINGS = {}
 try:
@@ -448,28 +457,6 @@ def rating_lookup(name, sector):
     if sector in ("공사채", "은행채", "특은채", "지방채"):
         return "AAA"          # 공사·은행·특은·지방은 사실상 AAA 계열
     return None
-
-
-def issuer_guess(body, broker_disp=None):
-    """본문 머리의 낱말을 발행사로 추정한다.
-
-    ★[OWNER 2026-09-03 가림] 종목이 없는 메시지에서 이 함수가 «그 딜러의 이름» 을
-      발행사로 물어 종목 이름 자리에 실명이 샜다(실측: 피드 행 n='흥국FICC').
-      브로커 표시명과 같으면 버린다 — 발행사가 아니라 서명이다.
-    """
-    t = RE_LEAD_DATE.sub("", str(body))
-    m = RE_ISSUER.match(t)
-    if not m:
-        return None
-    w = m.group(1)
-    if w in _ISSUER_STOP or len(w) < 2:
-        return None
-    w = w[:14]
-    if broker_disp:
-        bd = str(broker_disp)
-        if w == bd or (len(w) >= 3 and (w in bd or bd.startswith(w))):
-            return None
-    return w
 
 
 # ───────────────────────────────────── 한 메시지 -> 다리들 [OWNER 2026-09-03]
@@ -904,14 +891,25 @@ class Book:
             return "국주 " + str(d["Maturity"])
         return None
 
-    def _restore1(self, qr, mpv, absy):
-        """축약호가 한 개를 민평 기준으로 복원. 문면 절대금리가 있으면 그쪽 우선."""
+    def _restore1(self, qr, mpv, absy, at_mp=False):
+        """축약호가 한 개를 민평 기준으로 복원. 문면 절대금리가 있으면 그쪽 우선.
+
+        ★[OWNER 2026-09-09] `at_mp` 는 「21-10 민평 팔자」 — 값이 안 적혔지만
+          «민평 그 자리» 가 곧 값이다. 09-07 에 크레딧에만 걸었던 처리를 국고·통안으로
+          넓힌다(국고 QUOTE 16,135행 · 통안 10,755행이 값 없이 남아 있었다).
+          `AtMP` 는 파서가 이미 전 계열에 세워 두었고(국고 94,330 · 통안 7,125행)
+          그 뜻은 결과검정으로 확인됐다 — 민평 ±1bp 적중 92.0% 대 기저 40.3%.
+          ⚠ 요건상 `AtMP` 는 QuoteRaw·AbsYield·SpreadValue 가 모두 없을 때만 서므로
+            앞의 두 갈래와 겹치지 않는다. 그래서 맨 뒤에 둔다.
+        """
         if qr is not None and mpv is not None:
             arr, _ = restore(pd.Series([qr]), pd.Series([float(mpv)]))
             if not np.isnan(arr[0]):
                 return round(float(arr[0]), 3)
         if absy is not None:
             return round(float(absy), 3)
+        if at_mp and mpv is not None:
+            return round(float(mpv), 3)
         return None
 
     def _tape_row(self, room, t, d, body, broker):
@@ -936,13 +934,15 @@ class Book:
         qe = None                        # 귀속된 호가 (있으면)
         if sec == "국고" and d["BondCode"]:
             lane, code, nm = "ktb", d["BondCode"], d["BondCode"]
-            y = self._restore1(d["QuoteRaw"], self.mp.get(code), d["AbsYield"])
+            y = self._restore1(d["QuoteRaw"], self.mp.get(code), d["AbsYield"],
+                               d["AtMP"])
         elif sec == "통안":
             isin, matd = self._msb_key(body, d)
             if matd:
                 lane, code = "msb", matd
                 nm = self.msb_names.get(matd, matd)
-                y = self._restore1(d["QuoteRaw"], self.mp31.get(isin), d["AbsYield"])
+                y = self._restore1(d["QuoteRaw"], self.mp31.get(isin), d["AbsYield"],
+                                   d["AtMP"])
         elif sec == "국민주택":
             code = self._nhb_key(body, d)
             if code:
@@ -950,16 +950,9 @@ class Book:
                 y = self._restore1(d["QuoteRaw"], d["MPYield"] or self.nhb_ref,
                                    d["AbsYield"])
         elif sec == "크레딧/기타":
-            nm = d["BondName"] or issuer_guess(body, _raw_disp(d, broker)) or d["Maturity"]
+            nm = d["BondName"] or issuer_of(body, _raw_disp(d, broker)) or d["Maturity"]
             if nm:
-                # ★[OWNER 2026-09-03] 발전 5사 정본화. 이름이 한 글자씩만 달라서
-                #   접두·편집거리로 접으면 다섯이 한 통이 된다 — `kbond_issuer` 참조.
-                nm = kbond_issuer.canon_label(nm)
-                for a, off in _ALIAS_OFFICIAL.items():
-                    if str(nm).startswith(a):
-                        nm = off + str(nm)[len(a):]
-                        break
-                nm = str(nm)[:16]
+                nm = str(kbond_issuer.canon_label(nm))[:16]
                 lane = "cr"
         if code is None and nm is None:
             inf = self._infer_fill(k, t, d)
@@ -1154,24 +1147,17 @@ class Book:
                 self._cur["n"] = (_iss + " " + _rung) if _rung else _iss
             else:
                 # 사다리 은어가 아닌 지방·첨가물(«토지(용지)24-12») 은 일반 폴백으로
-                _lab = d["BondName"] or issuer_guess(body, _raw_disp(d, broker)) or d["Maturity"]
+                _lab = d["BondName"] or issuer_of(body, _raw_disp(d, broker)) or d["Maturity"]
                 if _lab:
                     self._cur["n"] = str(_lab)[:16]
         elif d["Sector"] == "크레딧/기타":
-            lab = d["BondName"] or issuer_guess(body, _raw_disp(d, broker)) or d["Maturity"]
+            lab = d["BondName"] or issuer_of(body, _raw_disp(d, broker)) or d["Maturity"]
             if lab:
-                # ★[OWNER 2026-09-03] 발전 5사 정본화. 이름이 한 글자씩만 달라서
-                #   접두·편집거리로 접으면 다섯이 한 통이 된다 — `kbond_issuer` 참조.
-                lab = kbond_issuer.canon_label(lab)
-                for a, off in _ALIAS_OFFICIAL.items():
-                    if str(lab).startswith(a):
-                        lab = off + str(lab)[len(a):]
-                        break
-                self._cur["n"] = str(lab)[:16]
+                self._cur["n"] = str(kbond_issuer.canon_label(lab))[:16]
         else:
             # CD·CP·MBS 처럼 우리 레인이 아닌 것도 «누가» 는 읽힌다(수협CD·하나CD).
             # 만기 날짜보다 발행체 이름이 낫다.
-            lab = d["BondName"] or issuer_guess(body, _raw_disp(d, broker)) or d["Maturity"]
+            lab = d["BondName"] or issuer_of(body, _raw_disp(d, broker)) or d["Maturity"]
             if lab:
                 self._cur["n"] = str(lab)[:16]
         self.stream.append(self._cur)
@@ -1371,14 +1357,12 @@ class Book:
         if d["Sector"] in CR_LANE and d["SpreadValue"] is not None \
                 and d["SpreadUnit"] in ("bp", "원") and side == "SELL" \
                 and d["SpreadSource"] in ("sign", "overunder", "nounit"):
-            label = d["BondName"] or issuer_guess(body, _raw_disp(d, broker))                 or d["Maturity"] or (body.split()[0][:14] if body.split() else "?")
-            # ★[OWNER 2026-09-03] 발전 5사 정본화. 이름이 한 글자씩만 달라서
-            #   접두·편집거리로 접으면 다섯이 한 통이 된다 — `kbond_issuer` 참조.
+            label = d["BondName"] or issuer_of(body, _raw_disp(d, broker))                 or d["Maturity"] or (body.split()[0][:14] if body.split() else "?")
             label = kbond_issuer.canon_label(label)
-            for a, off in _ALIAS_OFFICIAL.items():
-                if str(label).startswith(a):
-                    label = off + str(label)[len(a):]
-                    break
+            # ★[2026-09-09 4차] 계열·등급은 **정본** 으로 매긴다. 라벨에는 회차·구조가
+            #   붙어 있어(«한국서부발전60-1») 앵커 붙인 규칙이 안 맞는다.
+            _canon = str(kbond_issuer.canon_issuer(label)[0] or label)
+            _cls = classify_issuer(_canon)
             ttm = None
             matd = None
             if d["Maturity"]:
@@ -1450,16 +1434,14 @@ class Book:
                 "won": (round(float(d["SpreadValue"]), 2) if _won else None),
                 "a": d["AmountEff"], "asrc": d["AmountSource"], "d": disp[:12],
                 "k": mask_key(str(broker)[:14]),
-                "cls": CR_CLS.get(d["Sector"]) or classify_issuer(label),
+                "cls": CR_CLS.get(d["Sector"]) or _cls,
                 # 히트맵은 카드채를 여전채(캐피탈)와 갈라 본다 [OWNER]
                 "cls2": (CR_CLS.get(d["Sector"]) or
-                         ("카드채" if (classify_issuer(label) == "여전채"
-                                     and "카드" in str(label)) else
-                          classify_issuer(label))),
+                         ("카드채" if (_cls == "여전채" and "카드" in _canon) else _cls)),
                 "ttm": ttm, "cats": cats,
                 # 끝전 환산의 근거 — 화면 배지·툴팁과 verify [F] 가 읽는다
                 "frac": frac, "fsrc": frac_src, "lvl": lvl, "chk": chk_bp,
-                "rt": rt or rating_lookup(label, classify_issuer(label)),
+                "rt": rt or rating_lookup(_canon, _cls),
                 "rt_src": ("문면" if rt else "집계"), "matd": matd,
                 "mp": (round(float(mpq), 3) if mpq is not None else None),
                 "ytm": ytm, "y": ytm}
