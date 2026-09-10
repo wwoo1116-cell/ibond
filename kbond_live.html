@@ -532,7 +532,9 @@ const KIND = {QUOTE:["호가","q","q"], CONFIRM:["체결","c","c"],
               AXE:["관심","i","ask"], INQUIRY:["문의","i","ask"],
               THANKS:["인사","","etc"], OTHER:["미해석","","etc"]};
 const FILTERS = [["q","호가"],["c","체결"],["ask","문의"],["etc","미해석"]];
-const CLSORD = ["지방채","공사채","특은채","은행채","여전채","회사채","유동화"];
+/* ★[OWNER 2026-09-10] 계열 = 위험순. 국고·통안·공사·지방·국민주택·국고이자채는
+   무위험 한 통이고 MBS 만 따로다. kbond_live.RISK_ORDER · kbond_view.CLSORD 와 한 벌. */
+const CLSORD = ["무위험","특은채","은행채","카드채","캐피탈","회사채","유동화","MBS"];
 const RTORD  = ["AAA","AA+","AA0","AA-","A+","A0","A-","BBB+","BBB0","BBB-","BBB","미상"];
 const NHBORD = ["국당","국전","국전전","국전당"];
 const LOT = 100;                       /* ★1계약 = 100억 [OWNER 2026-09-03] */
@@ -1442,7 +1444,7 @@ function drawPx(x,W,H,T){
 /* 선택한 버킷(종별·등급) -> credit_matrix 의 bond_type.
    ★[OWNER 2026-09-03] 「각 회사채라던가 그거 기준은 대표 신용등급으로」 —
    등급을 안 고르면 그 종별의 «대표 신용등급»(히트맵 HMROWS 와 같은 규약)을 쓴다:
-     공사채 AAA · 특은채 AAA · 은행채 AAA · 카드채 AA+ · 여전채 AA- · 회사채 AAA.
+     무위험 AAA · 특은채 AAA · 은행채 AAA · 카드채 AA+ · 캐피탈 AA- · 회사채 AAA.
    회사채만 등급을 고르면 그 등급 선으로 갈아탄다(AAA~A+ = CB1~CB5, A0 아래는 CB5).
    ⚠ 지방채는 credit_matrix 에 없다 — 문면 민평만 그린다. */
 const CB_BY_RT = {"AAA":"CB1","AA+":"CB2","AA0":"CB3","AA":"CB3","AA-":"CB4"};
@@ -1451,12 +1453,12 @@ function mtxGroup(){
   const rt  = sel.cr==="ALL" ? null   : sel.cr.split("|")[1];
   if(!cls) return null;
   if(cls==="회사채") return (rt&&rt!=="미상") ? (CB_BY_RT[rt]||"CB5") : "CB1";
-  if(cls==="여전채") return "OFB";
+  if(cls==="캐피탈") return "OFB";
   if(cls==="카드채") return "CARD";
   if(cls==="은행채") return "BD";
   if(cls==="특은채") return "KDB";
-  if(cls==="공사채") return "SPB";
-  return null;                    /* 지방채·미상 */
+  if(cls==="무위험") return "SPB";
+  return null;                    /* 유동화·MBS·미상 */
 }
 function drawCurve(x,W,H,T){
   const off=crSel(T).filter(e=>e.ttm!=null&&e.ytm!=null);
@@ -1583,11 +1585,11 @@ function renderFeed(T){
 
 /* ── 히트맵: 전일 민평 대비 (테너별) ──────────────────────────────────
    [OWNER 2026-09-03] 「국고채/통안채/지방채/공사채/특은채AAA/은행채AAA/카드채AA+/
-   여전채AA-/회사채AAA 전일 민평이랑 현재 호가 비교, 테너별 히트맵」.
+   캐피탈AA-/회사채AAA 전일 민평이랑 현재 호가 비교, 테너별 히트맵」.
    국고·통안은 (mid − 전일민평), 크레딧은 문면에 적힌 «민평 대비 bp» 를 그대로 쓴다. */
-const HMROWS = [["국고채",null],["통안채",null],["지방채","AAA"],["공사채","AAA"],
+const HMROWS = [["국고채",null],["통안채",null],["무위험","AAA"],
                 ["특은채","AAA"],["은행채","AAA"],["카드채","AA+"],
-                ["여전채","AA-"],["회사채","AAA"]];
+                ["캐피탈","AA-"],["회사채","AAA"]];
 const BUCKETS = [[0,1,"~1년"],[1,2,"1~2"],[2,3,"2~3"],[3,5,"3~5"],[5,10,"5~10"],[10,99,"10년+"]];
 const bucketOf = y => (BUCKETS.find(b=>y>=b[0]&&y<b[1])||[])[2] || null;
 let hmAll=false;

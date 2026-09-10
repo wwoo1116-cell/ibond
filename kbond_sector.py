@@ -108,7 +108,10 @@ if __name__ == "__main__":
     import collections
 
     import kbond_issuer as K
-    from kbond_live import classify_issuer
+    # ★[2026-09-10] `classify_issuer` 는 이제 **위험순** 을 낸다(무위험·카드채·캐피탈).
+    #   대조는 «발행체 계열» 축이라 `sector_of` 를 봐야 한다. 위험 라벨과 견주면
+    #   지방채·공사채가 통째로 어긋남으로 떠서 대조가 죽는다.
+    from kbond_live import sector_of as classify_issuer
 
     tbl = build()
     OUT.write_text(json.dumps(tbl, ensure_ascii=False, indent=1), encoding="utf-8")

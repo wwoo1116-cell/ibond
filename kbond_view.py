@@ -28,21 +28,22 @@
 from __future__ import annotations
 
 # 화면 상수와 같은 값 (kbond_live.html 의 CLSORD·RTORD·NHBORD·BUCKETS·HMROWS)
-CLSORD = ["지방채", "공사채", "특은채", "은행채", "여전채", "회사채",
-          # ★[OWNER 2026-09-10] 유동화 = 7번째 계열. 회사채 뒤에 붙인다.
-          "유동화", "MBS", "국고이자채"]
+# ★[OWNER 2026-09-10] 계열을 «위험순» 으로 바꿨다 — kbond_live.RISK_ORDER 와 한 벌.
+#   국고·통안·공사·지방·국민주택·국고이자채는 무위험 한 통. MBS 만 따로.
+CLSORD = ["무위험", "특은채", "은행채", "카드채", "캐피탈", "회사채",
+          "유동화", "MBS"]
 RTORD = ["AAA", "AA+", "AA0", "AA-", "A+", "A0", "A-",
          "BBB+", "BBB0", "BBB-", "BBB", "미상"]
 NHBORD = ["국당", "국전", "국전전", "국전당"]
 BUCKETS = [(0, 1, "~1년"), (1, 2, "1~2"), (2, 3, "2~3"),
            (3, 5, "3~5"), (5, 10, "5~10"), (10, 99, "10년+")]
-HMROWS = [("국고채", None), ("통안채", None), ("지방채", "AAA"), ("공사채", "AAA"),
+HMROWS = [("국고채", None), ("통안채", None), ("무위험", "AAA"),
           ("특은채", "AAA"), ("은행채", "AAA"), ("카드채", "AA+"),
-          ("여전채", "AA-"), ("회사채", "AAA")]
+          ("캐피탈", "AA-"), ("회사채", "AAA")]
 # credit_matrix 의 bond_type — 종별 «대표 신용등급» [OWNER]
 CB_BY_RT = {"AAA": "CB1", "AA+": "CB2", "AA0": "CB3", "AA": "CB3", "AA-": "CB4"}
-MTX_BY_CLS = {"여전채": "OFB", "카드채": "CARD", "은행채": "BD",
-              "특은채": "KDB", "공사채": "SPB"}
+MTX_BY_CLS = {"캐피탈": "OFB", "카드채": "CARD", "은행채": "BD",
+              "특은채": "KDB", "무위험": "SPB"}
 
 
 def ttl_for(kind, mode="def"):
