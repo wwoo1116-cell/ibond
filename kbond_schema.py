@@ -67,7 +67,7 @@ class CreditQuote(BaseModel):
     mp: float | None = Field(None, description="문면에 적힌 전일 민평")
     ttm: float | None = Field(None, description="잔존(년)")
     matd: str | None = None
-    cls: str | None = Field(None, description="종별(지방채·공사채·특은채·은행채·여전채·회사채)")
+    cls: str | None = Field(None, description="종별(지방채·공사채·특은채·은행채·여전채·회사채·유동화)")
     cls2: str | None = Field(None, description="히트맵용 — 카드채를 여전채와 가른다")
     rt: str | None = Field(None, description="신용등급")
     rt_src: Literal["문면", "집계"] | None = None

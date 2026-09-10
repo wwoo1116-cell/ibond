@@ -385,6 +385,12 @@ from kbond_issuer import (RE_ISSUER, RE_LEAD_DATE, issuer_guess,   # noqa: E402,
 #   2026-09-02 전량 분류 실측: 회사 861 · 여전 758 · 은행 462 · 특은 359 ·
 #   공사 313 · 지방 252 (미분류 0).
 _SECTOR_RULES = [
+    # ★[OWNER 2026-09-10] 유동화 — 7번째 계열. 맨 앞에 둔다(캐피탈·은행 어간이
+    #   SPC 이름 안에 살기 때문: 케이카캐피탈제사차유동화전문 · 국민챔피온제이십차).
+    #   ⚠이름으로 가릴 수 있는 건 «유동화»·«ABCP» 가 이름에 박힌 것뿐이다.
+    #     「제N차」만 있는 SPC(한솔제십오차·마인블루제일차)는 여기서 못 잡는다 —
+    #     그건 `classify_issuer` 가 벤더 표를 보고 잡는다.
+    ("유동화", (r"유동화", r"ABCP", r"abcp", r"Abcp")),
     # ★[2026-09-09 4차] 부분문자열 -> **앵커 붙인 정규식**. 이유는 위 주석 참조.
     #   `$`(이름 끝)·`^`(이름 시작)이 남의 이름 안에 사는 것을 원천봉쇄한다.
     # ⚠ 꼬리에 «코리아»·«서비스» 가 더 붙는 회사가 있다(오릭스캐피탈코리아 ·
@@ -426,13 +432,33 @@ def _sector_by_rule(n):
     return "회사채"
 
 # 화면·버킷 정렬 순서 (오너 목록 순서 그대로)
-SECTOR_ORDER = ["지방채", "공사채", "특은채", "은행채", "여전채", "회사채"]
+SECTOR_ORDER = ["지방채", "공사채", "특은채", "은행채", "여전채", "회사채",
+                "유동화"]
+
+
+# ★[OWNER 2026-09-10] 유동화 축만 «표» 가 정한다. 나머지 여섯은 규칙 그대로다.
+#   왜 여기만 표를 보나 — 유동화는 이름으로 못 가린다. 한솔제십오차·마인블루제일차·
+#   국민챔피온제이십차 어디에도 «유동화» 가 안 적혀 있다. 반대로 표를 여섯 축 전부에
+#   쓰면 안 된다: 발전 5사·도시공사·에프앤아이는 데스크 관례가 벤더를 이긴다
+#   (`kbond_sector` 독스트링 참조). 그래서 «유동화면 유동화» 만 덧댄다.
+#   ⚠표가 없으면 조용히 규칙으로 돌아간다 — 새 클론에서 kbond_sector.py 를 안 구우면
+#     유동화가 통째로 회사채가 된다.
+_ABS_TABLE = set()
+try:
+    _ABS_TABLE = {k for k, v in json.loads(
+        (Path(__file__).parent / "kbond_sector.json").read_text(encoding="utf-8")
+    ).items() if v == "유동화"}
+except OSError:
+    pass
 
 
 def classify_issuer(name):
     """발행체 **정본**의 계열. 라벨(회차·구조가 붙은 것)이 아니라 정본을 줘야 한다 —
     앵커(`$`)가 회차에 막힌다."""
-    return _sector_by_rule(str(name))
+    n = str(name)
+    if n in _ABS_TABLE:
+        return "유동화"
+    return _sector_by_rule(n)
 
 
 # ★[OWNER 2026-09-09] `_ALIAS_OFFICIAL` 을 걷어냈다 — `kbond_issuer.OWNER` 로 갔다.

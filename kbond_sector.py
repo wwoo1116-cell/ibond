@@ -58,6 +58,11 @@ VENDOR = {
     ("공사공단채", "지방공기업"): "지방채",
     ("지방채", "지역개발채권"): "지방채",
     ("지방채", "도시철도채권"): "지방채",
+    # ★[OWNER 2026-09-10] 유동화를 7번째 계열로 둔다. 벤더가 이미 갈라 놓은 축이다 —
+    #   ("회사채","회사채(ABS)") 5,743행 · cclass 「무보증(ABS) AAA」 3,703 등.
+    #   지금까지 ACLASS 가 aclass=회사채 를 통째로 접으면서 이 구분을 버리고 있었다.
+    #   표제어 기준 3,667종이고 «둘 다 가진 것 0종» 이라 모호하지 않다.
+    ("회사채", "회사채(ABS)"): "유동화",
 }
 ACLASS = {"회사채": "회사채", "지방채": "지방채", "공사공단채": "공사채", "기타": "회사채"}
 
@@ -93,7 +98,7 @@ def build(df=None):
             sec = "특은채"
         elif RE_지주.search(canon):
             sec = "은행채"
-        elif RE_증권.search(canon) and sec not in ("여전채",):
+        elif RE_증권.search(canon) and sec not in ("여전채", "유동화"):
             sec = "회사채"
         out[canon] = sec
     return out
@@ -132,6 +137,12 @@ if __name__ == "__main__":
         diff = collections.Counter()
         for name, n in rows.items():
             t = tbl.get(name)
+            # ★[2026-09-10] 유동화 축은 대조에서 뺀다. 이름으로 못 가리는 축이라
+            #   «표가 정본» 이고 규칙은 애초에 판정할 자격이 없다. 여기 두면 3,667종이
+            #   통째로 어긋남으로 떠서 «새로 생긴 어긋남만 보인다» 는 이 대조의 목적이
+            #   죽는다. ⚠그러니 유동화는 이 대조가 지켜 주지 않는다 — 표가 유일한 근거다.
+            if t == "유동화":
+                continue
             if t and name not in ACCEPTED and t != classify_issuer(name):
                 diff[(classify_issuer(name), t, name)] = n
         tot = sum(diff.values())

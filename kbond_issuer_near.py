@@ -22,6 +22,7 @@
     2. 길이 차이 6자 이내      «신보» -> 아무거나 가 되는 것을 막는다
     3. **방향이 다르면 잣대도 다르다** (아래)
     4. 민평 검정이 **반대하지 않을 것**  같은 칸에서 만난 적이 있는데 어긋나면 버린다
+    5. **유일성은 길이로 거르기 전에** 판정한다 (2026-09-10 · 아래)
 
 ### 방향을 왜 가르나
 
@@ -139,6 +140,27 @@ def build():
                         cand |= lng
                         how, longer = "접미(문면이 길다)", True
         cand.discard(name)
+        # ★[2026-09-10] 가드 5 — 유일성은 «길이로 거르기 전에» 판정한다.
+        #   MAX_GAP 이 후보를 먼저 쳐내면 긴 꼬리를 가진 가족이 «유일» 로 보인다.
+        #   실측: 「유플러스파이브지」의 진짜 후보는 226개인데 길이를 통과한 건
+        #   「유플러스파이브지제」 하나뿐이었다 — 「제」에서 잘린 조각이다. 그래서
+        #   회차가 다른 74·73·76·80·67 이 전부 「제칠십칠차」 한 통이 됐다.
+        #   09-09 결론과 같은 병이다 — 회차를 안 보면 다른 종목이 한 통이 된다.
+        if how and how.startswith("접미"):
+            fam = set()
+            for v in translits(nm):
+                if "짧다" in how:
+                    fam |= {K.RESOLVE[h] for h in heads
+                            if len(h) >= MIN_LEN and h != v and h.startswith(v)}
+                else:
+                    fam |= {K.RESOLVE[h] for h in heads
+                            if len(h) >= MIN_LEN and h != v and v.startswith(h)}
+            fam.discard(name)
+            if len(fam) > 1:
+                rejected.append((n_rows, name,
+                                 f"길이로 걸러 «하나» 가 됐다 — 진짜 후보 {len(fam)}개",
+                                 sorted(fam)[:3]))
+                continue
         if len(cand) != 1:
             if cand:
                 rejected.append((n_rows, name, f"후보 {len(cand)}개", sorted(cand)[:3]))
