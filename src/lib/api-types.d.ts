@@ -383,12 +383,12 @@ export interface components {
             matd?: string | null;
             /**
              * Cls
-             * @description 종별(지방채·공사채·특은채·은행채·여전채·회사채)
+             * @description 종별 — 위험순(무위험·특은채·은행채·카드채·캐피탈·회사채·유동화·MBS)
              */
             cls?: string | null;
             /**
              * Cls2
-             * @description 히트맵용 — 카드채를 여전채와 가른다
+             * @description cls 와 같다 — 위험순 계열이 이미 카드·캐피탈을 가른다(2026-09-10)
              */
             cls2?: string | null;
             /**
