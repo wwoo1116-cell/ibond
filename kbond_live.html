@@ -745,10 +745,13 @@ function govBuckets(T, cls){
   const m=new Map();
   for(const {b,y,r} of govRows(T,cls)){
     if(r.mid==null || r.mp==null) continue;   /* 히트맵과 같은 문턱이다 */
-    if(!m.has(b)) m.set(b,{k:cls+"|"+b, cls, rt:b, gov:true, est:false,
+    if(!m.has(b)) m.set(b,{k:cls+"|"+b, cls, rt:b, gov:true, est:false, stale:false,
                           n:0, bps:[], ytms:[], ttms:[], mb:0});
     const d=m.get(b); d.n++; d.bps.push((r.mid-r.mp)*100);
     d.ytms.push(r.mid); d.ttms.push(y);
+    /* ★통안 최신물은 민평 적재가 며칠 늦다 — 히트맵은 별표로 말하는데 이 줄은
+       말하지 않고 있었다. 같은 수를 두 자리에서 다르게 말하면 안 된다. */
+    if(r.mpd && SNAP.mp_date && r.mpd!==String(SNAP.mp_date).slice(0,10)) d.stale=true;
   }
   const ord=BUCKETS.map(b=>b[2]);
   return [...m.values()].sort((a,b)=>ord.indexOf(a.rt)-ord.indexOf(b.rt));
@@ -906,7 +909,9 @@ function renderList(T,rows,bks){
     h+=shown.map(b=>{
       const m=med(b.bps), y=med(b.ytms);
       return `<button class="lr${sel.cr===b.k?" on":""}" data-b="${esc(b.k)}">`+
-        `<span class="l"><div class="t1${b.est?" est":""}">${esc(b.cls)} ${esc(b.rt)}</div>`+
+        `<span class="l"><div class="t1${b.est?" est":""}">${esc(b.cls)} ${esc(b.rt)}`+
+        (b.stale?`<span class="lvb e" title="민평이 그날 것이 아닙니다 — 전일 대비가 아닙니다">묵음</span>`:"")+
+        `</div>`+
         `<div class="t2">${b.n}${b.gov?"종":"건"}${b.mb?` · 수요 매칭 ${b.mb}`:""}</div></span>`+
         `<span class="r"><div class="v">${y==null?"":n3(y)}</div>`+
         `<div class="d ${cls3(m)}">${m==null?"":nbp(m)+"bp"}</div></span></button>`;

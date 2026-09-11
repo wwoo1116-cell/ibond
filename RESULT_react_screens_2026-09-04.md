@@ -132,6 +132,12 @@ CDS 는 팔레트를 ThemeProvider 요소에 인라인으로 뱉는다. `directi
 
 ## 5. 남은 것
 
+★[2026-09-11] 1·2 는 닫혔다 — 히트맵과 등급 커브는 `Credit.tsx` 에 있고 `eslint`·
+`eslint-config-next` 는 devDependencies 에 들어와 있다(`npm run lint` 가 돈다. 다만
+`out/` 을 함께 훑어 빌드 산출물에서 오류 13개가 뜬다 — 소스는 깨끗하다).
+3(전환)은 그대로 열려 있다. 같은 날 옛 화면에만 있던 셋을 마저 옮겼다 — 히트맵
+«묵은 민평» 별표·«등급 무시» 토글·커브 x축 범위 토글, 그리고 크레딧 메시지 테이프.
+
 1. 크레딧 커브의 히트맵·`mtx_group` 등급 커브 미표시.
 2. **`eslint` 가 아예 설치돼 있지 않다** — `package.json` 에 `lint` 스크립트는 있는데
    devDependencies 에 `eslint`·`eslint-config-next` 가 없다. 고치려면 의존성을 더해야

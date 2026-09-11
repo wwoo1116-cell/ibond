@@ -251,10 +251,16 @@ def heat_cells(snap, T, mode="def"):
         b = bucket_of(e["ttm"])
         if not b:
             continue
-        k = f"{e.get('cls2') or e.get('cls') or '회사채'}|{e.get('rt') or '미상'}|{b}"
+        c = e.get("cls2") or e.get("cls") or "회사채"
+        k = f"{c}|{e.get('rt') or '미상'}|{b}"
         cells.setdefault(k, []).append(e["bpe"])
+        # ★화면의 «등급 무시» 토글이 쓰는 칸. 중앙값은 중앙값끼리 못 합치므로
+        #   («등급별 중앙» 을 다시 중앙 내면 딴 수가 된다) 원자료에서 따로 쌓는다.
+        ka = f"{c}|*|{b}"
+        cells.setdefault(ka, []).append(e["bpe"])
         if e.get("lvl") == "est":
             est[k] = est.get(k, 0) + 1
+            est[ka] = est.get(ka, 0) + 1
     return {"cells": {k: {"med": med(v), "n": len(v),
                           "lo": min(v), "hi": max(v), "est": est.get(k, 0)}
                       for k, v in cells.items()},
@@ -358,9 +364,13 @@ def gov_buckets(snap, cls, T, mode="def"):
         # ★n 의 단위가 크레딧과 다르다 — 여기서는 «건» 이 아니라 «종» 이다(칸 값이
         #   종목마다 하나씩인 mid − 민평 이라서). 화면이 단위를 바꿔 쓰도록 gov 를 싣는다.
         d = m.setdefault(b, {"k": f"{cls}|{b}", "cls": cls, "rt": b, "est": False,
-                             "gov": True, "n": 0, "nat": 0, "mb": 0,
+                             "gov": True, "stale": False, "n": 0, "nat": 0, "mb": 0,
                              "bps": [], "ytms": [], "ttms": []})
         d["n"] += 1
+        # ★통안 최신물은 민평 적재가 며칠 늦다 — 그 «대비» 는 전일 대비가 아니다.
+        #   히트맵은 별표로 말하고 있었는데 이 줄은 말하지 않고 있었다 [2026-09-11].
+        if r.get("mpd") and snap.get("mp_date") and                 r["mpd"] != str(snap["mp_date"])[:10]:
+            d["stale"] = True
         d["bps"].append((r["mid"] - r["mp"]) * 100)
         d["ytms"].append(r["mid"])
         d["ttms"].append(y)

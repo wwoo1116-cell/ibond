@@ -243,6 +243,7 @@ class CreditBucket(BaseModel):
     rt: str
     est: bool = Field(False, description="등급이 문면이 아니라 집계에서 온 것")
     gov: bool = Field(False, description="국고·통안 버킷 — n 의 단위가 «건» 이 아니라 «종» 이다")
+    stale: bool = Field(False, description="그 칸에 «민평이 그날 것이 아닌» 종목이 있다(통안 최신물)")
     n: int
     nat: int = Field(0, description="그중 «민평에» 오퍼 수 — 중앙값에서는 뺀다 [OWNER 2026-09-07]")
     mb: int = 0
@@ -261,6 +262,8 @@ class HeatCell(BaseModel):
 
 
 class Heat(BaseModel):
+    """칸 열쇠는 «종별|등급|버킷». 등급 자리가 `*` 인 칸은 등급을 무시하고 합친 것이다
+    (화면의 «등급 무시» 토글이 쓴다). 국고·통안 행은 등급이 없어 `미상` 으로 온다."""
     cells: dict[str, HeatCell]
     stale: bool = Field(False, description="통안 민평이 그날 것이 아니다")
     rows: list[list]

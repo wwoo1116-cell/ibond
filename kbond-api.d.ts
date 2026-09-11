@@ -324,6 +324,12 @@ export interface components {
              * @default false
              */
             gov: boolean;
+            /**
+             * Stale
+             * @description 그 칸에 «민평이 그날 것이 아닌» 종목이 있다(통안 최신물)
+             * @default false
+             */
+            stale: boolean;
             /** N */
             n: number;
             /**
@@ -777,7 +783,11 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** Heat */
+        /**
+         * Heat
+         * @description 칸 열쇠는 «종별|등급|버킷». 등급 자리가 `*` 인 칸은 등급을 무시하고 합친 것이다
+         *     (화면의 «등급 무시» 토글이 쓴다). 국고·통안 행은 등급이 없어 `미상` 으로 온다.
+         */
         Heat: {
             /** Cells */
             cells: {
