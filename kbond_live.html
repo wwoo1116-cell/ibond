@@ -777,8 +777,15 @@ function crBuckets(T){
   for(const e of crAlive(T)){
     const k=bkey(e);
     if(!m.has(k)) m.set(k,{k, cls:e.cls||"회사채", rt:e.rt||"미상",
-                          est:e.rt_src==="집계", n:0, bps:[], ytms:[], ttms:[], mb:0});
-    const b=m.get(k); b.n++; if(e.bpe!=null) b.bps.push(e.bpe);
+                          est:e.rt_src==="집계", n:0, nat:0, bps:[], ytms:[], ttms:[], mb:0});
+    const b=m.get(k); b.n++;
+    /* ★[OWNER 2026-09-07] «민평에 팔자» 를 0bp 로 받으면 버킷의 절반~8할이 0 이 되어
+       중앙값이 통째로 0 으로 눌린다(실측 버킷마다 민평 52~83%). 중앙값은 «값을 부른
+       오퍼» 로만 재고 민평 오퍼는 따로 센다 — 둘은 다른 관측이다.
+       ⚠서버(kbond_view.cr_buckets)는 그날 이렇게 고쳤는데 이 화면은 안 고쳐져 있었다.
+         2026-09-11 지문 대조에서 31칸 전부 어긋나며 드러났다. */
+    if(e.atmp) b.nat++;
+    else if(e.bpe!=null) b.bps.push(e.bpe);
     if(e.ytm!=null) b.ytms.push(e.ytm);
     if(e.ttm!=null) b.ttms.push(e.ttm);
     b.mb += (e.mb||0)>0 ? 1 : 0;
@@ -908,7 +915,8 @@ function renderList(T,rows,bks){
     const shown=bks.filter(b=>!selCls||b.cls===selCls);
     h+=shown.map(b=>{
       const m=med(b.bps), y=med(b.ytms);
-      return `<button class="lr${sel.cr===b.k?" on":""}" data-b="${esc(b.k)}">`+
+      const tip = b.nat ? ` title="${b.n}건 중 ${b.nat}건이 «민평에» — 중앙 bp 는 값을 부른 ${b.n-b.nat}건으로 잽니다"` : "";
+      return `<button class="lr${sel.cr===b.k?" on":""}" data-b="${esc(b.k)}"${tip}>`+
         `<span class="l"><div class="t1${b.est?" est":""}">${esc(b.cls)} ${esc(b.rt)}`+
         (b.stale?`<span class="lvb e" title="민평이 그날 것이 아닙니다 — 전일 대비가 아닙니다">묵음</span>`:"")+
         `</div>`+
@@ -1071,7 +1079,7 @@ function renderOb(T,rows){
         return `<tr title="${esc(e.d)} · ${hms(e.t)}${e.rt?" · "+esc(e.rt):""}">`+
           `<td class="l">${esc(e.n)}</td><td class="mut">${tt}</td>`+
           `<td class="num ${cls3(e.bpe)}"${tip?` title="${esc(tip)}"`:""}>`+
-          `${e.bpe!=null?nbp(e.bpe):(e.won!=null?(e.won>0?"+":"")+e.won+"원":"")}</td>`+
+          `${e.atmp?"민평":(e.bpe!=null?nbp(e.bpe):(e.won!=null?(e.won>0?"+":"")+e.won+"원":""))}</td>`+
           `<td class="num ${e.lvl==="est"?"mut":""}"${tip?` title="${esc(tip)}"`:""}>`+
           `${n3(e.ytm)}${lvlBadge(e)}</td>`+
           `<td class="num">${amtHtml(e.a, e.asrc)}</td></tr>`;
