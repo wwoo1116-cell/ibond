@@ -227,12 +227,22 @@ class BondRow(BaseModel):
     pv: dict | None = Field(None, description="어제 책의 그 종목")
 
 
+class ClsPill(BaseModel):
+    """분류 줄의 한 칸. 순서가 곧 «구성» 이다 — 국고·통안 다음 위험순 계열 여덟.
+    [OWNER 2026-09-11] 히트맵 행과 같은 축으로 세웠다."""
+    cls: str
+    n: int = Field(0, description="살아 있는 건수(계열) 또는 칸이 서는 종목 수(국고·통안)")
+    gov: bool = Field(False, description="계열이 아니라 레인이다 — 등급 대신 만기 버킷으로 접힌다")
+
+
 class CreditBucket(BaseModel):
-    """종별×등급 버킷. 값은 중앙값이다."""
+    """종별×등급 버킷. 값은 중앙값이다.
+    ★국고·통안을 고르면 같은 모양에 «등급» 자리가 만기 버킷(~1년·1~2…)으로 온다."""
     k: str
     cls: str
     rt: str
     est: bool = Field(False, description="등급이 문면이 아니라 집계에서 온 것")
+    gov: bool = Field(False, description="국고·통안 버킷 — n 의 단위가 «건» 이 아니라 «종» 이다")
     n: int
     nat: int = Field(0, description="그중 «민평에» 오퍼 수 — 중앙값에서는 뺀다 [OWNER 2026-09-07]")
     mb: int = 0
@@ -467,7 +477,10 @@ class View(BaseModel):
     heat: Heat
     rows: list[BondRow] | None = Field(None, description="lane 이 ktb·msb·nhb 일 때")
     axes: list[Axis] | None = Field(None, description="레벨 없는 «관심» — 책이 아니다")
-    buckets: list[CreditBucket] | None = Field(None, description="lane 이 cr 일 때")
+    classes: list[ClsPill] | None = Field(
+        None, description="lane 이 cr 일 때 분류 줄의 구성 — 국고·통안·위험순 계열 여덟")
+    buckets: list[CreditBucket] | None = Field(
+        None, description="lane 이 cr 일 때. 국고·통안을 고르면 만기 버킷으로 접힌다")
     curve: Curve | None = None
     mtx_group: str | None = Field(None, description="credit_matrix 의 bond_type(등급 커브)")
     # 종목 하나를 고른 상태에서만 실린다. 화면이 다시 계산하지 않게 하려는 것이다.

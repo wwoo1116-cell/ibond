@@ -721,6 +721,51 @@ function bondRows(T){
   return rows;
 }
 
+/* ★[OWNER 2026-09-11] 분류 줄 앞 두 칸 — 국고·통안. 둘은 «계열» 이 아니라 레인이라
+   등급 축이 없다. 그래서 고르면 등급 대신 «만기 버킷» 으로 접어 같은 표로 보여 준다.
+   ⚠bondRows·meta 는 전역 cat 을 읽는다 — govDeltas 와 같은 수법으로 잠깐 갈아 끼워
+     «같은 문» 을 쓰게 한다. 값이 히트맵의 국고채·통안채 행과 어긋나면 안 된다.
+   서버에도 같은 것이 있다(kbond_view.gov_buckets·gov_sel). 한 벌이다. */
+const GOVCLS=[["국고","ktb"],["통안","msb"]];
+const govLane = c => (GOVCLS.find(g=>g[0]===c)||[])[1] || null;
+const isGov = () => !!govLane(selCls);
+function govRows(T, cls){
+  const k=govLane(cls); if(!k) return [];
+  const old=cat; cat=k; const out=[];
+  try{
+    for(const r of bondRows(T)){
+      const y = k==="msb" ? yearsTo(r.c) : yearsTo(r.mat);
+      const b = y==null ? null : bucketOf(y);
+      if(b) out.push({b,y,r});
+    }
+  } finally { cat=old; }
+  return out;
+}
+function govBuckets(T, cls){
+  const m=new Map();
+  for(const {b,y,r} of govRows(T,cls)){
+    if(r.mid==null || r.mp==null) continue;   /* 히트맵과 같은 문턱이다 */
+    if(!m.has(b)) m.set(b,{k:cls+"|"+b, cls, rt:b, gov:true, est:false,
+                          n:0, bps:[], ytms:[], ttms:[], mb:0});
+    const d=m.get(b); d.n++; d.bps.push((r.mid-r.mp)*100);
+    d.ytms.push(r.mid); d.ttms.push(y);
+  }
+  const ord=BUCKETS.map(b=>b[2]);
+  return [...m.values()].sort((a,b)=>ord.indexOf(a.rt)-ord.indexOf(b.rt));
+}
+/* 오퍼 면만 낸다 — 그 칸 이름이 «오퍼» 다. 양면은 그 레인 탭의 사다리가 맡는다. */
+function govSel(T, cls, rt){
+  const out=[];
+  for(const {b,y,r} of govRows(T,cls)){
+    if(rt && b!==rt) continue;
+    const e=r.fa; if(!e || e.y==null) continue;
+    out.push({t:e.t, s:"S", n:r.nm, ttm:y, ytm:e.y, y:e.y, mp:r.mp,
+              bpe: r.mp==null ? null : (e.y-r.mp)*100, atmp:!!e.atmp, lvl:"quoted",
+              a:e.a, asrc:e.asrc, d:e.d, k:e.k, cls, rt:b});
+  }
+  return out.sort((a,b)=>a.ttm-b.ttm);
+}
+
 /* 크레딧 */
 const crAlive = T => (SNAP.credit||[]).filter(e=>alive(e,"credit",T));
 const bkey = e => (e.cls||"회사채")+"|"+(e.rt||"미상");
@@ -741,11 +786,13 @@ function crBuckets(T){
 const med = a => { if(!a || !a.length) return null; const s=[...a].sort((x,y)=>x-y);
   return s[Math.floor(s.length/2)]; };
 function crSel(T){
+  if(isGov()) return govSel(T, selCls, sel.cr==="ALL" ? null : sel.cr.split("|")[1]);
   const all=crAlive(T);
   if(sel.cr==="ALL") return selCls ? all.filter(e=>(e.cls||"회사채")===selCls) : all;
   return all.filter(e=>bkey(e)===sel.cr);
 }
 function crNeeds(T){
+  if(isGov()) return [];        /* 국고·통안에는 바스켓이 없다 */
   const rows=(SNAP.baskets||[]).filter(e=>alive(e,"credit",T));
   const c = sel.cr==="ALL" ? selCls : sel.cr.split("|")[0];
   const r = sel.cr==="ALL" ? null   : sel.cr.split("|")[1];
@@ -762,7 +809,7 @@ function crNeeds(T){
 
 function ensureSel(T){
   if(cat==="main"||cat==="dyn") return {rows:[], bks:[]};
-  if(isCr()) return {rows:[], bks:crBuckets(T)};
+  if(isCr()) return {rows:[], bks: isGov() ? govBuckets(T,selCls) : crBuckets(T)};
   const rows=bondRows(T);
   if(!sel[cat] || !rows.some(r=>r.c===sel[cat])){
     let top=null;
@@ -840,20 +887,27 @@ function renderBar(T,rows,bks){
 function renderList(T,rows,bks){
   if(isCr()){
     $("hList").textContent="크레딧 분류";
-    $("sList").textContent="종별 · 등급";
-    $("rList").textContent=crAlive(T).length+"건";
+    $("sList").textContent = isGov() ? "만기 버킷" : "종별 · 등급";
+    $("rList").textContent = isGov()
+      ? govBuckets(T,selCls).reduce((a,b)=>a+b.n,0)+"종"
+      : crAlive(T).length+"건";
     const byCls=new Map();
     for(const e of crAlive(T)){ const c=e.cls||"회사채"; byCls.set(c,(byCls.get(c)||0)+1); }
-    let h='<div class="pills">'+CLSORD.map(c=>
-      `<button class="pill${selCls===c?" on":""}" data-cls="${esc(c)}">${esc(c)}`+
-      `<span class="n">${byCls.get(c)||0}</span></button>`).join("")+"</div>";
+    /* ★[OWNER 2026-09-11] 줄의 «구성» = 국고·통안 다음에 위험순 계열 여덟.
+       히트맵 행과 같은 축이다. 건수 0 인 칸도 빼지 않는다 — 줄이 날마다
+       흔들리면 눈이 자리를 잃는다. 국고·통안의 수는 «건» 이 아니라 «종» 이다. */
+    const pills = GOVCLS.map(([c])=>[c, govBuckets(T,c).reduce((a,b)=>a+b.n,0), "종"])
+                        .concat(CLSORD.map(c=>[c, byCls.get(c)||0, "건"]));
+    let h='<div class="pills">'+pills.map(([c,n,u])=>
+      `<button class="pill${selCls===c?" on":""}" data-cls="${esc(c)}" title="${esc(c)} ${n}${u}">`+
+      `${esc(c)}<span class="n">${n}</span></button>`).join("")+"</div>";
     h+='<div style="height:12px"></div>';
     const shown=bks.filter(b=>!selCls||b.cls===selCls);
     h+=shown.map(b=>{
       const m=med(b.bps), y=med(b.ytms);
       return `<button class="lr${sel.cr===b.k?" on":""}" data-b="${esc(b.k)}">`+
         `<span class="l"><div class="t1${b.est?" est":""}">${esc(b.cls)} ${esc(b.rt)}</div>`+
-        `<div class="t2">${b.n}건${b.mb?` · 수요 매칭 ${b.mb}`:""}</div></span>`+
+        `<div class="t2">${b.n}${b.gov?"종":"건"}${b.mb?` · 수요 매칭 ${b.mb}`:""}</div></span>`+
         `<span class="r"><div class="v">${y==null?"":n3(y)}</div>`+
         `<div class="d ${cls3(m)}">${m==null?"":nbp(m)+"bp"}</div></span></button>`;
     }).join("") || '<div class="empty">해당 종별 오퍼가 없습니다</div>';
@@ -1249,7 +1303,9 @@ function renderDeal(T){
 /* [OWNER 2026-09-03] 「국고·통안·국민주택·크레딧에서도 쌓여야 하는 거 아냐?」
    메인과 같은 줄기를 종별(그리고 선택 종목)로 걸러서 쌓는다. */
 function renderTape(T){
-  const sec=SECOF[cat];
+  /* ★국고·통안 pill 을 고른 동안에는 그 레인의 메시지를 쌓는다 — 화면 이름이
+     «국고» 인데 크레딧 메시지가 흐르면 읽는 사람이 속는다 [OWNER 2026-09-11]. */
+  const sec=isGov() ? SECOF[govLane(selCls)] : SECOF[cat];
   const code=isCr()?null:sel[cat];
   const bySec=STREAM.filter(e=>e.sec===sec);
   const rows = (tapeAll||isCr()||!code) ? bySec : bySec.filter(e=>e.code===code);
@@ -1967,7 +2023,10 @@ function render(){
   const nm = isCr() ? (sel.cr==="ALL"?(selCls||"크레딧 전체"):sel.cr.replace("|"," "))
                     : ((rows.find(r=>r.c===sel[cat])||{}).nm||"");
   $("hChart").textContent = isCr()?"커브":"시세";
-  $("sChart").textContent = isCr()?"잔존 × YTM · 기준선 = 이 등급의 전일 민평 커브":nm;
+  $("sChart").textContent = isCr()
+    ? (isGov() ? "잔존 × YTM · 기준선 = 종목 전일 민평"
+               : "잔존 × YTM · 기준선 = 이 등급의 전일 민평 커브")
+    : nm;
   $("rChart").innerHTML = isCr()
     ? [[5,"5년"],[10,"10년"],[0,"전체"]].map(([v,t])=>
         `<button class="bdg ${crvRange===v?"":"gy"}" data-crv="${v}">${t}</button>`).join(" ")

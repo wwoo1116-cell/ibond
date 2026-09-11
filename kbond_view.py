@@ -40,6 +40,13 @@ BUCKETS = [(0, 1, "~1년"), (1, 2, "1~2"), (2, 3, "2~3"),
 HMROWS = [("국고채", None), ("통안채", None), ("무위험", "AAA"),
           ("특은채", "AAA"), ("은행채", "AAA"), ("카드채", "AA+"),
           ("캐피탈", "AA-"), ("회사채", "AAA")]
+# ★[OWNER 2026-09-11] 분류 줄의 «구성» 을 히트맵 행과 같은 축으로 세운다 —
+#   국고·통안이 계열 여덟 앞에 선다. 둘은 계열이 아니라 «레인» 이라 책이 따로 있고
+#   (snap["ktb"]·snap["msb"]) 등급 축도 없다. 그래서 pill 을 누르면 등급이 아니라
+#   «만기 버킷» 으로 접어 보여 준다. 칸 값은 히트맵의 국고채·통안채 행과 같은
+#   자리에서 온다(mid − 민평) — 한 화면이 두 수를 말하면 안 된다.
+GOVCLS = (("국고", "ktb"), ("통안", "msb"))
+GOV_LANE = dict(GOVCLS)
 # credit_matrix 의 bond_type — 종별 «대표 신용등급» [OWNER]
 CB_BY_RT = {"AAA": "CB1", "AA+": "CB2", "AA0": "CB3", "AA": "CB3", "AA-": "CB4"}
 MTX_BY_CLS = {"캐피탈": "OFB", "카드채": "CARD", "은행채": "BD",
@@ -292,22 +299,128 @@ def cat_counts(snap, T, mode="def"):
     return out
 
 
+def _mp_line(mp_pts):
+    """민평 기준선 — 잔존을 칸(2년 미만 0.25년·그 위 0.5년)으로 묶어 중앙값.
+    화면 drawCurve 가 하던 셈이다. 크레딧과 국고·통안이 같은 칸을 쓴다."""
+    bins = {}
+    for t, m in mp_pts:
+        w = 0.25 if t < 2 else 0.5
+        bins.setdefault(round(t / w) * w, []).append(m)
+    return sorted(([b, med(v), len(v)] for b, v in bins.items()), key=lambda x: x[0])
+
+
 def curve_points(snap, T, mode="def"):
     """크레딧 커브의 점과 기준선. 화면 drawCurve 가 하던 계산."""
     off = [e for e in cr_alive(snap, T, mode)
            if e.get("ttm") is not None and e.get("ytm") is not None]
     mp_pts = [(e["ttm"], e["mp"]) for e in cr_alive(snap, T, mode)
               if e.get("ttm") is not None and e.get("mp") is not None]
-    bins = {}
-    for t, m in mp_pts:
-        w = 0.25 if t < 2 else 0.5
-        bins.setdefault(round(t / w) * w, []).append(m)
-    mp_line = sorted(([b, med(v), len(v)] for b, v in bins.items()),
-                     key=lambda x: x[0])
     return {"offers": [{"n": e["n"], "ttm": e["ttm"], "ytm": e["ytm"],
                         "bpe": e.get("bpe"), "a": e.get("a"), "mb": e.get("mb") or 0,
                         "lvl": e.get("lvl")} for e in off],
-            "mp_line": mp_line, "mp_n": len(mp_pts)}
+            "mp_line": _mp_line(mp_pts), "mp_n": len(mp_pts)}
+
+
+# ── 국고·통안 — 분류 줄의 앞 두 칸 [OWNER 2026-09-11] ──────────────────────
+# 크레딧 화면의 pill 은 «계열» 필터인데 국고·통안은 계열이 아니라 레인이다. 그래서
+# 아래 셋은 크레딧 것과 «모양만» 같게 낸다 — 화면이 같은 표를 고쳐 쓰지 않고 그대로
+# 그리게 하려는 것이다. 값은 그 레인 책(snap["ktb"]·snap["msb"])에서 온다.
+
+
+def gov_rows(snap, cls, T, mode="def"):
+    """그 레인의 종목 줄 중 «만기 버킷이 잡히는» 것 — (버킷, 잔존, 줄).
+
+    ★히트맵의 국고채·통안채 행과 같은 문을 쓴다(`heat_cells` 와 대조할 것).
+      잔존은 통안이면 코드 자체가 만기일이고 국고면 `mats` 의 만기다.
+    """
+    lane = GOV_LANE[cls]
+    out = []
+    for r in bond_rows(snap, lane, T, mode):
+        y = _years_to(snap, r["c"] if lane == "msb" else r["mat"])
+        b = bucket_of(y) if y is not None else None
+        if not b:
+            continue
+        out.append((b, y, r))
+    return out
+
+
+def gov_buckets(snap, cls, T, mode="def"):
+    """국고·통안을 고른 상태의 목록. 등급이 아니라 «만기 버킷» 으로 접는다.
+
+    ★칸 값은 히트맵과 같은 (mid − 민평)bp 다. mid 나 민평이 없으면 칸이 서지 않는다 —
+      히트맵에서 그 종목이 빠지는 것과 같은 사정이고, 같아야 한다.
+    """
+    order = [b[2] for b in BUCKETS]
+    m = {}
+    for b, y, r in gov_rows(snap, cls, T, mode):
+        if r["mid"] is None or r["mp"] is None:
+            continue
+        # ★n 의 단위가 크레딧과 다르다 — 여기서는 «건» 이 아니라 «종» 이다(칸 값이
+        #   종목마다 하나씩인 mid − 민평 이라서). 화면이 단위를 바꿔 쓰도록 gov 를 싣는다.
+        d = m.setdefault(b, {"k": f"{cls}|{b}", "cls": cls, "rt": b, "est": False,
+                             "gov": True, "n": 0, "nat": 0, "mb": 0,
+                             "bps": [], "ytms": [], "ttms": []})
+        d["n"] += 1
+        d["bps"].append((r["mid"] - r["mp"]) * 100)
+        d["ytms"].append(r["mid"])
+        d["ttms"].append(y)
+    out = sorted(m.values(), key=lambda d: order.index(d["rt"]))
+    for d in out:
+        d["bp_med"], d["ytm_med"] = med(d["bps"]), med(d["ytms"])
+        d["ttm_lo"], d["ttm_hi"] = min(d["ttms"]), max(d["ttms"])
+        del d["bps"], d["ytms"], d["ttms"]
+    return out
+
+
+def gov_sel(snap, cls, T, mode="def", rt=None):
+    """고른 (국고|통안)[· 만기 버킷] 의 «오퍼 면» — 종목마다 최우선 매도 하나.
+
+    ★양면을 싣지 않는다. 그 칸의 이름이 «오퍼» 이고, 양면은 그 레인 탭의 사다리가
+      맡는다. 여기서 비드까지 섞으면 화면 이름이 거짓말이 된다.
+    """
+    out = []
+    for b, y, r in gov_rows(snap, cls, T, mode):
+        if rt and b != rt:
+            continue
+        e = r["fa"]
+        if not e or e.get("y") is None:
+            continue
+        out.append({"t": e.get("t") or 0, "s": "S", "n": r["nm"], "ttm": y,
+                    "ytm": e["y"], "y": e["y"], "mp": r["mp"],
+                    "bpe": ((e["y"] - r["mp"]) * 100 if r["mp"] is not None else None),
+                    "atmp": bool(e.get("atmp")), "lvl": "quoted",
+                    "a": e.get("a"), "asrc": e.get("asrc"), "d": e.get("d"),
+                    "k": e.get("k"), "cls": cls, "rt": b})
+    return sorted(out, key=lambda e: e["ttm"])
+
+
+def gov_curve(snap, cls, T, mode="def"):
+    """그 레인의 잔존×YTM. 점은 종목 mid, 기준선은 종목 민평이다."""
+    off, mp_pts = [], []
+    for b, y, r in gov_rows(snap, cls, T, mode):
+        if r["mid"] is not None:
+            off.append({"n": r["nm"], "ttm": y, "ytm": r["mid"],
+                        "bpe": ((r["mid"] - r["mp"]) * 100
+                                if r["mp"] is not None else None),
+                        "a": None, "mb": 0, "lvl": None})
+        if r["mp"] is not None:
+            mp_pts.append((y, r["mp"]))
+    return {"offers": off, "mp_line": _mp_line(mp_pts), "mp_n": len(mp_pts)}
+
+
+def cls_pills(snap, T, mode="def"):
+    """분류 줄의 «구성» — 국고·통안 다음에 위험순 계열 여덟 [OWNER 2026-09-11].
+
+    ★건수가 0 인 칸도 빼지 않는다. 줄의 구성이 날마다 흔들리면 눈이 자리를 잃는다.
+    """
+    out = [{"cls": c, "gov": True,
+            "n": sum(b["n"] for b in gov_buckets(snap, c, T, mode))}
+           for c, _ in GOVCLS]
+    n = {}
+    for e in cr_alive(snap, T, mode):
+        k = e.get("cls") or "회사채"
+        n[k] = n.get(k, 0) + 1
+    return out + [{"cls": c, "gov": False, "n": n.get(c, 0)} for c in CLSORD]
 
 
 def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
@@ -330,13 +443,24 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
             if lane == "ktb":
                 out["swap"] = swap_book(snap, code, T, mode)
     elif lane == "cr":
-        out["buckets"] = cr_buckets(snap, T, mode)
-        out["curve"] = curve_points(snap, T, mode)
-        out["mtx_group"] = mtx_group(cls, rt)
-        out["grade_curve"] = grade_curve(snap, cls, rt)
-        # 고른 종별·등급의 오퍼와 매수 니즈. 화면이 다시 거르지 않게 서버가 낸다.
-        out["offers"] = cr_sel(snap, T, mode, cls, rt)
-        out["needs"] = cr_needs(snap, T, mode, cls, rt)
+        out["classes"] = cls_pills(snap, T, mode)
+        if cls in GOV_LANE:
+            # 국고·통안은 계열이 아니라 레인이다 — 등급 축도, 바스켓도, 등급 커브도
+            # 없다. 없는 것을 빈 것으로 내려보낸다(거짓 축을 만들지 않는다).
+            out["buckets"] = gov_buckets(snap, cls, T, mode)
+            out["curve"] = gov_curve(snap, cls, T, mode)
+            out["mtx_group"] = None
+            out["grade_curve"] = None
+            out["offers"] = gov_sel(snap, cls, T, mode, rt)
+            out["needs"] = []
+        else:
+            out["buckets"] = cr_buckets(snap, T, mode)
+            out["curve"] = curve_points(snap, T, mode)
+            out["mtx_group"] = mtx_group(cls, rt)
+            out["grade_curve"] = grade_curve(snap, cls, rt)
+            # 고른 종별·등급의 오퍼와 매수 니즈. 화면이 다시 거르지 않게 서버가 낸다.
+            out["offers"] = cr_sel(snap, T, mode, cls, rt)
+            out["needs"] = cr_needs(snap, T, mode, cls, rt)
     elif lane == "dyn":
         out["pulse"] = pulse_stats(snap, T)
         out["events"] = snap.get("events") or []

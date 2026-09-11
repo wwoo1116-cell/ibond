@@ -125,6 +125,83 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActBin */
+        ActBin: {
+            /** T */
+            t: number;
+            /**
+             * N
+             * @description 막대 높이 — 화면과 같게 앞 둘의 합
+             * @default 0
+             */
+            n: number;
+            /**
+             * Tot
+             * @description 척도용 합계
+             * @default 0
+             */
+            tot: number;
+        };
+        /**
+         * Axis
+         * @description 레벨 없는 «관심». 종목·방향은 정해졌는데 값이 없는 호가 [OWNER 2026-09-07].
+         *
+         *     09-01 판정으로 «호가» 라 부르지 않으므로 책에는 안 들어간다 — 이 목록에만 있다.
+         */
+        Axis: {
+            /** T */
+            t: number;
+            /** Lane */
+            lane?: ("ktb" | "msb" | "nhb" | "cr" | "muni") | null;
+            /** Code */
+            code?: string | null;
+            /** N */
+            n?: string | null;
+            /** S */
+            s?: ("S" | "B") | null;
+            /** A */
+            a?: number | null;
+            /** Asrc */
+            asrc?: ("stated" | "implied" | "bare" | "default" | "oddlot" | "inherit") | null;
+            /** D */
+            d?: string | null;
+            /** K */
+            k?: string | null;
+        };
+        /**
+         * Basket
+         * @description 범주 콜 = 크레딧의 «매수면». 종목을 안 찍고 (잔존, 섹터, 등급)으로 온다.
+         */
+        Basket: {
+            /** T */
+            t: number;
+            /** Lo */
+            lo?: number | null;
+            /** Hi */
+            hi?: number | null;
+            /** Sec */
+            sec?: string | null;
+            /** Rt */
+            rt?: string | null;
+            /** A */
+            a?: number | null;
+            /** Asrc */
+            asrc?: ("stated" | "implied" | "bare" | "default" | "oddlot" | "inherit") | null;
+            /** D */
+            d?: string | null;
+            /**
+             * Ms
+             * @description 이 니즈에 맞는 오퍼 수
+             */
+            ms?: number | null;
+            /**
+             * Bo
+             * @description 그중 가장 싼 것
+             */
+            bo?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /**
          * BondRow
          * @description 종목 한 줄 — 서버가 활성 필터·무크로스·최우선·mid 를 계산해 준 것.
@@ -203,8 +280,30 @@ export interface components {
             } | null;
         };
         /**
+         * ClsPill
+         * @description 분류 줄의 한 칸. 순서가 곧 «구성» 이다 — 국고·통안 다음 위험순 계열 여덟.
+         *     [OWNER 2026-09-11] 히트맵 행과 같은 축으로 세웠다.
+         */
+        ClsPill: {
+            /** Cls */
+            cls: string;
+            /**
+             * N
+             * @description 살아 있는 건수(계열) 또는 칸이 서는 종목 수(국고·통안)
+             * @default 0
+             */
+            n: number;
+            /**
+             * Gov
+             * @description 계열이 아니라 레인이다 — 등급 대신 만기 버킷으로 접힌다
+             * @default false
+             */
+            gov: boolean;
+        };
+        /**
          * CreditBucket
          * @description 종별×등급 버킷. 값은 중앙값이다.
+         *     ★국고·통안을 고르면 같은 모양에 «등급» 자리가 만기 버킷(~1년·1~2…)으로 온다.
          */
         CreditBucket: {
             /** K */
@@ -219,8 +318,20 @@ export interface components {
              * @default false
              */
             est: boolean;
+            /**
+             * Gov
+             * @description 국고·통안 버킷 — n 의 단위가 «건» 이 아니라 «종» 이다
+             * @default false
+             */
+            gov: boolean;
             /** N */
             n: number;
+            /**
+             * Nat
+             * @description 그중 «민평에» 오퍼 수 — 중앙값에서는 뺀다 [OWNER 2026-09-07]
+             * @default 0
+             */
+            nat: number;
             /**
              * Mb
              * @default 0
@@ -234,6 +345,122 @@ export interface components {
             ttm_lo?: number | null;
             /** Ttm Hi */
             ttm_hi?: number | null;
+        };
+        /**
+         * CreditQuote
+         * @description 크레딧 매도 호가. ★이 시장은 반쪽이다 — 종목을 찍은 레벨 호가의 99.9%가 매도다.
+         */
+        CreditQuote: {
+            /** T */
+            t: number;
+            /** S */
+            s?: ("S" | "B") | null;
+            /**
+             * N
+             * @description 종목/발행체 표시명
+             */
+            n?: string | null;
+            /**
+             * Unit
+             * @description 문면 표기 단위
+             */
+            unit?: ("bp" | "원") | null;
+            /**
+             * Atmp
+             * @description 문면에 값이 없어 «민평 그 자리» 로 읽은 오퍼 [OWNER 2026-09-07]
+             */
+            atmp?: boolean | null;
+            /**
+             * Bp
+             * @description 민평 대비 bp (bp 표기 행)
+             */
+            bp?: number | null;
+            /**
+             * Dbp
+             * @description 민평 대비 bp (원 표기 행 — 끝전 환산 또는 문면 Δ)
+             */
+            dbp?: number | null;
+            /**
+             * Bpe
+             * @description 하류가 하나로 쓰는 민평 대비 bp
+             */
+            bpe?: number | null;
+            /**
+             * Won
+             * @description 문면 원 스프레드
+             */
+            won?: number | null;
+            /** Ytm */
+            ytm?: number | null;
+            /**
+             * Y
+             * @description ytm 과 같다(피드 호환)
+             */
+            y?: number | null;
+            /**
+             * Mp
+             * @description 문면에 적힌 전일 민평
+             */
+            mp?: number | null;
+            /**
+             * Ttm
+             * @description 잔존(년)
+             */
+            ttm?: number | null;
+            /** Matd */
+            matd?: string | null;
+            /**
+             * Cls
+             * @description 종별 — 위험순(무위험·특은채·은행채·카드채·캐피탈·회사채·유동화·MBS)
+             */
+            cls?: string | null;
+            /**
+             * Cls2
+             * @description cls 와 같다 — 위험순 계열이 이미 카드·캐피탈을 가른다(2026-09-10)
+             */
+            cls2?: string | null;
+            /**
+             * Rt
+             * @description 신용등급
+             */
+            rt?: string | null;
+            /** Rt Src */
+            rt_src?: ("문면" | "집계") | null;
+            /**
+             * Cats
+             * @description 범주 콜 매칭용 섹터
+             */
+            cats?: string[] | null;
+            /**
+             * Mb
+             * @description 이 오퍼에 맞는 매수 니즈 수
+             */
+            mb?: number | null;
+            /**
+             * Frac
+             * @description 끝전 — 전일 민평 단가의 소수부
+             */
+            frac?: number | null;
+            /** Fsrc */
+            fsrc?: ("stated" | "list" | "assumed") | null;
+            /**
+             * Lvl
+             * @description quoted=문면 금리 · conv=끝전 환산 · est=0.5 가정
+             */
+            lvl?: ("quoted" | "conv" | "est") | null;
+            /**
+             * Chk
+             * @description Q 행의 대사값(우리 환산 − 문면 금리, bp)
+             */
+            chk?: number | null;
+            /** A */
+            a?: number | null;
+            /** Asrc */
+            asrc?: ("stated" | "implied" | "bare" | "default" | "oddlot" | "inherit") | null;
+            /** D */
+            d?: string | null;
+            /** K */
+            k?: string | null;
         };
         /** Curve */
         Curve: {
@@ -269,6 +496,191 @@ export interface components {
             mb: number;
             /** Lvl */
             lvl?: ("quoted" | "conv" | "est") | null;
+        };
+        /**
+         * CurveTodayRow
+         * @description 커브 오늘의 한 줄 — 종목 행에 «전일민평 대비» 와 «딜러 수» 를 얹은 것.
+         */
+        CurveTodayRow: {
+            /** C */
+            c: string;
+            /** Nm */
+            nm?: string | null;
+            /** Full */
+            full?: string | null;
+            /** Alias */
+            alias?: string | null;
+            /** Ten */
+            ten?: string | null;
+            /** Mat */
+            mat?: string | null;
+            /** Mp */
+            mp?: number | null;
+            /** Mpd */
+            mpd?: string | null;
+            /** @description 최우선 오퍼 */
+            fa?: components["schemas"]["Quote"] | null;
+            /** @description 최우선 비드 */
+            fb?: components["schemas"]["Quote"] | null;
+            /** Mid */
+            mid?: number | null;
+            /**
+             * Fill
+             * @description 당일 마지막 체결 {t, y}
+             */
+            fill?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Bench
+             * @default false
+             */
+            bench: boolean;
+            /**
+             * Next
+             * @default false
+             */
+            next: boolean;
+            /**
+             * Today
+             * @default false
+             */
+            today: boolean;
+            /**
+             * N
+             * @default 0
+             */
+            n: number;
+            /**
+             * Nq
+             * @default 0
+             */
+            nq: number;
+            /**
+             * Npx
+             * @default 0
+             */
+            npx: number;
+            /**
+             * Hn
+             * @default 0
+             */
+            hn: number;
+            /**
+             * Pv
+             * @description 어제 책의 그 종목
+             */
+            pv?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Dbp
+             * @description mid − 전일민평, bp
+             */
+            dbp?: number | null;
+            /**
+             * Nd
+             * @description 오늘 오퍼 딜러 · 비드 딜러 수
+             * @default
+             */
+            nd: string;
+        };
+        /**
+         * DealerCard
+         * @description 이 종목에 선 딜러 하나 — 가장 최근 오퍼/비드 한 건씩.
+         */
+        DealerCard: {
+            /** K */
+            k?: string | null;
+            /** D */
+            d?: string | null;
+            S?: components["schemas"]["Quote"] | null;
+            B?: components["schemas"]["Quote"] | null;
+            /**
+             * N
+             * @description 오늘 이 종목에 낸 호가 건수
+             * @default 0
+             */
+            n: number;
+            /**
+             * Ab S
+             * @description 오늘 최우선 오퍼에 서 있던 시간(초)
+             * @default 0
+             */
+            ab_s: number;
+            /**
+             * Ab B
+             * @description 오늘 최우선 비드에 서 있던 시간(초)
+             * @default 0
+             */
+            ab_b: number;
+            /**
+             * Fresh
+             * @default 0
+             */
+            fresh: number;
+            /**
+             * Both
+             * @default false
+             */
+            both: boolean;
+        };
+        /** DealerCards */
+        DealerCards: {
+            /**
+             * Rows
+             * @default []
+             */
+            rows: components["schemas"]["DealerCard"][];
+            /**
+             * N
+             * @default 0
+             */
+            n: number;
+            /**
+             * N Both
+             * @default 0
+             */
+            n_both: number;
+            /** Fa Y */
+            fa_y?: number | null;
+            /** Fb Y */
+            fb_y?: number | null;
+        };
+        /**
+         * Event
+         * @description 책의 «움직임». first=오늘 첫 호가 · best=최우선 갱신 · cross=남의 반대편을 뚫음
+         *     · size=대량 · fill=체결. ★같은 레벨에서 만나는 «락» 은 이벤트가 아니다(하루 907건).
+         */
+        Event: {
+            /** T */
+            t: number;
+            /**
+             * K
+             * @enum {string}
+             */
+            k: "first" | "best" | "cross" | "size" | "fill";
+            /** Lane */
+            lane?: ("ktb" | "msb" | "nhb" | "cr" | "muni") | null;
+            /** Code */
+            code?: string | null;
+            /** N */
+            n?: string | null;
+            /** S */
+            s?: ("S" | "B") | null;
+            /** Y */
+            y?: number | null;
+            /** A */
+            a?: number | null;
+            /** D */
+            d?: string | null;
+            /**
+             * X
+             * @description 종류별 곁가지(이전 최우선·뚫은 상대·귀속 등급)
+             */
+            x?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** FeedPage */
         FeedPage: {
@@ -336,6 +748,30 @@ export interface components {
             /** Raw */
             raw?: string | null;
         };
+        /**
+         * GradeCurve
+         * @description 등급별 민평 커브 한 벌(`sim_portfolio.credit_matrix` 최신 행).
+         */
+        GradeCurve: {
+            /** Group */
+            group?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Label */
+            label?: string | null;
+            /**
+             * Pts
+             * @default []
+             */
+            pts: components["schemas"]["GradePoint"][];
+        };
+        /** GradePoint */
+        GradePoint: {
+            /** Ttm */
+            ttm: number;
+            /** Y */
+            y: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -377,6 +813,420 @@ export interface components {
              * @default 0
              */
             est: number;
+        };
+        /** LeaderRow */
+        LeaderRow: {
+            /** K */
+            k?: string | null;
+            /** D */
+            d?: string | null;
+            /**
+             * N
+             * @default 0
+             */
+            n: number;
+            /**
+             * Ln
+             * @description 고른 레인에서의 건수
+             * @default 0
+             */
+            ln: number;
+            /**
+             * S
+             * @default 0
+             */
+            s: number;
+            /**
+             * B
+             * @default 0
+             */
+            b: number;
+            /**
+             * C
+             * @default 0
+             */
+            c: number;
+            /**
+             * Ab
+             * @description 오늘 최우선에 서 있던 시간 합(초)
+             * @default 0
+             */
+            ab: number;
+            /** First */
+            first?: number | null;
+            /** Last */
+            last?: number | null;
+            /**
+             * Lane
+             * @default {}
+             */
+            lane: {
+                [key: string]: number;
+            };
+            /**
+             * Codes
+             * @default []
+             */
+            codes: unknown[][];
+        };
+        /** Leaderboard */
+        Leaderboard: {
+            /**
+             * Rows
+             * @default []
+             */
+            rows: components["schemas"]["LeaderRow"][];
+            /**
+             * N
+             * @default 0
+             */
+            n: number;
+            /**
+             * Shown
+             * @default 0
+             */
+            shown: number;
+        };
+        /** ObBest */
+        ObBest: {
+            fa?: components["schemas"]["Quote"] | null;
+            fb?: components["schemas"]["Quote"] | null;
+            /** Spread Bp */
+            spread_bp?: number | null;
+            /** Mid */
+            mid?: number | null;
+        };
+        /**
+         * ObLadder
+         * @description 종목 하나의 호가 사다리. 막대 폭·나이 칩은 값이 아니라 표현이라 여기 없다.
+         */
+        ObLadder: {
+            /** Code */
+            code: string;
+            /**
+             * Agg
+             * @default 0
+             */
+            agg: number;
+            /**
+             * Levels
+             * @default []
+             */
+            levels: components["schemas"]["ObLevel"][];
+            /**
+             * Implied
+             * @description 교체에서 나온 조건부 호가
+             * @default []
+             */
+            implied: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Basis
+             * @default n
+             * @enum {string}
+             */
+            basis: "amt" | "n";
+            /**
+             * Mx
+             * @default 1
+             */
+            mx: number;
+            /**
+             * @default {
+             *       "a": 0,
+             *       "b": 0,
+             *       "na": 0,
+             *       "nb": 0,
+             *       "imp_a": 0,
+             *       "imp_b": 0
+             *     }
+             */
+            sum: components["schemas"]["ObSum"];
+            /** @default {} */
+            best: components["schemas"]["ObBest"];
+        };
+        /** ObLevel */
+        ObLevel: {
+            /** Y */
+            y: number;
+            S?: components["schemas"]["ObSide"] | null;
+            B?: components["schemas"]["ObSide"] | null;
+            /**
+             * Atmp
+             * @default false
+             */
+            atmp: boolean;
+            /**
+             * Blank
+             * @description 집계 격자의 빈 칸
+             */
+            blank?: ("a" | "b") | null;
+        };
+        /**
+         * ObSide
+         * @description 사다리 한 칸의 한 면. 화면은 이걸 막대로 그리기만 한다.
+         */
+        ObSide: {
+            /** N */
+            n: number;
+            /** Amt */
+            amt: number;
+            /**
+             * Unk
+             * @description 수량 표기가 없던 호가 수
+             * @default 0
+             */
+            unk: number;
+            /**
+             * Dflt
+             * @description 표기가 없어 기본단위 100억으로 본 수
+             * @default 0
+             */
+            dflt: number;
+            /**
+             * Odd
+             * @description 자투리
+             * @default 0
+             */
+            odd: number;
+            /**
+             * Atmp
+             * @description «민평에» 라고만 한 호가 수
+             * @default 0
+             */
+            atmp: number;
+            /**
+             * Fresh
+             * @description 그 칸에서 가장 신선한 호가의 장중 초
+             * @default 0
+             */
+            fresh: number;
+            /**
+             * Hit
+             * @description 그 칸에서 «실제로 체결된» 호가 수 (v12 체결 귀속)
+             * @default 0
+             */
+            hit: number;
+            /**
+             * Fhit
+             * @description 그 칸의 마지막 체결 시각(장중 초). 0 이면 없음
+             * @default 0
+             */
+            fhit: number;
+            /**
+             * Who
+             * @default []
+             */
+            who: (string | null)[];
+        };
+        /** ObSum */
+        ObSum: {
+            /**
+             * A
+             * @default 0
+             */
+            a: number;
+            /**
+             * B
+             * @default 0
+             */
+            b: number;
+            /**
+             * Na
+             * @default 0
+             */
+            na: number;
+            /**
+             * Nb
+             * @default 0
+             */
+            nb: number;
+            /**
+             * Imp A
+             * @default 0
+             */
+            imp_a: number;
+            /**
+             * Imp B
+             * @default 0
+             */
+            imp_b: number;
+        };
+        /**
+         * Pulse
+         * @description 시장 맥박. 화면은 칸 값을 막대로 그리기만 한다.
+         */
+        Pulse: {
+            /**
+             * Bin
+             * @default 600
+             */
+            bin: number;
+            /**
+             * Bins
+             * @default []
+             */
+            bins: components["schemas"]["PulseBin"][];
+            /**
+             * Prev Bins
+             * @default []
+             */
+            prev_bins: components["schemas"]["PulsePrevBin"][];
+            /**
+             * Nq
+             * @default 0
+             */
+            nq: number;
+            /**
+             * Na
+             * @default 0
+             */
+            na: number;
+            /**
+             * Nc
+             * @default 0
+             */
+            nc: number;
+            /**
+             * Ni
+             * @default 0
+             */
+            ni: number;
+            /**
+             * Ktb
+             * @default 0
+             */
+            ktb: number;
+            /**
+             * Cr
+             * @default 0
+             */
+            cr: number;
+            /**
+             * Msb
+             * @default 0
+             */
+            msb: number;
+            /**
+             * Vs Prev Pct
+             * @description 어제 같은 시각까지 누적 대비 %
+             */
+            vs_prev_pct?: number | null;
+            /**
+             * N Dealer
+             * @default 0
+             */
+            n_dealer: number;
+            /** Prev N Dealer */
+            prev_n_dealer?: number | null;
+            /**
+             * N Event
+             * @default 0
+             */
+            n_event: number;
+            /** T0 */
+            t0?: number | null;
+            /** T1 */
+            t1?: number | null;
+        };
+        /** PulseBin */
+        PulseBin: {
+            /**
+             * T
+             * @description 칸의 시작 장중 초
+             */
+            t: number;
+            /**
+             * Q
+             * @default 0
+             */
+            q: number;
+            /**
+             * A
+             * @default 0
+             */
+            a: number;
+            /**
+             * C
+             * @default 0
+             */
+            c: number;
+            /**
+             * I
+             * @default 0
+             */
+            i: number;
+            /**
+             * O
+             * @default 0
+             */
+            o: number;
+        };
+        /** PulsePrevBin */
+        PulsePrevBin: {
+            /** T */
+            t: number;
+            /**
+             * N
+             * @default 0
+             */
+            n: number;
+        };
+        /** PxPoint */
+        PxPoint: {
+            /** T */
+            t: number;
+            /** Mid */
+            mid?: number | null;
+            /**
+             * A
+             * @description 그 시각의 최우선 오퍼
+             */
+            a?: number | null;
+            /**
+             * B
+             * @description 그 시각의 최우선 비드
+             */
+            b?: number | null;
+        };
+        /**
+         * PxSeries
+         * @description 시세 이력. 세로 범위는 규칙이라 서버가 낸다(민평 대칭).
+         */
+        PxSeries: {
+            /** Code */
+            code: string;
+            /** Mp */
+            mp?: number | null;
+            /** Lo */
+            lo?: number | null;
+            /** Hi */
+            hi?: number | null;
+            /** T0 */
+            t0?: number | null;
+            /** T1 */
+            t1?: number | null;
+            /**
+             * Bin
+             * @default 600
+             */
+            bin: number;
+            /**
+             * Pts
+             * @default []
+             */
+            pts: components["schemas"]["PxPoint"][];
+            /**
+             * Act
+             * @default []
+             */
+            act: components["schemas"]["ActBin"][];
+            /**
+             * Note
+             * @description 표본이 모자라면 그 이유
+             */
+            note?: string | null;
         };
         /**
          * Quote
@@ -441,6 +1291,43 @@ export interface components {
              */
             qr?: number | null;
         };
+        /** SwapBook */
+        SwapBook: {
+            /**
+             * N
+             * @default 0
+             */
+            n: number;
+            /**
+             * Pairs
+             * @default []
+             */
+            pairs: components["schemas"]["SwapPair"][];
+        };
+        /** SwapPair */
+        SwapPair: {
+            /** Pair */
+            pair?: string | null;
+            /**
+             * Asks
+             * @default []
+             */
+            asks: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Bids
+             * @default []
+             */
+            bids: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Spread Bp
+             * @description 신형−구형 bp. ×100 하지 않는다
+             */
+            spread_bp?: number | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -482,8 +1369,18 @@ export interface components {
              */
             rows?: components["schemas"]["BondRow"][] | null;
             /**
+             * Axes
+             * @description 레벨 없는 «관심» — 책이 아니다
+             */
+            axes?: components["schemas"]["Axis"][] | null;
+            /**
+             * Classes
+             * @description lane 이 cr 일 때 분류 줄의 구성 — 국고·통안·위험순 계열 여덟
+             */
+            classes?: components["schemas"]["ClsPill"][] | null;
+            /**
              * Buckets
-             * @description lane 이 cr 일 때
+             * @description lane 이 cr 일 때. 국고·통안을 고르면 만기 버킷으로 접힌다
              */
             buckets?: components["schemas"]["CreditBucket"][] | null;
             curve?: components["schemas"]["Curve"] | null;
@@ -492,6 +1389,45 @@ export interface components {
              * @description credit_matrix 의 bond_type(등급 커브)
              */
             mtx_group?: string | null;
+            /** @description 고른 종목의 호가 사다리 */
+            ob?: components["schemas"]["ObLadder"] | null;
+            /** @description 누가 어디 서 있나 */
+            dealers?: components["schemas"]["DealerCards"] | null;
+            /** @description 교체 책(국고만) */
+            swap?: components["schemas"]["SwapBook"] | null;
+            /** @description 고른 종목의 시세 이력 */
+            px?: components["schemas"]["PxSeries"] | null;
+            /**
+             * Offers
+             * @description lane 이 cr 일 때 고른 버킷의 오퍼
+             */
+            offers?: components["schemas"]["CreditQuote"][] | null;
+            /**
+             * Needs
+             * @description lane 이 cr 일 때 매수 니즈
+             */
+            needs?: components["schemas"]["Basket"][] | null;
+            /** @description 고른 종별·등급의 민평 커브 */
+            grade_curve?: components["schemas"]["GradeCurve"] | null;
+            pulse?: components["schemas"]["Pulse"] | null;
+            /** Events */
+            events?: components["schemas"]["Event"][] | null;
+            /** Event Counts */
+            event_counts?: {
+                [key: string]: number;
+            } | null;
+            /** Curve Today */
+            curve_today?: {
+                [key: string]: components["schemas"]["CurveTodayRow"][];
+            } | null;
+            leaderboard?: components["schemas"]["Leaderboard"] | null;
+            /**
+             * Aggr
+             * @description 당일 공격 방향 집계 {B: 사 간 체결, S: 판 체결}
+             */
+            aggr?: {
+                [key: string]: number;
+            } | null;
         };
     };
     responses: never;
@@ -608,6 +1544,8 @@ export interface operations {
                 ttl?: string;
                 cls?: string | null;
                 rt?: string | null;
+                code?: string | null;
+                agg?: number;
                 T?: number | null;
             };
             header?: never;
