@@ -17,7 +17,7 @@ import { Text } from '@coinbase/cds-web/typography';
 
 import { getView } from '@/lib/api';
 import { Heat } from '@/components/Heat';
-import type { TtlMode, View } from '@/lib/api';
+import type { FeedRow, TtlMode, View } from '@/lib/api';
 
 type Bucket = NonNullable<View['buckets']>[number];
 type Offer = NonNullable<View['offers']>[number];
@@ -28,21 +28,36 @@ const sbp = (v?: number | null) => (v == null ? '' : `${v > 0 ? '+' : ''}${v.toF
 const lot = (a?: number | null) => (a == null || !a ? '—' : `${Math.round(a * 10) / 10}억`);
 const ttmTxt = (t?: number | null) =>
   t == null ? '' : t < 1 ? `${Math.round(t * 12)}M` : `${t.toFixed(1)}년`;
+/** 장중 초 → 시:분:초. `Bonds` 와 같은 셈이다. */
+const hms = (s?: number | null) => {
+  if (s == null) return '';
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  return `${p2(Math.floor(s / 3600) % 24)}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`;
+};
 
 /** 잔존×YTM 산점도. 서버가 준 점과 민평선을 좌표로만 옮긴다. */
-function Curve({ curve, grade }: {
+function Curve({ curve, grade, range }: {
   curve: NonNullable<View['curve']>;
   grade?: View['grade_curve'];
+  /** x축 상한(년). 0 이면 전체. 옛 화면 `crvRange` 와 같은 뜻이고 기본도 같은 10년이다.
+   *  ★없으면 국고 50년물 하나가 축을 48년까지 늘려 나머지 점이 왼쪽에 뭉갠다. */
+  range: number;
 }) {
   const W = 560;
   const H = 260;
   const pad = { l: 44, r: 10, t: 12, b: 24 };
   /* ★`?? []` 는 매 렌더 새 배열을 만든다 — 그대로 useMemo 의존성에 넣으면
      메모가 매번 다시 돈다(린트가 잡았다). 파생값도 메모로 감싼다. */
-  const line = useMemo(() => (curve.mp_line ?? []) as number[][], [curve]);
+  const line = useMemo(
+    () => ((curve.mp_line ?? []) as number[][]).filter((p) => !range || (p[0] ?? 0) <= range),
+    [curve, range],
+  );
   const pts = useMemo(
-    () => (curve.offers ?? []) as { ttm?: number; ytm?: number; bpe?: number; n?: string }[],
-    [curve],
+    () =>
+      ((curve.offers ?? []) as { ttm?: number; ytm?: number; bpe?: number; n?: string }[]).filter(
+        (p) => !range || (p.ttm ?? 0) <= range,
+      ),
+    [curve, range],
   );
 
   const box = useMemo(() => {
@@ -61,14 +76,14 @@ function Curve({ curve, grade }: {
        잡고, 커브는 그 범위 안으로 잘라 그린다. */
     if (!xs.length || !ys.length) return null;
     const x0 = 0;
-    const x1 = Math.max(...xs) || 1;
+    const x1 = range || Math.max(...xs) || 1;
     let y0 = Math.min(...ys);
     let y1 = Math.max(...ys);
     const m = (y1 - y0) * 0.08 || 0.05;
     y0 -= m;
     y1 += m;
     return { x0, x1, y0, y1 };
-  }, [pts, line]);
+  }, [pts, line, range]);
 
   if (!box) return <div className="kb-empty">그릴 점이 없습니다</div>;
   const px = (x: number) => pad.l + ((x - box.x0) / (box.x1 - box.x0 || 1)) * (W - pad.l - pad.r);
@@ -122,10 +137,17 @@ function Curve({ curve, grade }: {
   );
 }
 
-export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => void }) {
+export function Credit({ ttl, onTtl, feed = [] }: {
+  ttl: TtlMode;
+  onTtl?: (t: TtlMode) => void;
+  /** 메시지 테이프용 피드. `page.tsx` 가 이미 들고 있는 것을 내려 받는다 —
+   *  접거나 세지 않고 «고르기만» 하므로 서버 계산과 겹치지 않는다. */
+  feed?: FeedRow[];
+}) {
   const [v, setV] = useState<View | null>(null);
   const [cls, setCls] = useState<string | null>(null);
   const [rt, setRt] = useState<string | null>(null);
+  const [crv, setCrv] = useState(10);
   const [err, setErr] = useState<string | null>(null);
 
   const pull = useCallback(async () => {
@@ -157,6 +179,11 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
   const pills = v.classes ?? [];
   const govSel = pills.some((p) => p.gov && p.cls === cls);
   const shown = cls ? buckets.filter((b) => b.cls === cls) : buckets;
+  /* 메시지 테이프 — 옛 화면의 크레딧 탭에 있던 것을 옮긴다. 고르기만 한다.
+     국고·통안 pill 을 고른 동안에는 그 레인 메시지를 쌓는다(화면 이름이 «국고» 인데
+     크레딧 메시지가 흐르면 읽는 사람이 속는다). */
+  const tapeSec = govSel && cls ? cls : '크레딧/기타';
+  const tape = feed.filter((e) => e.sec === tapeSec).slice(-200).reverse();
   const lvl = offers.filter((o) => o.ytm != null);
   const noLvl = offers.filter((o) => o.ytm == null);
 
@@ -201,6 +228,13 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
               <span className="nm">
                 {b.cls} {b.rt}
                 {b.est ? <b className="kb-badge">집계</b> : null}
+                {/* ★통안 최신물은 민평 적재가 며칠 늦다 — 그 «대비» 는 전일 대비가 아니다.
+                    히트맵이 별표로 말하는 것을 이 줄도 말해야 한다 [2026-09-11]. */}
+                {b.stale ? (
+                  <b className="kb-badge stale" title="민평이 그날 것이 아닙니다 — 전일 대비가 아닙니다">
+                    묵음
+                  </b>
+                ) : null}
               </span>
               {/* ★국고·통안 버킷의 n 은 «건» 이 아니라 «종» 이다 — 칸 값이 종목마다
                   하나씩인 (mid − 민평) 이라서다. 서버가 gov 로 알려 준다. */}
@@ -219,12 +253,25 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
           <div className="kb-ch">
             <Text as="span" font="label2">커브</Text>
             <Text as="span" font="legal" color="fgMuted">
-              잔존 × YTM · 민평선 {v.curve?.mp_n ?? 0}종
-              {v.grade_curve ? ` · 등급커브 ${v.grade_curve.group}` : ''}
+              {govSel
+                ? `잔존 × YTM · 기준선 = 종목 전일 민평 · 민평선 ${v.curve?.mp_n ?? 0}종`
+                : `잔존 × YTM · 민평선 ${v.curve?.mp_n ?? 0}종${v.grade_curve ? ` · 등급커브 ${v.grade_curve.group}` : ''}`}
             </Text>
+            {/* x축 범위 — 옛 화면과 같은 세 칸이고 기본도 같은 10년이다. */}
+            <div className="kb-crv">
+              {([[5, '5년'], [10, '10년'], [0, '전체']] as [number, string][]).map(([x, nm]) => (
+                <button
+                  key={nm}
+                  className={`kb-pill${crv === x ? ' on' : ''}`}
+                  onClick={() => setCrv(x)}
+                >
+                  {nm}
+                </button>
+              ))}
+            </div>
           </div>
           {v.curve ? (
-            <Curve curve={v.curve} grade={v.grade_curve} />
+            <Curve curve={v.curve} grade={v.grade_curve} range={crv} />
           ) : (
             <div className="kb-empty">커브가 없습니다</div>
           )}
@@ -279,6 +326,31 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
             <div className="kb-empty">
               {govSel ? '국고·통안에는 바스켓이 없습니다' : '살아 있는 니즈가 없습니다'}
             </div>
+          )}
+        </div>
+
+        <div className="kb-card">
+          <div className="kb-ch">
+            <Text as="span" font="label2">메시지</Text>
+            <Text as="span" font="legal" color="fgMuted">
+              {govSel ? cls : '크레딧'} 전체 {tape.length.toLocaleString()}건
+            </Text>
+          </div>
+          {tape.length ? (
+            <div className="kb-scroll">
+              {tape.map((e) => (
+                <div className="kb-tp" key={e.i}>
+                  <span className="kb-n">{hms(e.t)}</span>
+                  <span className={e.s === 'S' ? 'sr-down' : e.s === 'B' ? 'sr-up' : undefined}>
+                    {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
+                  </span>
+                  <span className="kb-tpr">{e.raw}</span>
+                  <span className="kb-n">{e.d}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="kb-empty">아직 {govSel ? cls : '크레딧'} 메시지가 없습니다</div>
           )}
         </div>
       </div>

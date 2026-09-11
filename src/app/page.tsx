@@ -324,7 +324,7 @@ export default function Page() {
       ) : tab === 'dyn' ? (
         <Trends ttl={ttl} onTtl={setTtl} />
       ) : tab === 'cr' ? (
-        <Credit ttl={ttl} onTtl={setTtl} />
+        <Credit ttl={ttl} onTtl={setTtl} feed={rows} />
       ) : (
         <Bonds lane={tab} ttl={ttl} onTtl={setTtl} feed={rows} />
       )}
