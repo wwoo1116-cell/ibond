@@ -338,6 +338,12 @@
 }
 /* 토글은 오른쪽 끝에 — 옛 화면(hmAll 배지)과 같은 자리다. */
 .kb-hmttl > button { margin-left: auto; }
+.kb-sec {
+  font-size: 11px; font-weight: 600; color: var(--color-fgMuted);
+  padding: 10px 12px 4px; border-top: 1px solid var(--color-bgLine); margin-top: 6px;
+}
+.kb-scroll > .kb-sec:first-child { border-top: none; margin-top: 0; padding-top: 4px; }
+.kb-mb { font-size: 10px; color: var(--color-fgMuted); margin-left: 4px; font-weight: 500; }
 .kb-crv { margin-left: auto; display: flex; gap: 4px; }
 .kb-crv .kb-pill { padding: 2px 8px; font-size: 11px; }
 .kb-hmnote {

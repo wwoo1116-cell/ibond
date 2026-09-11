@@ -220,9 +220,14 @@ export function Credit({ ttl, onTtl, feed = [] }: {
               className={`kb-li cr${cls === b.cls && rt === b.rt ? ' on' : ''}`}
               onClick={() => { setCls(b.cls ?? null); setRt(b.rt ?? null); }}
               title={
-                b.nat
-                  ? `${b.n}건 중 ${b.nat}건이 «민평에» — 중앙 bp 는 값을 부른 ${b.n - b.nat}건으로 잽니다`
-                  : undefined
+                [
+                  b.nat
+                    ? `${b.n}건 중 ${b.nat}건이 «민평에» — 중앙 bp 는 값을 부른 ${b.n - b.nat}건으로 잽니다`
+                    : '',
+                  b.mb ? `매수 니즈에 맞는 오퍼 ${b.mb}건` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || undefined
               }
             >
               <span className="nm">
@@ -238,7 +243,12 @@ export function Credit({ ttl, onTtl, feed = [] }: {
               </span>
               {/* ★국고·통안 버킷의 n 은 «건» 이 아니라 «종» 이다 — 칸 값이 종목마다
                   하나씩인 (mid − 민평) 이라서다. 서버가 gov 로 알려 준다. */}
-              <span className="num kb-n">{b.n}{b.gov ? '종' : '건'}</span>
+              {/* ★«수요 매칭» 은 옛 화면이 부제에 달고 있던 값이다 — 전환에서 잃으면
+                  안 되는 수라 여기 붙인다(2026-09-11 지문 대조에서 드러났다). */}
+              <span className="num kb-n">
+                {b.n}{b.gov ? '종' : '건'}
+                {b.mb ? <span className="kb-mb">수요 {b.mb}</span> : null}
+              </span>
               <span className="num">{n3(b.ytm_med)}</span>
               <span className={`num ${b.bp_med == null ? '' : b.bp_med < 0 ? 'sr-down' : 'sr-up'}`}>
                 {b.bp_med == null ? '' : `${sbp(b.bp_med)}bp`}

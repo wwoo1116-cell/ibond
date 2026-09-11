@@ -9,7 +9,7 @@
  *
  *   막대 «폭» 과 나이 «칠» 은 값이 아니라 표현이라 여기서 한다.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 
 import { Text } from '@coinbase/cds-web/typography';
 
@@ -283,6 +283,26 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
   const ax = v.axes ?? [];
   /* 오늘 날짜 — 통안 민평이 묵었는지 판정한다 [OWNER 2026-09-07] */
   const todayYmd = new Date().toISOString().slice(0, 10);
+  /* ★[OWNER 2026-09-03] 「지표물이 뭔지 안 보인다」 — 오늘 호가가 없어도 지표물·
+     차기지표물은 커브의 기준이라 맨 위에 고정한다. 그 아래가 «오늘 활동», 그 아래가
+     «어제». 어제 구획은 «무엇이 돌았나» 가 요점이라 활동 순으로 세운다(체결 먼저).
+     ⚠옛 화면에는 이 세 구획이 있는데 여기에는 없어서 목록이 통째로 만기순이었다 —
+       2026-09-11 지문 대조에서 15줄이 전부 어긋나며 드러났다. */
+  const pinned = rows.filter((r) => r.bench || r.next);
+  const todayRows = rows.filter((r) => r.today && !r.bench && !r.next);
+  const ydayRows = rows
+    .filter((r) => !r.today && !r.bench && !r.next)
+    .sort((a, b) => {
+      const f = (x: BondRow) => ((x.pv as { fill?: number | null } | undefined)?.fill != null ? 1 : 0);
+      const n = (x: BondRow) => (x.pv as { n?: number } | undefined)?.n ?? 0;
+      return f(b) - f(a) || n(b) - n(a);
+    });
+  const prevDate = (v.rows?.find((r) => r.pv) as { pv?: { date?: string } } | undefined)?.pv?.date;
+  const sections = [
+    pinned.length ? { head: '지표물 · 차기지표물', list: pinned } : null,
+    { head: `오늘 활동${todayRows.length ? '' : ' 없음'}`, list: todayRows },
+    ydayRows.length ? { head: `어제${prevDate ? ` (${prevDate})` : ''} · 활동 순`, list: ydayRows } : null,
+  ].filter((x): x is { head: string; list: BondRow[] } => x != null);
 
   return (
     <div className="kb-bonds">
@@ -292,7 +312,22 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           <Text as="span" font="legal" color="fgMuted">{rows.length}종</Text>
         </div>
         <div className="kb-scroll">
-          {rows.map((r) => (
+          {sections.map(({ head, list }) => (
+            <Fragment key={head}>
+              <div className="kb-sec">{head}</div>
+              {list.map((r) => {
+            /* ★오늘 호가가 없는 줄은 «어제 마지막 수준» 을 흐리게 보여 준다 — 옛 화면이
+               그렇게 한다(prow). 여기서는 «—» 로 비워 두고 있었다: 지표물은 오늘 값이
+               없는 날이 흔해서 커브의 기준이 통째로 빈칸으로 보였다(2026-09-11 지문
+               대조에서 26-10 한 줄이 남아 드러났다). */
+            const pv = (r.pv ?? {}) as {
+              mid?: number | null; fill?: number | null; a?: number | null;
+              b?: number | null; mp?: number | null; n?: number | null;
+            };
+            const val = r.today ? r.mid : (pv.mid ?? pv.fill ?? pv.a ?? pv.b ?? null);
+            const mpv = r.mp ?? pv.mp ?? null;
+            const dbp = val != null && mpv != null ? (val - mpv) * 100 : null;
+            return (
             <button
               key={r.c}
               className={`kb-li2${r.c === code ? ' on' : ''}${r.today ? '' : ' mut'}`}
@@ -306,6 +341,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
                 {r.alias ? <b className="kb-badge al">{r.alias}</b> : null}
                 {r.bench ? <b className="kb-badge">지표</b> : null}
                 {r.next ? <b className="kb-badge">차기</b> : null}
+                {!r.today && pv.fill != null ? <b className="kb-badge">어제 체결</b> : null}
                 {/* ★[OWNER 2026-09-07] 통안 민평 적재가 멈추면 최대 30일 전 값을 끌어 쓴다.
                     그러면 «전일 민평 대비» 가 아니므로 그 사실을 행에 적는다. */}
                 {r.mpd && v.now && r.mpd !== todayYmd ? (
@@ -314,16 +350,20 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
                   </b>
                 ) : null}
               </span>
-              <span className="v">{n3(r.mid)}</span>
+              <span className="v">{n3(val)}</span>
               <span className="sub">
                 {r.ten}
                 {r.mat ? ` · ${r.mat}` : ''}
-                {r.n ? ` · ${r.n}건` : ''}
+                {r.today && r.n ? ` · ${r.n}건` : ''}
+                {!r.today && pv.n ? ` · 어제 ${pv.n}건` : ''}
               </span>
-              <span className={`d ${r.mid != null && r.mp != null && r.mid < r.mp ? 'sr-down' : 'sr-up'}`}>
-                {r.mid != null && r.mp != null ? sbp((r.mid - r.mp) * 100) : ''}
+              <span className={`d ${r.today ? (dbp != null && dbp < 0 ? 'sr-down' : 'sr-up') : ''}`}>
+                {dbp != null ? sbp(dbp) : ''}
               </span>
             </button>
+            );
+          })}
+            </Fragment>
           ))}
         </div>
       </div>
