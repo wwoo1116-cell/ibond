@@ -51,6 +51,28 @@ def say(msg: str) -> None:
         fh.write(line + "\n")
 
 
+def warn_if_unfinished() -> None:
+    """직전 실행이 «완료» 줄 없이 끝났으면 소리 내어 말한다. [2026-09-11]
+
+    ★왜 — 2026-09-07~09-10 의 16:30 자동 실행이 **넷 다 끊겼는데 아무도 못 봤다**.
+      원장은 들어갔고 파생 표(다리·체결·KIS)만 안 만들어진 상태라 화면은 멀쩡했다.
+      시작 줄만 보면 도는 것처럼 보인다 — 세야 하는 것은 «완료» 줄이다.
+      (PC 가 꺼지면 이 경고도 못 남기므로, 판정은 «다음 실행» 이 한다.)
+    """
+    if not LOG.exists():
+        return
+    tail = LOG.read_text(encoding="utf-8", errors="replace").splitlines()[-400:]
+    start = fin = None
+    for line in tail:
+        if "증분 갱신 시작" in line:
+            start, fin = line, None
+        elif "  완료 " in line:
+            fin = line
+    if start and not fin:
+        say(f"  [경고] 직전 실행이 «완료» 없이 끝났습니다 — {start[:19]}")
+        say("         파생 표(다리·체결·KIS)가 그때 안 만들어졌을 수 있습니다. 이번 실행이 다시 만듭니다.")
+
+
 # --------------------------------------------------------------- 1. 그룹/지문
 def scan_groups() -> dict[str, list[str]]:
     """(방,날짜) -> 파일 목록. 키는 상태파일에 담기게 'room|YYYYMMDD' 문자열."""
@@ -215,6 +237,7 @@ def main() -> int:
     t0 = time.time()
     say("=" * 66)
     say("K-Bond 증분 갱신 시작")
+    warn_if_unfinished()
 
     groups = scan_groups()
     state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
