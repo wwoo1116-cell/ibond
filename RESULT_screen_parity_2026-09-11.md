@@ -98,3 +98,20 @@ cd ..\kbond-web && npm run build && python -m http.server 3400 --directory out
 # 4) 대조
 cd ..\kbond && node compare_screens.mjs
 ```
+
+## 6. 전환 — 한 주소에서 둘 다 [OWNER 2026-09-11]
+
+```
+https://e110430.tailc7b701.ts.net/kbond/      옛 화면 (그대로)
+https://e110430.tailc7b701.ts.net/kbond/app   새 화면 (React)
+http://127.0.0.1:8301/app/                    같은 것, 로컬 직통
+```
+
+`kbond_api` 가 `kbond-web/out-kbond` 를 `/app` 과 `/kbond/app` **두 자리**에 붙인다.
+Tailscale 이 `/kbond` 를 떼고 넘기는데 브라우저는 떼기 전 주소로 자산을 부르기 때문이다.
+접두어 빌드는 `build_app.ps1`(태스크 `KBondAppBuild`, 주중 08:00)가 굽는다.
+
+함정 하나를 여기 남긴다 — **Next 의 `basePath` 는 CSS 안의 `url(/fonts/...)` 를 안
+고친다.** 절대 주소라 Funnel 루트(다른 앱)로 새 나가 404 가 되고 한글이 시스템 글꼴로
+떨어진다. 굽고 나서 `fix_font_prefix.py` 가 고친다(헤드리스 실측: 실패한 자산 0).
+

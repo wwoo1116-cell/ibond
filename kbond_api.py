@@ -52,6 +52,15 @@ from kbond_schema import (Basket, CreditQuote, Dealer, Event, FeedRow,   # noqa:
                           Fill, Quote, Swap, View)
 
 VIEWER = Path(__file__).parent / "kbond_live.html"
+# ★[OWNER 2026-09-11] 새 화면(kbond-web)을 «같은 주소» 에 함께 낸다.
+#   /       옛 화면(그대로)        ·  /app   새 화면
+#   Funnel 에서는 /kbond/ 와 /kbond/app 이 된다.
+#   ⚠두 자리에 붙이는 이유: Tailscale 이 `/kbond` 를 떼고 넘기는데 브라우저는 떼기
+#     전 주소(/kbond/app/_next/...)로 자산을 부른다. 그래서 /app 과 /kbond/app 둘 다
+#     같은 폴더를 봐야 한다. 로컬(127.0.0.1:8301/app/)도 그 덕에 그대로 돈다.
+#   빌드는 `kbond-webuild_app.ps1` 가 굽는다(out-kbond). 없으면 조용히 안 붙인다 —
+#   화면 하나가 없다고 책이 멈출 이유는 없다.
+APP_DIR = Path(__file__).resolve().parent.parent / "kbond-web" / "out-kbond"
 POLL_S = KL.POLL_S
 
 
@@ -210,3 +219,14 @@ async def events(request: Request, t: str | None = None):
 def index():
     """화면은 문턱 밖이다 — 비밀은 데이터이지 화면이 아니다."""
     return HTMLResponse(VIEWER.read_text(encoding="utf-8"))
+
+
+# ★마운트는 라우트 «뒤» 에 와야 한다 — StaticFiles 를 먼저 붙이면 경로를 삼킨다.
+if APP_DIR.is_dir():
+    from fastapi.staticfiles import StaticFiles                  # noqa: E402
+
+    app.mount("/kbond/app", StaticFiles(directory=APP_DIR, html=True), name="app-funnel")
+    app.mount("/app", StaticFiles(directory=APP_DIR, html=True), name="app")
+    KL.log(f"[화면] 새 화면을 /app 에 붙였다 — {APP_DIR}")
+else:
+    KL.log(f"[화면] 새 화면 빌드가 없다(건너뜀) — {APP_DIR}")
