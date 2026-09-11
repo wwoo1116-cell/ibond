@@ -111,6 +111,19 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=4096)
 
 
+# ★[2026-09-11] 화면(HTML)은 캐시하지 않는다.
+#   여태 `/` 응답에 캐시 헤더가 **하나도 없었다** — 그러면 브라우저가 «알아서» 얼마간
+#   품는다(heuristic caching). 그래서 화면을 고치고 서버를 다시 세워도 «안 바뀐 것처럼»
+#   보이는 일이 생겼다(오너 실측 2026-09-11). 새로고침을 배우게 하는 대신 서버가 말한다.
+#   ⚠자산(_next/…)은 파일명에 해시가 박혀 있어 오래 캐시하는 편이 맞다 — 건드리지 않는다.
+@app.middleware("http")
+async def _no_store_html(request, call_next):
+    resp = await call_next(request)
+    if str(resp.headers.get("content-type", "")).startswith("text/html"):
+        resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
+
+
 def _deny_if_no_token(t):
     """토큰이 설정돼 있을 때만 검사한다. 지금은 [OWNER] 결정으로 꺼져 있다."""
     if not KL.token_ok(t):
