@@ -5,6 +5,11 @@
  *
  * ★계산 없음. 활성 필터·버킷 중앙값·커브 점·니즈 매칭은 `kbond_view.py` 가 낸다
  *   (`cr_buckets`·`curve_points`·`cr_sel`·`cr_needs`). 화면은 좌표로 옮겨 그릴 뿐이다.
+ *
+ * ★[OWNER 2026-09-11] 분류 줄 앞에 국고·통안이 선다. 둘은 계열이 아니라 레인이라
+ *   등급 축이 없어서, 고르면 서버가 «만기 버킷» 으로 접어 같은 모양으로 보낸다
+ *   (`gov_buckets`·`gov_sel`·`gov_curve`). 화면은 단위(종/건)와 없는 축(니즈·등급
+ *   커브)만 달리 말하고, 표는 그대로 쓴다.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -144,9 +149,13 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
   const buckets: Bucket[] = v.buckets ?? [];
   const offers: Offer[] = v.offers ?? [];
   const needs: Need[] = v.needs ?? [];
-  /* 종별 pill 은 서버가 CLSORD 로 정렬해 준 버킷 순서를 그대로 따른다. */
-  const classes: string[] = [];
-  for (const b of buckets) if (b.cls && !classes.includes(b.cls)) classes.push(b.cls);
+  /* ★[OWNER 2026-09-11] 분류 줄의 «구성» 은 서버가 낸다(`cls_pills`) — 국고·통안이
+     앞에 서고 그다음 위험순 계열 여덟이다. 히트맵 행과 같은 축이고, 건수가 0 인
+     칸도 빠지지 않는다(줄이 날마다 흔들리면 눈이 자리를 잃는다).
+     ⚠예전처럼 «버킷에서 뽑아» 만들면 안 된다 — 그러면 국고·통안이 못 들어오고
+       비어 있는 계열이 사라진다. 옛 판으로 되돌릴 때만 아래 한 줄을 쓴다. */
+  const pills = v.classes ?? [];
+  const govSel = pills.some((p) => p.gov && p.cls === cls);
   const shown = cls ? buckets.filter((b) => b.cls === cls) : buckets;
   const lvl = offers.filter((o) => o.ytm != null);
   const noLvl = offers.filter((o) => o.ytm == null);
@@ -156,19 +165,24 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
       <div className="kb-card kb-list">
         <div className="kb-ch">
           <Text as="span" font="label2">분류</Text>
-          <Text as="span" font="legal" color="fgMuted">{v.counts?.cr ?? 0}건</Text>
+          <Text as="span" font="legal" color="fgMuted">
+            {govSel
+              ? `${cls} · ${buckets.reduce((a, b) => a + (b.n ?? 0), 0)}종`
+              : `${v.counts?.cr ?? 0}건`}
+          </Text>
         </div>
         <div className="kb-pills">
           <button className={`kb-pill${cls ? '' : ' on'}`} onClick={() => { setCls(null); setRt(null); }}>
             전체
           </button>
-          {classes.map((c) => (
+          {pills.map((p) => (
             <button
-              key={c}
-              className={`kb-pill${cls === c ? ' on' : ''}`}
-              onClick={() => { setCls(c); setRt(null); }}
+              key={p.cls}
+              className={`kb-pill${cls === p.cls ? ' on' : ''}`}
+              onClick={() => { setCls(p.cls); setRt(null); }}
+              title={p.gov ? `${p.cls} — 등급이 없는 레인이라 만기 버킷으로 접습니다 · ${p.n}종` : `${p.n}건`}
             >
-              {c}
+              {p.cls}
             </button>
           ))}
         </div>
@@ -188,7 +202,9 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
                 {b.cls} {b.rt}
                 {b.est ? <b className="kb-badge">집계</b> : null}
               </span>
-              <span className="num kb-n">{b.n}건</span>
+              {/* ★국고·통안 버킷의 n 은 «건» 이 아니라 «종» 이다 — 칸 값이 종목마다
+                  하나씩인 (mid − 민평) 이라서다. 서버가 gov 로 알려 준다. */}
+              <span className="num kb-n">{b.n}{b.gov ? '종' : '건'}</span>
               <span className="num">{n3(b.ytm_med)}</span>
               <span className={`num ${b.bp_med == null ? '' : b.bp_med < 0 ? 'sr-down' : 'sr-up'}`}>
                 {b.bp_med == null ? '' : `${sbp(b.bp_med)}bp`}
@@ -260,7 +276,9 @@ export function Credit({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
               </tbody>
             </table>
           ) : (
-            <div className="kb-empty">살아 있는 니즈가 없습니다</div>
+            <div className="kb-empty">
+              {govSel ? '국고·통안에는 바스켓이 없습니다' : '살아 있는 니즈가 없습니다'}
+            </div>
           )}
         </div>
       </div>

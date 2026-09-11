@@ -280,8 +280,30 @@ export interface components {
             } | null;
         };
         /**
+         * ClsPill
+         * @description 분류 줄의 한 칸. 순서가 곧 «구성» 이다 — 국고·통안 다음 위험순 계열 여덟.
+         *     [OWNER 2026-09-11] 히트맵 행과 같은 축으로 세웠다.
+         */
+        ClsPill: {
+            /** Cls */
+            cls: string;
+            /**
+             * N
+             * @description 살아 있는 건수(계열) 또는 칸이 서는 종목 수(국고·통안)
+             * @default 0
+             */
+            n: number;
+            /**
+             * Gov
+             * @description 계열이 아니라 레인이다 — 등급 대신 만기 버킷으로 접힌다
+             * @default false
+             */
+            gov: boolean;
+        };
+        /**
          * CreditBucket
          * @description 종별×등급 버킷. 값은 중앙값이다.
+         *     ★국고·통안을 고르면 같은 모양에 «등급» 자리가 만기 버킷(~1년·1~2…)으로 온다.
          */
         CreditBucket: {
             /** K */
@@ -296,6 +318,12 @@ export interface components {
              * @default false
              */
             est: boolean;
+            /**
+             * Gov
+             * @description 국고·통안 버킷 — n 의 단위가 «건» 이 아니라 «종» 이다
+             * @default false
+             */
+            gov: boolean;
             /** N */
             n: number;
             /**
@@ -1346,8 +1374,13 @@ export interface components {
              */
             axes?: components["schemas"]["Axis"][] | null;
             /**
+             * Classes
+             * @description lane 이 cr 일 때 분류 줄의 구성 — 국고·통안·위험순 계열 여덟
+             */
+            classes?: components["schemas"]["ClsPill"][] | null;
+            /**
              * Buckets
-             * @description lane 이 cr 일 때
+             * @description lane 이 cr 일 때. 국고·통안을 고르면 만기 버킷으로 접힌다
              */
             buckets?: components["schemas"]["CreditBucket"][] | null;
             curve?: components["schemas"]["Curve"] | null;
