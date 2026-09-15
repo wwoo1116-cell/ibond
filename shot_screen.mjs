@@ -15,8 +15,11 @@
  *        cd ..\kbond-web && npm run build && python -m http.server 3400 --directory out
  *   3) 헤드리스 크롬을 디버깅 포트로 띄운다:
  *        chrome --headless=new --remote-debugging-port=9222 --user-data-dir=<임시> about:blank
- *   4) node shot_screen.mjs [화면URL] [API] [출력.png] [탭이름]
+ *   4) node shot_screen.mjs [화면URL] [API] [출력.png] [탭이름] [고를 종목]
  *        node shot_screen.mjs http://127.0.0.1:3400/ http://127.0.0.1:8303 dyn.png 동향
+ *        node shot_screen.mjs http://127.0.0.1:3400/ http://127.0.0.1:8303 ob.png 국고 26-7
+ *   ★사다리·시세·딜러는 종목을 골라야 나온다. 안 고르면 목록 첫 줄이 잡히는데 그게 한쪽
+ *     호가만 있는 종목이면 «바램 단계가 안 보이는» 그림을 찍게 된다.
  *
  * 찍은 그림 말고 **stdout 의 kv 줄** 도 보라 — 칸 라벨과 값이 한 줄로 나오므로
  * 「두 줄로 접혀 칸 높이가 어긋났다」 같은 것이 글자로도 잡힌다.
@@ -31,6 +34,7 @@ const URL_ = process.argv[2] || 'http://127.0.0.1:3400/';
 const API = process.argv[3] || 'http://127.0.0.1:8303';
 const OUT = process.argv[4] || 'screen.png';
 const TAB = process.argv[5] || '동향';
+const PICK = process.argv[6] || '';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const t = await (await fetch(`${CDP}/json/new?${URL_}`, { method: 'PUT' })).json();
@@ -74,6 +78,15 @@ const clicked = await ev(
 console.log('탭', TAB, clicked);
 /* 첫 폴링이 5초라 그것보다 넉넉히 기다린다(빈 카드를 찍으면 «없는 것» 처럼 보인다). */
 await sleep(7000);
+if (PICK) {
+  const got = await ev(
+    `(()=>{const r=[...document.querySelectorAll('.kb-li2')]
+       .find(x=>(x.querySelector('.nm')||x).textContent.trim().startsWith(${JSON.stringify(PICK)}));
+     if(!r) return 'no-row'; r.click(); return 'picked';})()`,
+  );
+  console.log('종목', PICK, got);
+  await sleep(6000);
+}
 console.log('kv:', await ev(
   `[...document.querySelectorAll('.kb-kvc')].map(e=>e.textContent.replace(/\\s+/g,' ').trim()).join(' | ')`,
 ));

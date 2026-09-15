@@ -503,6 +503,10 @@ class View(BaseModel):
     now: str | None = None
     T: int
     ttl_mode: Literal["def", "half", "inf"] = "def"
+    age_steps: list[int] = Field(
+        [60, 300],
+        description="바램 문턱(초) [신선, 익음]. 화면은 이 값을 쓰고 스스로 정하지 않는다. "
+                    "근거 = 최우선 나이별 «그 레벨에서 체결» 비율 ~1분 90.6% · 1~5분 61.2% · 5~15분 29.6%")
     ver: int | None = None
     counts: dict[str, int]
     heat: Heat

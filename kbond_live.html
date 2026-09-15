@@ -584,8 +584,10 @@ function lvlTip(e){
     (e.chk!=null?` · 우리 끝전 환산과 ${e.chk>0?"+":""}${e.chk}bp 차이`:"");
   return "";
 }
-/* 나이 단계: 신선 <5분 · 익음 5~15분 · 노후 15분+ (서버 age_steps) */
-const ageSteps = () => (SNAP&&SNAP.age_steps)||[300,900];
+/* 나이 단계: 신선 <1분 · 익음 1~5분 · 노후 5분+ (서버 age_steps 가 정본)
+   ★2026-09-15 재보정 — 최우선 나이별 «그 레벨에서 체결» 비율이 ~1분 90.6% · 1~5분 61.2% ·
+   5~15분 29.6% 라 벼랑이 1분이다. 폴백 값도 서버 상수와 같게 둔다. */
+const ageSteps = () => (SNAP&&SNAP.age_steps)||[60,300];
 const ageCls = a => { const S=ageSteps(); return a<S[0]?"a0":a<S[1]?"a1":"a2"; };
 function ageTip(a){
   const ev=((SNAP||{}).ttl_evidence||{}).ktb||[];

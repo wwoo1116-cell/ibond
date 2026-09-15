@@ -440,6 +440,10 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
         now = str(snap.get("now") or "0:0:0").split(":")
         T = int(now[0]) * 3600 + int(now[1]) * 60 + int(now[2])
     out = {"now": snap.get("now"), "T": T, "ttl_mode": mode,
+           # 바램 문턱은 «한 곳» 에서만 정한다(kbond_live.AGE_STEPS). 09-11 에 화면과 서버가
+           # 따로 판정을 들고 있다가 나흘 만에 들킨 전례가 있다 — 화면이 손으로 복제하면
+           # 서버만 고쳤을 때 두 화면이 다른 수를 말한다.
+           "age_steps": list(snap.get("age_steps") or (60, 300)),
            "counts": cat_counts(snap, T, mode),
            "heat": heat_cells(snap, T, mode)}
     if lane in ("ktb", "msb", "nhb"):
