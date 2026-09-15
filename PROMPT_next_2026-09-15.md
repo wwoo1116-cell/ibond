@@ -177,7 +177,7 @@ Vercel 은 그 뒤 `cd ..\kbond-web && vercel deploy --prod`(CLI 로그인 되�
 
 | | |
 |---|---|
-| 코드 | `Projects\apps\kbond` HEAD **`067b779`** → `origin/kbond-backend` 푸시됨 |
+| 코드 | `Projects\apps\kbond` · `origin/kbond-backend` 에 전부 푸시됨(최신 = 이 인계문 커밋) |
 | 화면 | `Projects\apps\kbond-web` HEAD **`9ac1326`**(원격 없음) · `out`(Vercel판)·`out-kbond`(Funnel판) 둘 다 새로 구움 |
 | 본표 | `kbond_structured_data.parquet` **8,338,580행 · 63열** |
 | 다리 | `kbond_legs.parquet` 515,707행 · 51열 |
@@ -307,9 +307,12 @@ test_issuer 138/138 · compare_screens 다섯 영역 **0건** · 동향 탭 스�
 ## §10. 오늘 커밋
 
 ```
-kbond (origin/kbond-backend · 푸시함)
-  067b779  다음 세션 인계문 — 09-15 것 한 장으로
+kbond (origin/kbond-backend · 전부 푸시함)
   f9e8943  책이 말하는 것 — 체결 귀속이 열어 준 지표 셋 [OWNER 「K-Orderbook+++」]
+           kbond_dyn_study.py · _book_ctx · book_info · verify [I3~I5] · RESULT 문서
+  067b779  다음 세션 인계문 — 09-15 (1판)
+  3cc581c  인계문 상세판 — 레인 방향까지 적는다 · shot_screen.mjs
+  (+ 위 §5·§10 의 해시를 맞춘 커밋 하나)
 
 kbond-web (원격 없음)
   9ac1326  책이 말하는 것 — 동향 탭 넉 줄 + 리더보드 «귀속» 열
