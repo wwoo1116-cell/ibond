@@ -156,7 +156,8 @@ function Leaderboard({ lb, lane, onLane }: {
             <th className="l">딜러</th>
             <th>건수</th>
             <th title="호가 중 매도/매수">매도/매수</th>
-            <th>체결</th>
+            <th title="그 딜러가 보낸 체결 응답 수">체결</th>
+            <th title="맞은 호가의 주인으로 센 체결 — 딜러+레벨 귀속이면 그 딜러, 레벨만이면 그 레벨의 남">귀속</th>
             <th title="오늘 최우선에 서 있던 시간 합">최우선</th>
           </tr>
         </thead>
@@ -180,11 +181,12 @@ function Leaderboard({ lb, lane, onLane }: {
                   </span>
                 </td>
                 <td className="num kb-n">{d.c || ''}</td>
+                <td className="num">{d.f || ''}</td>
                 <td className="num kb-n">{d.ab ? `${Math.round(d.ab / 60)}분` : ''}</td>
               </tr>
               {open ? (
                 <tr className="dld">
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="kb-dld">
                       <span className="kb-n">
                         첫 {hms(d.first ?? 0)} · 마지막 {hms(d.last ?? 0)}
@@ -245,6 +247,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
   if (!v?.pulse) return <div className="kb-empty">부르는 중…</div>;
 
   const p = v.pulse;
+  const bi = v.book_info;
   const cnt = v.event_counts ?? {};
   const evs = (v.events ?? []).filter((e) => evOn[e.k ?? '']).slice().reverse();
   const ct = v.curve_today ?? {};
@@ -303,6 +306,40 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
             )}
             {kv('이벤트', p.n_event.toLocaleString())}
           </div>
+          {/* +++ 책이 말하는 것 — 귀속 체결(국고·통안)에서 엔진이 «체결 순간» 에 재 둔 값.
+              국고 전 이력 실측(RESULT_book_dynamics_2026-09-15.md):
+                · 책은 한 틱(0.5bp, 93.6%)이고 체결의 81% 가 최우선 레벨에서 난다 → 유효 = 호가 반스프레드
+                · 직전 불균형(잠금 동점 제외): 비드 우세 → 사 감 59.5% · 오퍼 우세 → 39.1% (위약 AUC 0.51 대 0.58)
+              여기 수는 «오늘» 이 그 실측과 같은 자리에 있는지 보는 것이다. 표본이 작은 날은 흔들린다. */}
+          {bi ? (
+            <div className="kb-kvgrid" style={{ marginTop: 6 }}>
+              {kv(
+                '유효 반스프레드 · 호가 (bp)',
+                bi.eff_med == null
+                  ? '—'
+                  : `${bi.eff_med.toFixed(2)} · ${bi.qs_half_med == null ? '—' : bi.qs_half_med.toFixed(2)}`,
+              )}
+              {kv(
+                '최우선 레벨에서 난 체결',
+                bi.at_best_pct == null ? '—' : `${bi.at_best_pct.toFixed(0)}% / ${bi.n_ab}건`,
+              )}
+              {kv(
+                '직전 불균형 → 사 감 % (오퍼·균형·비드)',
+                bi.n_imb
+                  ? ['오퍼 우세', '균형', '비드 우세']
+                      .map((k) => {
+                        const c = bi.p_b_by_imb?.[k];
+                        return c && c.pB != null ? `${c.pB.toFixed(0)}%(${c.n})` : '—';
+                      })
+                      .join(' · ')
+                  : '—',
+              )}
+              {kv(
+                '귀속 체결 · 불균형 잰 것',
+                `${bi.n} · ${bi.n_imb}${bi.n_imb_prev ? ` (+${bi.n_imb_prev})` : ''}`,
+              )}
+            </div>
+          ) : null}
           <PulseChart p={p} />
         </div>
 
@@ -354,7 +391,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
                 <th style={{ width: 62 }}>전일민평</th>
                 <th style={{ width: 58 }}>mid</th>
                 <th style={{ width: 50 }}>Δbp</th>
-                <th style={{ width: 42 }} title="살아 있는 오퍼 딜러 · 비드 딜러">딜러</th>
+                <th style={{ width: 58 }} title="살아 있는 오퍼 딜러 · 비드 딜러 (▲ 비드 우세 · ▼ 오퍼 우세)">딜러</th>
               </tr>
             </thead>
             <tbody>
@@ -379,7 +416,13 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
                         <td className={`num ${r.dbp == null ? '' : r.dbp < 0 ? 'sr-down' : 'sr-up'}`}>
                           {sbp(r.dbp)}
                         </td>
-                        <td className="num kb-n">{r.nd}</td>
+                        <td
+                          className="num kb-n"
+                          title={r.imb == null ? '' : `지금 불균형 (비드−오퍼)/합 ${r.imb > 0 ? '+' : ''}${r.imb.toFixed(2)}`}
+                        >
+                          {r.nd}
+                          {r.imb == null ? '' : r.imb > 0.15 ? ' ▲' : r.imb < -0.15 ? ' ▼' : ''}
+                        </td>
                       </tr>
                     ))}
                   </Fragment>

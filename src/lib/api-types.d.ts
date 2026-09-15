@@ -280,6 +280,69 @@ export interface components {
             } | null;
         };
         /**
+         * BookInfo
+         * @description 책이 말하는 것 — 오늘 귀속 체결에서 잰 셋(국고·통안). 값은 엔진이 체결 순간에 재 둔 것.
+         *     국고 전 이력 실측은 RESULT_book_dynamics_2026-09-15.md.
+         */
+        BookInfo: {
+            /**
+             * N
+             * @description 귀속된 체결 수
+             * @default 0
+             */
+            n: number;
+            /**
+             * N Eff
+             * @default 0
+             */
+            n_eff: number;
+            /**
+             * Eff Med
+             * @description 유효 반스프레드 중앙 bp
+             */
+            eff_med?: number | null;
+            /**
+             * N Qs
+             * @default 0
+             */
+            n_qs: number;
+            /**
+             * Qs Half Med
+             * @description 체결 시점 호가 반스프레드 중앙 bp
+             */
+            qs_half_med?: number | null;
+            /**
+             * N Ab
+             * @default 0
+             */
+            n_ab: number;
+            /**
+             * At Best Pct
+             * @description 최우선 레벨에서 난 비율 %
+             */
+            at_best_pct?: number | null;
+            /**
+             * N Imb
+             * @description 불균형을 잰 체결 — 문면에 종목이 있는 것(csrc=stated)만
+             * @default 0
+             */
+            n_imb: number;
+            /**
+             * N Imb Prev
+             * @description 불균형은 있으나 맨 ㅎㅈ 를 직전 호가에 붙인 것(csrc=prev) — 연구가 못 잰 모집단이라 뺀 수
+             * @default 0
+             */
+            n_imb_prev: number;
+            /**
+             * P B By Imb
+             * @description 직전 불균형 구간(오퍼 우세·균형·비드 우세)별 사 감 비율
+             * @default {}
+             */
+            p_b_by_imb: {
+                [key: string]: components["schemas"]["ImbCell"];
+            };
+        };
+        /**
          * ClsPill
          * @description 분류 줄의 한 칸. 순서가 곧 «구성» 이다 — 국고·통안 다음 위험순 계열 여덟.
          *     [OWNER 2026-09-11] 히트맵 행과 같은 축으로 세웠다.
@@ -590,6 +653,11 @@ export interface components {
              * @default
              */
             nd: string;
+            /**
+             * Imb
+             * @description 지금 불균형 (비드 딜러 − 오퍼 딜러)/합. 양면일 때만(+++)
+             */
+            imb?: number | null;
         };
         /**
          * DealerCard
@@ -824,6 +892,19 @@ export interface components {
              */
             est: number;
         };
+        /** ImbCell */
+        ImbCell: {
+            /**
+             * N
+             * @default 0
+             */
+            n: number;
+            /**
+             * Pb
+             * @description 그 구간에서 «사 감»(오퍼가 맞음) 비율 %
+             */
+            pB?: number | null;
+        };
         /** LeaderRow */
         LeaderRow: {
             /** K */
@@ -862,6 +943,12 @@ export interface components {
              * @default 0
              */
             ab: number;
+            /**
+             * F
+             * @description 오늘 귀속된 체결 — 맞은 호가의 주인으로 센다(+++)
+             * @default 0
+             */
+            f: number;
             /** First */
             first?: number | null;
             /** Last */
@@ -1438,6 +1525,8 @@ export interface components {
             aggr?: {
                 [key: string]: number;
             } | null;
+            /** @description lane 이 dyn 일 때. 책이 말하는 것(+++) */
+            book_info?: components["schemas"]["BookInfo"] | null;
         };
     };
     responses: never;
