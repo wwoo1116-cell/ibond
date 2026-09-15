@@ -141,6 +141,9 @@
    바램의 일은 감추는 것이 아니라 신선도를 줄 세우는 것이다. */
 .kb-obr.ag1 { opacity: .82; }
 .kb-obr.ag2 { opacity: .60; }
+/* 락 — 같은 레벨에 양면이 함께 선 칸. 거래가 나는 자리라 바램을 먹이지 않는다
+   (귀속 체결의 84%가 락 상태에서 난다). [OWNER 2026-09-15] */
+.kb-obr.lock { opacity: 1; background: var(--sr-hl, rgba(127, 127, 127, .09)); }
 .kb-p { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; }
 .kb-p.mut { color: var(--color-fgMuted); font-weight: 400; }
 .kb-q { position: relative; height: 18px; display: flex; align-items: center; font-size: 11px; }

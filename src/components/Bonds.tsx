@@ -89,31 +89,46 @@ function Ladder({ ob, T, steps }: { ob: ObLadder; T: number; steps?: number[] | 
   }
   const best = ob.best ?? {};
   const spTxt =
-    best.spread_bp != null
+    /* ★락 — 같은 레벨에 오퍼와 비드가 함께 서 있다. «스프레드 0.0bp» 라고 말하면 «좁다» 로
+       읽히는데, 실제로는 «여기서 거래가 난다» 는 뜻이다(귀속 체결의 23.5%). [OWNER 09-15] */
+    best.lock
+      ? `락 ${n3(best.mid)} · 같은 레벨에 양면`
+      : best.spread_bp != null
       ? `스프레드 ${best.spread_bp.toFixed(1)}bp · mid ${n3(best.mid)}`
       : (ob.sum?.na ?? 0)
         ? '매도 호가만 있습니다'
         : (ob.sum?.nb ?? 0)
           ? '매수 호가만 있습니다'
           : '';
-  const row = (L: ObLevel, side: 'a' | 'b') => (
-    <div key={`${side}${L.y}`} className={`kb-obr ${side} ${ageCls(T - (L.S?.fresh ?? L.B?.fresh ?? T), steps)}`}>
-      {side === 'a' ? (
-        <Cell sd={L.S} side="S" basis={ob.basis} mx={ob.mx} T={T} />
-      ) : (
-        <div className="kb-q l" />
-      )}
-      <div className={`kb-p${L.S || L.B ? '' : ' mut'}`}>
-        {L.y.toFixed(3)}
-        {L.atmp ? <span className="kb-badge">민평</span> : null}
+  /* ★락 칸은 한 행에 양면을 다 그린다 [OWNER 2026-09-15]. 칸을 «어느 쪽 목록에 넣었나» 로
+     그리면 락 칸의 반대편이 화면에서 사라진다 — 잔량 합에는 들어가는데 행이 없어서
+     「매수 합 870억인데 보이는 건 750억」이 된다(실측 26-7). 있는 면은 있는 대로 그린다. */
+  const row = (L: ObLevel, side: 'a' | 'b') => {
+    const lock = !!(L.S && L.B);
+    return (
+      <div
+        key={`${side}${L.y}`}
+        className={`kb-obr ${side}${lock ? ' lock' : ''} ${ageCls(T - (L.S?.fresh ?? L.B?.fresh ?? T), steps)}`}
+        title={lock ? '락 — 같은 레벨에 매도와 매수가 함께 서 있습니다' : undefined}
+      >
+        {L.S ? (
+          <Cell sd={L.S} side="S" basis={ob.basis} mx={ob.mx} T={T} />
+        ) : (
+          <div className="kb-q l" />
+        )}
+        <div className={`kb-p${L.S || L.B ? '' : ' mut'}`}>
+          {L.y.toFixed(3)}
+          {L.atmp ? <span className="kb-badge">민평</span> : null}
+          {lock ? <span className="kb-badge">락</span> : null}
+        </div>
+        {L.B ? (
+          <Cell sd={L.B} side="B" basis={ob.basis} mx={ob.mx} T={T} />
+        ) : (
+          <div className="kb-q r" />
+        )}
       </div>
-      {side === 'b' ? (
-        <Cell sd={L.B} side="B" basis={ob.basis} mx={ob.mx} T={T} />
-      ) : (
-        <div className="kb-q r" />
-      )}
-    </div>
-  );
+    );
+  };
   return (
     <div className="kb-ob">
       <div className="kb-obh">
@@ -397,8 +412,14 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               <b className="sr-up">{n3(sel?.fb?.y)}</b>
             </div>
             <div>
-              <span className="kb-n">스프레드</span>
-              <b>{v.ob?.best?.spread_bp != null ? `${v.ob.best.spread_bp.toFixed(1)}bp` : '—'}</b>
+              <span className="kb-n">{v.ob?.best?.lock ? '락' : '스프레드'}</span>
+              <b>
+                {v.ob?.best?.lock
+                  ? '양면'
+                  : v.ob?.best?.spread_bp != null
+                    ? `${v.ob.best.spread_bp.toFixed(1)}bp`
+                    : '—'}
+              </b>
             </div>
             <div>
               <span className="kb-n">당일 체결</span>
