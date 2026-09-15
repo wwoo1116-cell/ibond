@@ -1453,6 +1453,15 @@ export interface components {
              * @enum {string}
              */
             ttl_mode: "def" | "half" | "inf";
+            /**
+             * Age Steps
+             * @description 바램 문턱(초) [신선, 익음]. 화면은 이 값을 쓰고 스스로 정하지 않는다. 근거 = 최우선 나이별 «그 레벨에서 체결» 비율 ~1분 90.6% · 1~5분 61.2% · 5~15분 29.6%
+             * @default [
+             *       60,
+             *       300
+             *     ]
+             */
+            age_steps: number[];
             /** Ver */
             ver?: number | null;
             /** Counts */

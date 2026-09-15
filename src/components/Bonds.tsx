@@ -29,10 +29,13 @@ const hms = (t: number) =>
 const lot = (a?: number | null) => (a == null || !a ? '—' : `${Math.round(a * 10) / 10}억`);
 const sbp = (v?: number | null) => (v == null ? '' : `${v > 0 ? '+' : ''}${v.toFixed(1)}bp`);
 
-/** 나이 → 바램 단계. 옛 화면의 ageCls 와 같은 문턱(5분·15분). */
-function ageCls(sec: number): '' | 'ag1' | 'ag2' {
-  if (sec <= 300) return '';
-  return sec <= 900 ? 'ag1' : 'ag2';
+/** 나이 → 바램 단계. ★문턱은 서버가 준다(`view.age_steps`) — 여기서 정하지 않는다.
+ *  09-11 에 화면과 서버가 판정을 따로 들고 있다가 나흘 만에 들킨 전례가 있다.
+ *  기본값은 서버가 못 줄 때만 쓰는 폴백이고 서버 상수와 같은 값이다. */
+function ageCls(sec: number, steps?: number[] | null): '' | 'ag1' | 'ag2' {
+  const [s0, s1] = steps && steps.length >= 2 ? steps : [60, 300];
+  if (sec <= s0) return '';
+  return sec <= s1 ? 'ag1' : 'ag2';
 }
 const ageTxt = (sec: number) =>
   sec < 60 ? `${Math.round(sec)}초` : sec < 3600 ? `${Math.round(sec / 60)}분` : `${(sec / 3600).toFixed(1)}시간`;
@@ -70,7 +73,7 @@ function Cell({ sd, side, basis, mx, T }: {
   );
 }
 
-function Ladder({ ob, T }: { ob: ObLadder; T: number }) {
+function Ladder({ ob, T, steps }: { ob: ObLadder; T: number; steps?: number[] | null }) {
   const levels = ob.levels ?? [];
   const imp = ob.implied ?? [];
   if (!levels.length && !imp.length) {
@@ -94,7 +97,7 @@ function Ladder({ ob, T }: { ob: ObLadder; T: number }) {
           ? '매수 호가만 있습니다'
           : '';
   const row = (L: ObLevel, side: 'a' | 'b') => (
-    <div key={`${side}${L.y}`} className={`kb-obr ${side} ${ageCls(T - (L.S?.fresh ?? L.B?.fresh ?? T))}`}>
+    <div key={`${side}${L.y}`} className={`kb-obr ${side} ${ageCls(T - (L.S?.fresh ?? L.B?.fresh ?? T), steps)}`}>
       {side === 'a' ? (
         <Cell sd={L.S} side="S" basis={ob.basis} mx={ob.mx} T={T} />
       ) : (
@@ -515,7 +518,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               </select>
             ) : null}
           </div>
-          {v.ob ? <Ladder ob={v.ob} T={T} /> : <div className="kb-empty">종목을 고르세요</div>}
+          {v.ob ? <Ladder ob={v.ob} T={T} steps={v.age_steps} /> : <div className="kb-empty">종목을 고르세요</div>}
         </div>
 
         <div className="kb-card">

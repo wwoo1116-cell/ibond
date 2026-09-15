@@ -135,8 +135,12 @@
 .kb-obh > :last-child, .kb-obt > :last-child { text-align: right; }
 .kb-obt { border-top: 1px solid var(--color-bgLine); }
 .kb-obr { padding: 0 12px; height: 22px; }
-.kb-obr.ag1 { opacity: .68; }
-.kb-obr.ag2 { opacity: .42; }
+/* 바램 깊이는 문턱과 한 벌이다. 2026-09-15 에 문턱을 (300,900)->(60,300) 으로 좁히면서
+   같이 옅게 맞췄다 — 옛 깊이(.68/.42)는 «15분 넘은 소수» 를 지우려고 고른 값이라, 문턱만
+   좁히면 책의 대부분이 가장 옅은 칸으로 떨어져 «순서» 도 «글자» 도 같이 죽는다.
+   바램의 일은 감추는 것이 아니라 신선도를 줄 세우는 것이다. */
+.kb-obr.ag1 { opacity: .82; }
+.kb-obr.ag2 { opacity: .60; }
 .kb-p { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; }
 .kb-p.mut { color: var(--color-fgMuted); font-weight: 400; }
 .kb-q { position: relative; height: 18px; display: flex; align-items: center; font-size: 11px; }
