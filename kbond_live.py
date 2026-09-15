@@ -1077,6 +1077,14 @@ class Book:
             # 오퍼가 맞았다 = 누가 사 갔다. 장외 책에 없던 «공격 방향» 이다.
             ag = "B" if hit.get("s") == "S" else "S"
             self.aggr[ag] += 1
+            # ★+++ [OWNER 2026-09-15 「K-Orderbook+++」] 딜러 리더보드의 «귀속 체결» —
+            #   맞은 호가의 주인에게 센다(딜러+레벨 귀속이면 그 딜러, 레벨만이면 그 레벨의 남).
+            ds = self.dealers.get(hit.get("k"))
+            if ds is not None:
+                ds["f"] = ds.get("f", 0) + 1
+        # ★+++ 체결 순간의 책 — 유효 스프레드·최우선 여부·직전 불균형. 국고 전 이력 실측은
+        #   RESULT_book_dynamics_2026-09-15.md. 규약은 kbond_dyn_study.py 와 같다.
+        ctx = self._book_ctx(lane, code, t, hit, k)
         # 종목별 «당일 마지막 체결» — 약한 귀속은 레벨로 쓰지 않는다
         if code and y is not None:
             if lane == "ktb":
@@ -1089,10 +1097,12 @@ class Book:
             b = int(t // PULSE_BIN) * PULSE_BIN
             self.act.setdefault(code, {}).setdefault(b, [0, 0, 0])[2] += 1
             self._event(t, "fill", lane, code, nm, s_, y, amt, self._disp(d, broker),
-                        {"csrc": csrc, "ag": ag})
+                        {"csrc": csrc, "ag": ag, "eff": ctx.get("eff"), "ab": ctx.get("ab")})
         self.tape.append({
             "t": t, "sec": sec or "기타", "lane": lane, "code": code, "n": nm,
             "s": s_, "y": y, "a": amt, "asrc": asrc, "ag": ag,
+            "eff": ctx.get("eff"), "qs": ctx.get("qs"), "ab": ctx.get("ab"),
+            "imb": ctx.get("imb"), "amb": ctx.get("amb"),
             "csrc": (csrc if code else None),
             "d": self._disp(d, broker), "k": k,
             "raw": mask_raw(body, _raw_disp(d, broker),
@@ -1529,7 +1539,7 @@ class Book:
         ds = self.dealers.get(k)
         if ds is None:
             ds = self.dealers[k] = {"k": k, "d": disp, "n": 0, "q": 0, "b": 0, "s": 0,
-                                    "c": 0, "i": 0, "first": t, "last": t,
+                                    "c": 0, "i": 0, "f": 0, "first": t, "last": t,
                                     "lane": {}, "codes": {}}
         ds["n"] += 1
         ds["last"] = max(ds["last"], t)
@@ -1656,6 +1666,66 @@ class Book:
             "s": "B" if side == "BUY" else "S",
             "a": d["AmountEff"], "asrc": d["AmountSource"],
             "d": self._disp(d, broker), "k": mask_key(str(broker)[:14])}
+
+    def _book_ctx(self, lane, code, t, hit, k=None):
+        """체결 순간의 책 — 유효 스프레드·최우선 여부·불균형. [K-Orderbook+++ 2026-09-15]
+
+        국고 전 이력을 잰 kbond_dyn_study.py 와 «같은 규약» 이다(둘이 다르면 화면 수가
+        연구 수와 다른 물건이 된다):
+          책   = 그 종목의 살아 있는(TTL 1800) 호가를 uncross 한 것
+          qs   = 호가 스프레드 bp (비드 최우선 − 오퍼 최우선)
+          eff  = 유효 반스프레드 bp. 오퍼가 맞았으면 mid − 체결금리, 비드가 맞았으면 체결금리 − mid
+                 (금리 세계라 부호가 뒤집힌다 — 사 간 쪽은 낮은 금리를 «비싸게» 받는다)
+          ab   = 맞은 호가가 그 방향의 최우선이었나
+          imb  = (비드 딜러 수 − 오퍼 딜러 수) / 합. ★맞은 호가 자신은 뺀다 — 안 빼면
+                 «오퍼가 있으니 오퍼가 맞았다» 는 항등식이 된다. 양면이 다 있을 때만 값이 있다.
+          amb  = 잠금 동점. 그 레벨에 오퍼와 비드가 «다» 서 있는데 체결 보고자 자신의 호가가
+                 없으면 _attach_fill 은 «최신 것» 을 고른다 — 방향이 사실상 동전 던지기다.
+                 ★이런 체결은 imb 를 비운다. 첫 실측에서 이걸 안 빼자 «사람이 많은 쪽이 맞는다»
+                 는 정반대 부호가 나왔다(최신 호가가 사람 많은 쪽일 확률이 높다는 기계적 편향).
+                 빼면 국고 전 이력은 «비드 우세 → 사 감 59.5% · 오퍼 우세 → 39.1%» 다.
+        국고·통안만 잰다(양면 사다리가 서는 레인). 크레딧은 매도 일변도(99.9%)라 뜻이 없다.
+        """
+        out = {"qs": None, "eff": None, "ab": None, "imb": None, "amb": None}
+        if lane not in ("ktb", "msb") or code is None:
+            return out
+        src = self.ktb if lane == "ktb" else self.msb
+        rows = [e for e in src.values() if e.get("code") == code and e.get("y") is not None
+                and e["t"] <= t and t - e["t"] <= TTL_DEFAULT["ktb"]]
+        asks = [e for e in rows if e["s"] == "S"]
+        bids = [e for e in rows if e["s"] == "B"]
+        for _ in range(200):          # uncross_best 와 같은 규약 — 살아남는 «집합» 이 필요하다
+            if not asks or not bids:
+                break
+            ba = max(asks, key=lambda e: (e["y"], e["t"]))
+            bb = min(bids, key=lambda e: (e["y"], -e["t"]))
+            if ba["y"] < bb["y"]:
+                break
+            if ba["t"] <= bb["t"]:
+                asks = [e for e in asks if e is not ba]
+            else:
+                bids = [e for e in bids if e is not bb]
+        fa = max(asks, key=lambda e: (e["y"], e["t"])) if asks else None
+        fb = min(bids, key=lambda e: (e["y"], -e["t"])) if bids else None
+        mid = None
+        if fa is not None and fb is not None:
+            out["qs"] = round((fb["y"] - fa["y"]) * 100, 2)
+            mid = (fa["y"] + fb["y"]) / 2
+        if hit is None or hit.get("y") is None:
+            return out
+        bst = fa if hit["s"] == "S" else fb
+        if bst is not None:
+            out["ab"] = abs(bst["y"] - hit["y"]) <= 1e-9
+        if mid is not None:
+            out["eff"] = round(((mid - hit["y"]) if hit["s"] == "S" else (hit["y"] - mid)) * 100, 2)
+        lvl = [e for e in rows if abs(e["y"] - hit["y"]) <= 1e-9]
+        own = any(e.get("k") == k for e in lvl) if k is not None else (hit.get("k") == k)
+        out["amb"] = (not own) and len({e["s"] for e in lvl}) > 1
+        a2 = [e for e in asks if e is not hit]
+        b2 = [e for e in bids if e is not hit]
+        if a2 and b2 and not out["amb"]:
+            out["imb"] = round((len(b2) - len(a2)) / (len(b2) + len(a2)), 3)
+        return out
 
     def _attach_fill(self, lane, code, nm, broker, y, t):
         """체결을 책에 서 있는 호가에 붙인다 — 지우지 않고 «맞았다» 고 적기만 한다.

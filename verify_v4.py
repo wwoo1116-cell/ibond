@@ -715,6 +715,35 @@ def main() -> int:
     else:
         print(f"    서버 집계 {agg} — 테이프와 일치")
 
+    # ── [I3]~[I5] 책 문맥 (+++ 2026-09-15) ──────────────────
+    # 엔진이 체결 순간에 재 둔 eff·qs·ab·imb 가 (3) 뷰까지 그대로 가는가, (4) 딜러별 귀속
+    # 체결의 합이 귀속 수와 같은가, (5) «최우선에서 맞았으면 유효 반스프레드 = 호가 반스프레드»
+    # 라는 항등식이 서는가 — (5) 는 규약에서 따라 나오는 불변식이라 어긋나면 계산이 틀린 것이다.
+    import kbond_view as KV
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/view?lane=dyn", timeout=20) as r:
+        vdyn = json.load(r)
+    bi_srv = vdyn.get("book_info") or {}
+    bi_re = KV.book_info(book)
+    same = all(bi_srv.get(k) == bi_re.get(k) for k in ("n", "n_eff", "eff_med", "at_best_pct", "n_imb"))
+    print(f"[I3] 책 문맥 — 귀속 {bi_re['n']}건 · 유효 반스프레드 중앙 {bi_re['eff_med']}bp (n={bi_re['n_eff']}) · "
+          f"호가 반스프레드 중앙 {bi_re['qs_half_med']}bp · 최우선 체결률 {bi_re['at_best_pct']}% (n={bi_re['n_ab']}) · "
+          f"불균형 있는 것 {bi_re['n_imb']}건 {bi_re['p_b_by_imb']}")
+    if not same:
+        fails.append(f"I3 뷰 book_info 가 스냅샷 재계산과 다름: {bi_srv} != {bi_re}")
+    f_sum = sum((d.get("f") or 0) for d in (book.get("dealers") or []))
+    # dealers 는 상위 120 만 실린다 — 잘린 딜러의 f 는 못 센다. 그래서 «≤» 로 보고 같으면 말한다.
+    if f_sum > n_ag:
+        fails.append(f"I4 딜러별 귀속 체결 합 {f_sum} > 귀속 수 {n_ag}")
+    else:
+        print(f"[I4] 딜러별 귀속 체결 합 {f_sum} {'=' if f_sum == n_ag else '<='} 귀속 {n_ag}"
+              f"{'' if f_sum == n_ag else ' (상위 120 딜러만 실려 잘린 몫)'}")
+    bad5 = [e for e in tape if e.get("ab") and e.get("qs") is not None and e.get("eff") is not None
+            and abs(e["eff"] - e["qs"] / 2) > 0.011]
+    n5 = sum(1 for e in tape if e.get("ab") and e.get("qs") is not None and e.get("eff") is not None)
+    print(f"[I5] 최우선에서 맞은 체결의 유효 = 호가/2 — {n5 - len(bad5)}/{n5}")
+    if bad5:
+        fails.append(f"I5 항등식 어긋남 {len(bad5)}건: {[(e['code'], e['y'], e['eff'], e['qs']) for e in bad5[:3]]}")
+
     print("\n" + "=" * 60)
     if fails:
         print(f"실패 {len(fails)}건")

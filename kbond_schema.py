@@ -96,6 +96,12 @@ class Fill(BaseModel):
     asrc: AmountSource | None = None
     csrc: FillSource | None = Field(None, description="종목을 어떻게 알았나. level 99.4% · prev 92.9%")
     ag: Side | None = Field(None, description="공격 방향. B=오퍼가 맞았다(누가 사 갔다) · S=비드가 맞았다(팔았다). 책에 붙지 않으면 없다")
+    # +++ 체결 순간의 책 (국고·통안만). 규약은 kbond_live.Book._book_ctx.
+    eff: float | None = Field(None, description="유효 반스프레드 bp — 오퍼가 맞았으면 mid−체결금리, 비드면 체결금리−mid")
+    qs: float | None = Field(None, description="체결 시점 호가 스프레드 bp(비드 최우선 − 오퍼 최우선)")
+    ab: bool | None = Field(None, description="맞은 호가가 그 방향의 최우선 레벨이었나")
+    imb: float | None = Field(None, description="직전 불균형 (비드 딜러 − 오퍼 딜러)/합, 맞은 호가 자신은 뺀 것. 양면이고 잠금 동점이 아닐 때만")
+    amb: bool | None = Field(None, description="잠금 동점 — 그 레벨에 양면이 다 섰는데 자기 호가가 없어 방향 귀속이 약한 체결")
     d: str | None = None
     k: str | None = None
     raw: str | None = Field(None, description="원문(가림이 켜져 있으면 서명은 라벨로 바뀐다)")
@@ -373,6 +379,7 @@ class CurveTodayRow(BondRow):
     """커브 오늘의 한 줄 — 종목 행에 «전일민평 대비» 와 «딜러 수» 를 얹은 것."""
     dbp: float | None = Field(None, description="mid − 전일민평, bp")
     nd: str = Field("", description="오늘 오퍼 딜러 · 비드 딜러 수")
+    imb: float | None = Field(None, description="지금 불균형 (비드 딜러 − 오퍼 딜러)/합. 양면일 때만(+++)")
 
 
 class PulseBin(BaseModel):
@@ -418,6 +425,7 @@ class LeaderRow(BaseModel):
     b: int = 0
     c: int = 0
     ab: float = Field(0, description="오늘 최우선에 서 있던 시간 합(초)")
+    f: int = Field(0, description="오늘 귀속된 체결 — 맞은 호가의 주인으로 센다(+++)")
     first: int | None = None
     last: int | None = None
     lane: dict[str, int] = {}
@@ -470,6 +478,26 @@ class GradeCurve(BaseModel):
     pts: list[GradePoint] = []
 
 
+class ImbCell(BaseModel):
+    n: int = 0
+    pB: float | None = Field(None, description="그 구간에서 «사 감»(오퍼가 맞음) 비율 %")
+
+
+class BookInfo(BaseModel):
+    """책이 말하는 것 — 오늘 귀속 체결에서 잰 셋(국고·통안). 값은 엔진이 체결 순간에 재 둔 것.
+    국고 전 이력 실측은 RESULT_book_dynamics_2026-09-15.md."""
+    n: int = Field(0, description="귀속된 체결 수")
+    n_eff: int = 0
+    eff_med: float | None = Field(None, description="유효 반스프레드 중앙 bp")
+    n_qs: int = 0
+    qs_half_med: float | None = Field(None, description="체결 시점 호가 반스프레드 중앙 bp")
+    n_ab: int = 0
+    at_best_pct: float | None = Field(None, description="최우선 레벨에서 난 비율 %")
+    n_imb: int = Field(0, description="불균형을 잰 체결 — 문면에 종목이 있는 것(csrc=stated)만")
+    n_imb_prev: int = Field(0, description="불균형은 있으나 맨 ㅎㅈ 를 직전 호가에 붙인 것(csrc=prev) — 연구가 못 잰 모집단이라 뺀 수")
+    p_b_by_imb: dict[str, ImbCell] = Field({}, description="직전 불균형 구간(오퍼 우세·균형·비드 우세)별 사 감 비율")
+
+
 class View(BaseModel):
     """`/api/view` 의 응답. 화면은 이걸 그대로 그린다."""
     now: str | None = None
@@ -501,3 +529,4 @@ class View(BaseModel):
     curve_today: dict[str, list[CurveTodayRow]] | None = None
     leaderboard: Leaderboard | None = None
     aggr: dict[str, int] | None = Field(None, description="당일 공격 방향 집계 {B: 사 간 체결, S: 판 체결}")
+    book_info: BookInfo | None = Field(None, description="lane 이 dyn 일 때. 책이 말하는 것(+++)")

@@ -479,6 +479,8 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
         out["leaderboard"] = leaderboard(snap, cls or "all")
         # v12 공격 방향 — 오퍼가 맞았으면 «사 갔다»(B), 비드가 맞았으면 «팔았다»(S)
         out["aggr"] = snap.get("aggr") or {"B": 0, "S": 0}
+        # +++ 책이 말하는 것 — 오늘 귀속 체결의 유효 스프레드·최우선 체결률·직전 불균형
+        out["book_info"] = book_info(snap)
     return out
 
 
@@ -776,11 +778,17 @@ def curve_today(snap, T, mode="def"):
             h = hist.get(c) or []
             last = h[-1] if h else None
             mid = r["mid"] if r.get("mid") is not None else (last[1] if last else None)
+            nA = last[4] if (last and len(last) > 5) else None
+            nB = last[5] if (last and len(last) > 5) else None
             rows.append({**r, "mid": mid,
                          "dbp": ((mid - r["mp"]) * 100)
                                 if (mid is not None and r.get("mp") is not None) else None,
                          # hist 꼬리에 실린 «오늘 오퍼·비드 딜러 수»
-                         "nd": (f"{last[4]}·{last[5]}" if (last and len(last) > 5) else "")})
+                         "nd": (f"{nA}·{nB}" if nA is not None else ""),
+                         # +++ 지금 불균형 (비드 딜러 − 오퍼 딜러)/합. 양면이 다 있을 때만
+                         "imb": (round((nB - nA) / (nB + nA), 3)
+                                 if (nA is not None and nB is not None and (nA + nB) > 0 and nA > 0 and nB > 0)
+                                 else None)})
         rows.sort(key=lambda r: (_years_to(snap, r.get("mat")) if _years_to(snap, r.get("mat"))
                                  is not None else 99))
         out[lane] = rows
@@ -800,10 +808,44 @@ def leaderboard(snap, lane="all"):
         ln = d.get("n") if lane == "all" else ((d.get("lane") or {}).get(lane) or 0)
         if lane != "all" and not ln:
             continue
-        rows.append({**d, "ln": ln, "ab": ab_tot.get(d.get("k"), 0)})
+        rows.append({**d, "ln": ln, "ab": ab_tot.get(d.get("k"), 0), "f": d.get("f", 0)})
     rows.sort(key=lambda r: -(r["ln"] or 0))
     return {"rows": rows, "n": snap.get("n_dealer") if snap.get("n_dealer") is not None
             else len(all_d), "shown": len(all_d)}
+
+
+def book_info(snap):
+    """책이 말하는 것 — 오늘 귀속된 체결에서 잰 셋. [K-Orderbook+++ 2026-09-15]
+
+    값은 엔진이 «체결 순간» 에 재 둔 것(kbond_live.Book._book_ctx)을 모은다 — 여기서
+    책을 다시 접지 않는다(접으면 «지금 책» 이지 «그때 책» 이 아니다). 국고·통안만.
+      eff_med      유효 반스프레드 중앙(bp). 최우선에서 맞으면 호가 반스프레드와 같다
+      qs_half_med  체결 시점 호가 반스프레드 중앙(bp)
+      at_best_pct  귀속 체결 중 «그 방향 최우선 레벨» 에서 난 비율
+      p_b_by_imb   직전 불균형 구간별 «사 감» 비율 — 국고 전 이력 실측(RESULT_book_dynamics)은
+                   비드 우세 → 사 감 59.5% · 균형 49.7% · 오퍼 우세 → 39.1% (잠금 동점 제외,
+                   문면에 종목이 있는 체결만).
+    """
+    tape = snap.get("tape") or []
+    att = [e for e in tape if e.get("ag") and e.get("lane") in ("ktb", "msb")]
+    eff = [e["eff"] for e in att if e.get("eff") is not None]
+    qs = [e["qs"] for e in tape if e.get("qs") is not None and e.get("lane") in ("ktb", "msb")]
+    ab = [e["ab"] for e in att if e.get("ab") is not None]
+    # ★불균형은 «문면에 종목이 있는 체결»(csrc=stated)만 센다 — 연구가 검증한 모집단이 그것이다.
+    #   맨 «ㅎㅈ» 를 직전 호가에 붙인 것(prev)은 배치 체결표에 없어 못 쟀고, 09-03 재생에서
+    #   그 모집단만 부호가 반대였다(비드 우세 → 사 감 35%, n=48). 따로 센다(n_imb_prev).
+    imb = [(e["imb"], e["ag"]) for e in att if e.get("imb") is not None and e.get("csrc") == "stated"]
+    n_prev = sum(1 for e in att if e.get("imb") is not None and e.get("csrc") != "stated")
+    bins = (("오퍼 우세", -1.01, -0.15), ("균형", -0.15, 0.15), ("비드 우세", 0.15, 1.01))
+    pb = {}
+    for nm, lo, hi in bins:
+        xs = [ag for v, ag in imb if lo <= v < hi]
+        pb[nm] = {"n": len(xs),
+                  "pB": (round(sum(1 for ag in xs if ag == "B") / len(xs) * 100, 1) if xs else None)}
+    return {"n": len(att), "n_eff": len(eff), "eff_med": med(eff),
+            "n_qs": len(qs), "qs_half_med": (med(qs) / 2 if qs else None),
+            "n_ab": len(ab), "at_best_pct": (round(sum(1 for x in ab if x) / len(ab) * 100, 1) if ab else None),
+            "n_imb": len(imb), "n_imb_prev": n_prev, "p_b_by_imb": pb}
 
 
 # ── 시세 이력 ──────────────────────────────────────────────────────────────
