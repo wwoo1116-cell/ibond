@@ -791,8 +791,20 @@ def swap_newer(a, b):
 
 
 def uncross_best(entries):
-    """무크로스 뒤 최우선 (오퍼, 비드). 화면과 같은 규약 — 오퍼 금리 < 비드 금리,
-    크로스 쌍은 오래된 쪽을 지운다."""
+    """무크로스 뒤 최우선 (오퍼, 비드). 화면과 같은 규약 — 크로스 쌍은 오래된 쪽을 지운다.
+
+    ★★★[OWNER 2026-09-15] **락(간격 0)은 걷지 않는다.** 불변식이 «오퍼 < 비드» 에서
+      **«오퍼 <= 비드»** 로 바뀐다.
+
+      실측(RESULT_lock_2026-09-15.md): 귀속 체결 38,746건 중 **23.5%가 uncross 가 걷어낸
+      호가에서 났고**, 그 레벨이 화면에서 통째로 사라지는 경우는 0.2%뿐이었다 — 거의 전부
+      락이라 반대편만 남아 있었다. 화면은 「3.710 사자」를 보여 주는데 실제로 일어난 일은
+      「3.710 팔자가 맞았다」였다. 걷어낸 호가의 나이 중앙은 26초라 스테일해서 지운 것도 아니다.
+
+      v2.5 가 이 규칙을 들여온 근거는 코인베이스 책의 «크로스 0» 불변식이었는데, 그건
+      **체결 엔진이 강제하는** 것이다. 메신저 시장에는 그 엔진이 없어 **락이 진짜 상태로
+      오래 선다**(v8 실측 하루 907건 = 국고 호가의 40%). 간격이 «있는» 크로스만 걷는다.
+    """
     asks = [e for e in entries if e["s"] == "S" and e.get("y") is not None]
     bids = [e for e in entries if e["s"] == "B" and e.get("y") is not None]
     for _ in range(200):
@@ -800,7 +812,7 @@ def uncross_best(entries):
             break
         ba = max(asks, key=lambda e: (e["y"], e["t"]))
         bb = min(bids, key=lambda e: (e["y"], -e["t"]))
-        if ba["y"] < bb["y"]:
+        if ba["y"] <= bb["y"]:
             break
         if ba["t"] <= bb["t"]:
             asks = [e for e in asks if e is not ba]
@@ -1701,11 +1713,11 @@ class Book:
         asks = [e for e in rows if e["s"] == "S"]
         bids = [e for e in rows if e["s"] == "B"]
         for _ in range(200):          # uncross_best 와 같은 규약 — 살아남는 «집합» 이 필요하다
-            if not asks or not bids:
+            if not asks or not bids:  # ★락(간격 0)은 안 걷는다(uncross_best 독스트링)
                 break
             ba = max(asks, key=lambda e: (e["y"], e["t"]))
             bb = min(bids, key=lambda e: (e["y"], -e["t"]))
-            if ba["y"] < bb["y"]:
+            if ba["y"] <= bb["y"]:
                 break
             if ba["t"] <= bb["t"]:
                 asks = [e for e in asks if e is not ba]

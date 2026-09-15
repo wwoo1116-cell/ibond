@@ -328,6 +328,10 @@ class ObBest(BaseModel):
     fb: Quote | None = None
     spread_bp: float | None = None
     mid: float | None = None
+    lock: bool = Field(
+        False,
+        description="락 — 같은 레벨에 오퍼와 비드가 함께 서 있다(스프레드 0). "
+                    "걷지 않고 양면을 세운다 [OWNER 2026-09-15]. 체결의 23.5%가 이 자리에서 난다")
 
 
 class ObLadder(BaseModel):

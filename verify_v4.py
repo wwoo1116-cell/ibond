@@ -265,7 +265,10 @@ def main() -> int:
                 break
             ba = max(asks, key=lambda e: (e["y"], e["t"]))
             bb = min(bids, key=lambda e: (e["y"], -e["t"]))
-            if ba["y"] < bb["y"]:
+            # ★[OWNER 2026-09-15] 락(간격 0)은 안 걷는다. 불변식이 «오퍼 < 비드» 에서
+            #   «오퍼 <= 비드» 로 바뀌었다 — 근거는 kbond_live.uncross_best 독스트링.
+            #   여기 구현은 서버를 안 믿고 규칙을 «다시» 짠 것이라 같이 바꿔야 한다.
+            if ba["y"] <= bb["y"]:
                 break
             if ba["t"] <= bb["t"]:
                 asks = [e for e in asks if e is not ba]
@@ -273,7 +276,7 @@ def main() -> int:
                 bids = [e for e in bids if e is not bb]
         return asks, bids
 
-    n_lad = 0
+    n_lad = n_lock = 0
     for lane, ttl in (("ktb", 1800), ("msb", 1800), ("nhb", 1800)):
         src = [e for e in book[lane]
                if e.get("y") is not None and T - e["t"] <= ttl]
@@ -285,9 +288,13 @@ def main() -> int:
             n_lad += 1
             fa = max(a, key=lambda e: (e["y"], e["t"]))
             fb = min(b, key=lambda e: (e["y"], -e["t"]))
-            if not (fa["y"] < fb["y"]):
-                fails.append(f"C1 크로스 잔존 {lane} {c}: 오퍼 {fa['y']} >= 비드 {fb['y']}")
-    print(f"\n[C] 양면 사다리 {n_lad}종 — 오퍼 금리 < 비드 금리 · 크로스 없음")
+            # ★락(간격 0)은 위반이 아니다 — 이 시장의 진짜 상태다. 간격이 «있는» 크로스만 실패.
+            if fa["y"] > fb["y"] + 1e-9:
+                fails.append(f"C1 크로스 잔존 {lane} {c}: 오퍼 {fa['y']} > 비드 {fb['y']}")
+            elif abs(fa["y"] - fb["y"]) <= 1e-9:
+                n_lock += 1
+    print(f"\n[C] 양면 사다리 {n_lad}종 — 오퍼 금리 <= 비드 금리 · 간격 있는 크로스 없음")
+    print(f"    그중 락(간격 0) {n_lock}종 — 걷지 않고 양면을 세운다 [OWNER 2026-09-15]")
 
     # ── D. 메시지 피드 ────────────────────────────────────────────────
     feed = book.get("feed") or []

@@ -45,7 +45,9 @@ def secs(s):
 
 
 def uncross(asks, bids):
-    """라이브 uncross_best 와 같은 규약으로 «살아남는 집합» 을 돌려준다."""
+    """라이브 uncross_best 와 같은 규약으로 «살아남는 집합» 을 돌려준다.
+    ★[OWNER 2026-09-15] 락(간격 0)은 안 걷는다 — 불변식은 «오퍼 <= 비드».
+    """
     asks = list(asks)
     bids = list(bids)
     for _ in range(200):
@@ -53,7 +55,7 @@ def uncross(asks, bids):
             break
         ba = max(asks, key=lambda e: (e["y"], e["t"]))
         bb = min(bids, key=lambda e: (e["y"], -e["t"]))
-        if ba["y"] < bb["y"]:
+        if ba["y"] <= bb["y"]:
             break
         if ba["t"] <= bb["t"]:
             asks = [e for e in asks if e is not ba]

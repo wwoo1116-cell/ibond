@@ -656,7 +656,9 @@ function uncross(rows){
     if(!asks.length||!bids.length) break;
     let ba=asks[0]; for(const e of asks) if(e.y>ba.y||(e.y===ba.y&&e.t>ba.t)) ba=e;
     let bb=bids[0]; for(const e of bids) if(e.y<bb.y||(e.y===bb.y&&e.t>bb.t)) bb=e;
-    if(ba.y<bb.y) break;
+    /* ★2026-09-15 [OWNER] 락(간격 0)은 안 걷는다 — 불변식이 «오퍼 <= 비드» 로 바뀌었다.
+       체결의 23.5%가 걷어낸 쪽에서 났고 거의 전부 락이었다. 서버 uncross_best 와 한 벌. */
+    if(ba.y<=bb.y) break;
     if(ba.t<=bb.t) asks=asks.filter(e=>e!==ba); else bids=bids.filter(e=>e!==bb);
   }
   return [asks,bids];
@@ -1047,7 +1049,9 @@ function renderSum(T,rows,bks){
   $("kv").innerHTML =
     kvCell("매도 (오퍼)", r.fa?n3(r.fa.y):"—", "ask")+
     kvCell("매수 (비드)", r.fb?n3(r.fb.y):"—", "bid")+
-    kvCell("스프레드", sp==null?"—":sp.toFixed(1)+"bp")+
+    /* ★락(간격 0)은 «스프레드 0.0bp» 가 아니라 «락» 이다 — 여기서 거래가 난다 [OWNER 09-15] */
+    kvCell(sp!=null&&Math.abs(sp)<1e-9?"락":"스프레드",
+           sp==null?"—":(Math.abs(sp)<1e-9?"양면":sp.toFixed(1)+"bp"))+
     kvCell("당일 체결", r.fill?n3(r.fill.y)+(fd!=null?`<span class="mut"> ${nbp(fd)}</span>`:""):"—", cls3(fd));
   $("kv2").innerHTML =
     `<span>고 / 저 <b>${st?n3(st.hi)+" / "+n3(st.lo):"—"}</b></span>`+
@@ -1163,7 +1167,14 @@ function renderOb(T,rows){
     const _at=((L0.S&&L0.S.atmp===L0.S.n)||(L0.B&&L0.B.atmp===L0.B.n));
     const px=`<div class="p">${y.toFixed(3)}`+
       (_at?'<span class="impb" title="레벨 없는 호가 — 민평에 한다는 뜻">민평</span>':"")+`</div>`;
-    if(L.S){
+    if(L.S&&L.B){
+      /* ★락 — 같은 레벨에 양면. 한 행에 둘 다 그린다 [OWNER 2026-09-15].
+         한쪽만 그리면 반대편이 잔량 합에는 들어가는데 행이 없어 «합이 안 맞는» 화면이 된다. */
+      const pxL=`<div class="p">${y.toFixed(3)}`+
+        (_at?'<span class="impb" title="레벨 없는 호가 — 민평에 한다는 뜻">민평</span>':"")+
+        '<span class="impb" title="락 — 같은 레벨에 매도와 매수가 함께 서 있습니다">락</span></div>';
+      ha += `<div class="obr a${agRow(L.S)}">${cell(L.S,"S")}${pxL}${cell(L.B,"B")}</div>`;
+    } else if(L.S){
       ha += `<div class="obr a${agRow(L.S)}">${cell(L.S,"S")}${px}${blank}</div>`;
     } else if(L.B){
       hb += `<div class="obr b${agRow(L.B)}">${blank}${px}${cell(L.B,"B")}</div>`;
@@ -1191,7 +1202,9 @@ function renderOb(T,rows){
   const impB=impRows.filter(r=>r.s==="B").reduce((s,r)=>s+(r.a||0),0);
   $("sOb").textContent = (aggBp ? aggBp+"bp 집계" : "원호가")+
     " · 막대 = "+(allA ? "수량" : "호가 건수");
-  const spTxt = (fa&&fb) ? `스프레드 <b>${((fb.y-fa.y)*100).toFixed(1)}bp</b> · mid <b>${n3((fa.y+fb.y)/2)}</b>`
+  const spTxt = (fa&&fb&&Math.abs(fb.y-fa.y)<1e-9)
+      ? `락 <b>${n3(fa.y)}</b> · 같은 레벨에 양면`
+    : (fa&&fb) ? `스프레드 <b>${((fb.y-fa.y)*100).toFixed(1)}bp</b> · mid <b>${n3((fa.y+fb.y)/2)}</b>`
     : (aE.length ? "매도 호가만 있습니다" : bE.length ? "매수 호가만 있습니다" : "");
   $("obBox").innerHTML =
     `<div class="ob"><div class="obh"><span>매도 잔량</span>`+

@@ -66,7 +66,11 @@ def alive(e, kind, T, mode="def"):
 
 
 def uncross(rows):
-    """크로스 쌍 중 «오래된» 쪽을 지운다. 화면 uncross 와 같은 순서로 돈다."""
+    """크로스 쌍 중 «오래된» 쪽을 지운다. 화면 uncross 와 같은 순서로 돈다.
+
+    ★[OWNER 2026-09-15] 락(간격 0)은 걷지 않는다 — 불변식은 «오퍼 <= 비드».
+    근거는 `kbond_live.uncross_best` 독스트링과 RESULT_lock_2026-09-15.md.
+    """
     asks = [e for e in rows if e.get("s") == "S"]
     bids = [e for e in rows if e.get("s") == "B"]
     for _ in range(200):
@@ -74,7 +78,7 @@ def uncross(rows):
             break
         ba = max(asks, key=lambda e: (e["y"], e["t"]))
         bb = min(bids, key=lambda e: (e["y"], -e["t"]))
-        if ba["y"] < bb["y"]:
+        if ba["y"] <= bb["y"]:
             break
         if ba["t"] <= bb["t"]:
             asks = [e for e in asks if e is not ba]
@@ -593,7 +597,11 @@ def ob_ladder(snap, lane, code, T, mode="def", agg=0.0):
                 "imp_b": sum(r.get("a") or 0 for r in imp if r.get("s") == "B")},
         "best": {"fa": fa, "fb": fb,
                  "spread_bp": ((fb["y"] - fa["y"]) * 100) if (fa and fb) else None,
-                 "mid": ((fa["y"] + fb["y"]) / 2) if (fa and fb) else None},
+                 "mid": ((fa["y"] + fb["y"]) / 2) if (fa and fb) else None,
+                 # ★락 — 같은 레벨에 오퍼와 비드가 함께 서 있다. 걷지 않고 그대로 보인다
+                 #   [OWNER 2026-09-15]. 이 자리에서 체결이 나므로 «스프레드 0» 이 아니라
+                 #   «락» 이라고 말해야 한다.
+                 "lock": bool(fa and fb and abs(fa["y"] - fb["y"]) <= 1e-9)},
     }
 
 
