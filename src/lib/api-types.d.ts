@@ -797,6 +797,11 @@ export interface components {
             y?: number | null;
             /** Bp */
             bp?: number | null;
+            /**
+             * Mp
+             * @description 어제자 민평 — 국고·통안은 DB 전일 민평, 크레딧·국주·MBS 는 문면에 적힌 민평
+             */
+            mp?: number | null;
             /** A */
             a?: number | null;
             /** Asrc */

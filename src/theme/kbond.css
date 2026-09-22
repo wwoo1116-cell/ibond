@@ -32,6 +32,7 @@
 .kb-row + .kb-row {
   border-top: 1px solid var(--color-bgLine);
 }
+.kb-row:hover { background: var(--sr-page); }
 .kb-chip {
   display: inline-block;
   padding: 0 6px;
@@ -488,3 +489,95 @@
   color: var(--color-fgMuted); background: var(--sr-page);
   border-top: 1px solid var(--color-bgLine);
 }
+
+/* ══ 피드 표 [OWNER 2026-09-22 「문장 형태가 아니라 표로」] ═══════════════════
+ *
+ * 「시간, 종목명, 매수/매도, 브로커, 회사명, 어제자 해당 종목 민평, 할인조정가격,
+ *   원문」 — 원문만 칸이 아니라 «행 아래 줄» 이다(OWNER 선택).
+ *
+ * ★칸 폭은 `--kb-cols` **한 곳** 에서만 정한다. 머리글(.kb-fhead)과 행(.kb-row)이
+ *   같은 변수를 읽으니 둘이 갈라질 수 없다. `<table>` 의 내용 기반 자동 폭을 안 쓴
+ *   이유는 피드가 흐르는 동안 칸 폭이 흔들려 읽던 자리를 잃기 때문이다.
+ * ★머리글은 스크롤 상자 «안» 에 sticky 로 둔다. 밖에 두면 세로 스크롤바 폭만큼
+ *   칸이 어긋난다 — 같은 padding 을 줘도 그렇다.
+ * ★종목명만 minmax(0,1fr) 이다. 나머지는 «서식 최대치» 로 고정한다: 시간 08:00:00 ·
+ *   금리 0.000 · 수량 1000억. 값이 커져도 칸이 안 밀린다.
+ */
+.kb-mainfeed {
+  --kb-cols:
+    56px             /* 시간 */
+    17px             /* ☆ */
+    42px             /* 종류 */
+    minmax(0, 210px) /* 종목명 — 14자(«알씨아이파이낸셜서비스코리아»)까지 든다 */
+    minmax(34px, 1fr)/* 매매 — ★남는 폭은 여기가 먹는다 */
+    44px             /* 브로커 */
+    38px             /* 회사명 */
+    56px             /* 전일민평 */
+    62px             /* 할인조정 */
+    52px;            /* 수량 */
+}
+/* ★남는 폭을 «종목명» 이 아니라 «매매» 가 먹는 이유: 1fr 을 종목명에 주면 이름이
+ *   짧은 날(대부분이다) 종목명과 매도/매수 사이가 400px 벌어져, 한 행을 읽는 데
+ *   눈이 두 번 건너뛴다. 왼쪽 덩이(무엇을·어느 쪽)는 붙이고, 남는 폭은 그 덩이와
+ *   오른쪽 덩이(누가·얼마에) 사이에 둔다. 칸 순서는 [OWNER] 가 적은 그대로다. */
+.kb-fhead,
+.kb-row {
+  display: grid;
+  grid-template-columns: var(--kb-cols);
+  gap: 0 8px;
+  align-items: baseline;
+}
+.kb-fhead {
+  position: sticky; top: 0; z-index: 2;
+  padding: 7px 0 6px;
+  background: var(--sr-card);
+  border-bottom: 1px solid var(--color-bgLine);
+  font-size: 11px; font-weight: 600; color: var(--color-fgMuted);
+  white-space: nowrap;
+}
+.kb-row { padding: 4px 0 5px; }
+.kb-fhead .num, .kb-row .num { text-align: right; }
+
+.kb-c {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11.5px; color: var(--color-fgMuted);
+}
+.kb-c.num { font-variant-numeric: tabular-nums; }
+.kb-c.t { font-variant-numeric: tabular-nums; }
+.kb-c.n { font-size: 13px; font-weight: 600; color: var(--color-fg); }
+.kb-c.s { font-size: 12px; font-weight: 600; }
+/* 할인조정 = 이 표에서 눈이 가장 먼저 닿아야 할 값. 민평은 그 기준선이라 한 단 낮다. */
+.kb-c.y { font-size: 13.5px; font-weight: 700; color: var(--color-fg); position: relative; }
+.kb-c.num:not(.y) { font-size: 12px; }
+
+/* 종류 알약 — 옛 화면의 색 규약 그대로(호가 파랑기 · 체결 보조 · 나머지 무채색) */
+.kb-kd {
+  font-size: 11px; font-weight: 600; text-align: center;
+  padding: 1px 0; border-radius: 5px;
+  background: var(--color-bgAlternate); color: var(--color-fgMuted);
+  white-space: nowrap;
+}
+.kb-kd.q { background: var(--color-bgPrimaryWash); color: var(--color-fg); }
+.kb-kd.c { background: var(--color-bgSecondary); color: var(--color-fg); }
+
+/* «민평 그 자리» 표식 — 값이 민평과 같은 이유를 칸 안에서 말한다.
+ * ★칸 «왼쪽 끝» 에 띄운다. 숫자 뒤에 붙이면 그 행만 소수점이 밀려, 표식이 있고
+ *   없고에 따라 자리수가 어긋난다 — tabular-nums 를 켠 이유가 사라진다. */
+.kb-atmp {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  font-size: 9.5px; font-weight: 600; font-style: normal;
+  color: var(--color-fgMuted);
+}
+
+/* 원문 — 3열부터 끝까지. 시간·☆ 아래는 비워 값 줄과 구별한다.
+ * ★자른다면 이 줄을 둘 이유가 없다. 원문은 칸값을 «검산» 하는 자리라 길면 접힌다
+ *   (서버가 이미 170자에서 끊어 보낸다). 행 높이가 제각각이 되는 값은 치른다. */
+.kb-raw {
+  grid-column: 3 / -1;
+  font-size: 11.5px; line-height: 1.45; color: var(--color-fgMuted);
+  overflow-wrap: anywhere;
+}
+
+/* ☆ 는 격자 칸이라 옛 flex 규약(flex:none)이 필요 없다 — 폭은 칸이 준다 */
+.kb-row > .kb-star { padding: 0; justify-self: center; }
+.kb-row > .kb-star.ph { width: auto; }

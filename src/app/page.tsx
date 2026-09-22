@@ -74,15 +74,27 @@ export default function Page() {
   const maxI = useRef(0);
   const lastBeat = useRef(0);
 
-  /** 스크롤백은 서버가 하루치를 들고 있다 — 열자마자 한 번 당겨 온다. */
+  /** 스크롤백은 서버가 하루치를 들고 있다 — 열자마자 한 번 당겨 온다.
+   *
+   * ★[2026-09-22 수리] 겹침을 «갱신 함수 안에서» 거른다. 예전에는 바깥 `rows`
+   *   를 닫아 걸러서, SSE 가 백필보다 먼저 닿으면 그 겹침을 못 봤다 — 백필이
+   *   떠날 때의 `rows` 는 비어 있었기 때문이다. SSE 첫 프레임이 `stream[-250:]`
+   *   을 싣고 오므로 «맨 아래 250줄이 두 번 그려지는» 꼴로 늘 재현됐다
+   *   (실측: 3,000줄을 당겼는데 3,252줄이 섰다). 호가창에서 같은 호가가 둘로
+   *   보이는 것은 배치 문제가 아니라 값의 문제다.
+   */
   const backfill = useCallback(async () => {
     const j = await getFeed(0, 3000);
-    const have = new Set(rows.map((e) => e.i));
-    const add = (j.feed ?? []).filter((e) => !have.has(e.i));
-    if (!add.length) return;
-    setRows((prev) => [...prev, ...add].sort((a, b) => a.i - b.i).slice(-6000));
+    const got = j.feed ?? [];
+    if (!got.length) return;
+    setRows((prev) => {
+      const have = new Set(prev.map((e) => e.i));
+      const add = got.filter((e) => !have.has(e.i));
+      if (!add.length) return prev;
+      return [...prev, ...add].sort((a, b) => a.i - b.i).slice(-6000);
+    });
     maxI.current = Math.max(maxI.current, j.n_seq ?? 0);
-  }, [rows]);
+  }, []);
 
   /* 기동: 백엔드가 살아 있으면 붙고, 아니면 설정 화면. */
   useEffect(() => {
@@ -333,7 +345,10 @@ export default function Page() {
       <div className="kb-foot">
         블커본드·막무가내 두 방을 파싱해 그대로 흘립니다 · 종류: 호가·체결·문의(관심 포함)·미해석 ·
         값이 안 붙은 행은 아직 못 읽은 것입니다(교체 다리, «원» 단위 크레딧 호가 등) ·
-        수량 기본단위 100억, 100억 미만은 자투리
+        수량 기본단위 100억, 100억 미만은 자투리 · 전일민평 = 국고·통안은 DB 전일 민평(통안 최신물은
+        적재가 며칠 늦어 «전일» 이 아닐 수 있습니다), 크레딧·국주·MBS 는 문면에 적힌 민평 ·
+        할인조정 = 그 민평에 오바/언더·«원» 호가를 얹어 복원한 값, «민» 표식은 문면에 레벨이 없어
+        민평 그 자리라는 뜻입니다 · 브로커 = 딜러(K###) · 회사명 = 하우스(H##), 둘 다 가림 라벨입니다
       </div>
     </div>
   );
