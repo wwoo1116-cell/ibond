@@ -126,9 +126,10 @@ class FeedRow(BaseModel):
     atmp: bool | None = None
     csrc: FillSource | None = None
     lvl: LevelKind | None = None
-    d: str | None = None
-    bk: str | None = Field(None, description="딜러 키(가림 뒤 라벨)")
-    h: str | None = Field(None, description="하우스(가림 뒤 라벨)")
+    p: str | None = Field(None, description="브로커 이름 — 메신저 대화명(이름 가림이 켜져 있으면 P### 라벨)")
+    d: str | None = Field(None, description="데스크 표시명 «유진증권 CM팀» (가림이면 H##-#)")
+    bk: str | None = Field(None, description="딜러 키 — 전화 정규화 값이라 전화 가림에 묶인다(K###)")
+    h: str | None = Field(None, description="하우스 «유진» (가림이면 H##)")
     raw: str | None = None
 
 

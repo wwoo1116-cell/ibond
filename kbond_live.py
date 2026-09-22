@@ -643,10 +643,23 @@ def frac_bp(won, frac, ttm):
 #   최우선 점유·하우스 패널이 통째로 죽는다. 같은 데스크는 언제나 같은 라벨이다.
 #   [OWNER 결정 대상] 완전히 하나로 뭉갤지는 물어 둔다.
 # ★원문(raw)도 가린다 — 서명 괄호와 본문에 흩어진 전화번호꼴 전부.
-MASK = True                 # `--no-mask` 로 끈다(로컬에서 원문을 볼 때)
+#
+# ★★[OWNER 2026-09-22] 「브로커 회사명도 이제 공개로 띄워버려 허락받았어」 —
+#   이름 가림을 끈다. 다만 스위치를 **둘로 가른다**: 한 플래그가 넷을 덮고 있었고
+#   (하우스 H01 · 데스크 H01-2 · 브로커키 K041 · 원문 속 전화번호), 그중 뒤의 둘은
+#   이름이 아니라 **전화번호**다 — 브로커키는 `broker_key()` 가 만든 전화 정규화
+#   숫자열 그 자체다(파서 §broker_key). 이 화면은 토큰 없는 공개 주소
+#   (kbond-web.vercel.app)로 나가므로 이름 공개 허락을 전화번호 공개로 넓혀 읽지
+#   않는다. 전화까지 열 일이 생기면 `MASK_TEL = False` 한 줄이다.
+MASK = False                # 이름(하우스·데스크·원문 서명). [OWNER 2026-09-22] 공개
+MASK_TEL = True             # 전화(브로커키·원문 속 번호). 이름과 «따로» 둔다
+# 표시명 길이. 라벨(H01-2)일 땐 12자로 넉넉했지만 실명은 «부국증권 금융투자솔루션» 처럼
+# 길다 — 12자에 걸린 값이 3,000행 중 93개였고 그중엔 말을 자른 것도 있었다.
+DISP_MAX = 18
 _MASK_HOUSE = {}            # 실제 하우스 -> 'H01'
 _MASK_DESK = {}             # (하우스, 표시명) -> 'H01-2'
 _MASK_KEY = {}              # 브로커키 -> 'K041'
+_MASK_NAME = {}             # 대화명(브로커 이름) -> 'P041'
 # 전화번호꼴: 02-3770-5194 · 3770-5194 · 709 2457 · ☎6188-9657
 _RE_TEL = re.compile(r"(?<!\d)(?:0\d{1,2}[-.\s]?)?\d{3,4}[-.\s]?\d{4}(?!\d)")
 
@@ -673,8 +686,12 @@ def mask_desk(disp, house):
 
 
 def mask_key(k):
-    """브로커키(전화 한 줄)는 그 자체가 개인 식별자다 — 안정 라벨로 바꾼다."""
-    if not MASK or not k:
+    """브로커키(전화 한 줄)는 그 자체가 개인 식별자다 — 안정 라벨로 바꾼다.
+
+    ★이름 가림(MASK)이 아니라 **전화 가림(MASK_TEL)** 에 묶인다. 이름을 공개해도
+      이 키는 라벨로 남아야 딜러 프로필·리더보드의 «같은 사람» 이 계속 이어진다.
+    """
+    if not MASK_TEL or not k:
         return k
     lab = _MASK_KEY.get(k)
     if lab is None:
@@ -682,14 +699,70 @@ def mask_key(k):
     return lab
 
 
+def mask_name(nm):
+    """메신저 대화명 = 브로커 «이름» 이다(오늘 297명, 전부 사람 이름).
+
+    ★이름 가림(MASK)에 묶인다 — 전화가 아니라 이름이다. [OWNER 2026-09-22] 로
+      기본은 공개지만, 가림을 되켜면 여기도 같이 덮여야 «가림» 이라는 말이 참이 된다.
+    """
+    if not MASK or not nm:
+        return nm
+    lab = _MASK_NAME.get(nm)
+    if lab is None:
+        lab = _MASK_NAME[nm] = f"P{len(_MASK_NAME) + 1:03d}"
+    return lab
+
+
 def mask_raw(body, disp=None, house=None):
-    """원문에서 서명 괄호를 라벨로 바꾸고, 남은 전화번호꼴을 지운다."""
-    if not MASK or not body:
+    """원문에서 서명 괄호를 라벨로 바꾸고(이름 가림), 남은 전화번호꼴을 지운다(전화 가림).
+
+    ★두 일이 «따로» 돈다. 이름을 열어도 본문 여기저기 흩어진 번호는 지운다 —
+      서명 괄호는 한 자리지만 번호는 한 자리가 아니다.
+    """
+    if not body:
         return body
-    who = mask_desk(disp, house) if disp else "XXX"
-    brk, rest = split_broker(body)
-    out = f"{rest} [{who}]" if brk is not None else body
-    return _RE_TEL.sub("XXX", out)
+    who = None
+    if MASK:
+        who = mask_desk(disp, house) if disp else "XXX"
+    elif MASK_TEL:
+        # ★이름을 공개해도 서명 괄호는 «다시 적는다». 괄호 안은 전화가 사는 자리이고,
+        #   번호 «꼴» 을 하나씩 맞히는 것보다 통째로 다시 적는 편이 안전하다 —
+        #   실측 2026-09-22: `(부국 금융투자솔루션 368-427)` 의 3+3 자리를 _RE_TEL 이
+        #   안 물어 12행이 그대로 나갔다. 괄호를 «찾는» RE_PHONE(split_broker)은 그
+        #   꼴까지 문다. 넓은 쪽으로 찾고 좁은 쪽으로 남긴다.
+        who = disp or "XXX"
+    if who is not None:
+        brk, rest = split_broker(body)
+        if brk is not None:
+            body = f"{rest} [{who}]"
+    return _RE_TEL.sub("XXX", body) if MASK_TEL else body
+
+
+def clean_disp(name):
+    """표시명에서 전화꼴을 들어낸다 — 꼬리만이 아니라 «어디에 있든».
+
+    ★[2026-09-22] 이름 가림을 끄자 드러났다. 예전 규칙은 «꼬리의 숫자» 만 벗겼는데
+      서명이 «다올 2184-2646 ○○○» 처럼 번호를 가운데 둔 곳이 있었다. 꼬리가 한글이라
+      아무것도 안 벗겨졌고, 그 뒤 12자 컷에 걸려 «다올 2184-2646» 이 브로커 칸에
+      번호 그대로 섰다. 이름을 열어도 전화는 안 연다 — 그래서 여기서도 지운다.
+    """
+    t = str(name or "")
+    if MASK_TEL:
+        t = _RE_TEL.sub(" ", t)
+    return re.sub(r"[\d\-~☎().\s]+$", "", t).strip()
+
+
+def who_fallback(broker):
+    """서명에 «이름» 이 없을 때 쓸 표시.
+
+    ★[2026-09-22] 이름 가림을 끄자 드러난 것 — 폴백이 통째로 브로커 문자열이었고
+      그건 «전화 한 줄» 이다. 가림이 켜져 있을 땐 H## 로 덮여 안 보였는데, 끄고 나니
+      회사명 칸에 `5603833` 이 회사 이름처럼 섰다. 이름을 열어도 전화는 안 연다.
+    """
+    k = str(broker or "")[:14]
+    if not k:
+        return ""
+    return mask_key(k) if MASK_TEL else k
 
 
 # ───────────────────────────────────── 하우스 > 데스크 > 딜러 [OWNER 2026-09-03]
@@ -735,7 +808,11 @@ def house_of(disp, key):
     if (not w or w in _HOUSE_GENERIC or len(w) < 2) and k.isdigit():
         ex = k[:4] if len(k) >= 8 else k[:3]
         w = _HOUSE_EXCH.get(ex, w)
-    return w or str(disp or "")[:8]
+    if w:
+        return w
+    # ★폴백이 숫자면 그건 회사가 아니라 전화다 — 위 who_fallback 주석 참조.
+    d8 = str(disp or "")[:8]
+    return "" if (MASK_TEL and d8.strip().isdigit()) else d8
 
 
 def tsec(t):
@@ -825,8 +902,7 @@ def uncross_best(entries):
 
 def _raw_disp(d, broker):
     """가리기 «전» 표시명 — 원문 서명을 라벨로 바꿀 때만 쓴다."""
-    return (re.sub(r"[\d\-~☎().\s]+$", "", str(d["Broker"] or "")).strip()
-            or str(broker)[:10])[:12]
+    return (clean_disp(d["Broker"]) or who_fallback(broker))[:DISP_MAX]
 
 
 def _raw_house(d, broker):
@@ -943,8 +1019,7 @@ class Book:
         """표시용 딜러명 — 전화번호·괄호 꼬리를 자른다.
         ★[OWNER 2026-09-03] MASK 가 켜져 있으면 여기서 이미 'H01-2' 가 된다.
           하류(책·피드·테이프·이벤트·딜러표)가 전부 이 함수를 거치므로 한 곳이면 된다."""
-        raw = (re.sub(r"[\d\-~☎().\s]+$", "", str(d["Broker"] or "")).strip()
-               or str(broker)[:10])[:12]
+        raw = (clean_disp(d["Broker"]) or who_fallback(broker))[:DISP_MAX]
         return mask_desk(raw, house_of(raw, broker)) if MASK else raw
 
     def _msb_key(self, body, d):
@@ -1218,6 +1293,9 @@ class Book:
             #   전일 민평으로 덮는다 — 그쪽은 문면에 민평을 안 적고 축약호가로 쓴다.
             #   ⚠통안 최신물은 민평 적재가 며칠 늦어 «전일» 이 아닐 수 있다(mp31date).
             "mp": (round(float(d["MPYield"]), 3) if d["MPYield"] is not None else None),
+            # ★브로커 «이름» [OWNER 2026-09-22 「브로커는 브로커 이름이 나오게」].
+            #   서명(`d`)은 «유진증권 CM팀» 처럼 팀까지고, 사람은 메신저 대화명이다.
+            "p": mask_name(str(sender or "")[:12] or None),
             "d": self._disp(d, broker),
             "raw": mask_raw(raw, _raw_disp(d, broker), _raw_house(d, broker))[:170],
             # ★v8.1 하우스 > 데스크 > 딜러 [OWNER]: 딜러 = 브로커키(전화 한 줄)
@@ -2259,7 +2337,8 @@ class Handler(BaseHTTPRequestHandler):
                 d = {"ok": True, "uptime_s": round(up), "ver": STATE["ver"],
                      "last_event_age_s": round(time.time() - STATE["last_evt"], 1)
                                          if STATE["last_evt"] else None,
-                     "masked": MASK, "denied": dict(_n_401)}
+                     "masked": MASK, "masked_tel": MASK_TEL,
+                     "denied": dict(_n_401)}
             else:
                 d = {"ok": True}          # 문턱 밖에서는 «살아 있다» 만
             body = json.dumps(d).encode()
@@ -2505,10 +2584,10 @@ def main() -> int:
         PORT = int(argv[argv.index("--port") + 1])
     # ★v8.1 [OWNER 「최종 감사 뒤 Tailscale 로」] — 바인딩 주소를 인자로. 기본은 로컬뿐.
     #   Tailscale 이면 `--host 100.x.y.z`(테일넷 IP) 또는 `--host 0.0.0.0`.
-    global HOST, MASK
+    global HOST, MASK, MASK_TEL
     if "--no-mask" in argv:
-        MASK = False
-        log("[가림] 꺼짐 — 딜러 이름·전화가 그대로 나간다(로컬 확인용)")
+        MASK = MASK_TEL = False
+        log("[가림] 전부 꺼짐 — 딜러 이름·전화가 그대로 나간다(로컬 확인용)")
     if "--host" in argv:
         HOST = argv[argv.index("--host") + 1]
     book, poll, ref = start_engine(at=at)
@@ -2516,12 +2595,14 @@ def main() -> int:
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     log(f"[서빙] http://{HOST}:{PORT}/  (파일 폴링 {POLL_S}초 · SSE 푸시"
-        f"{' · 딜러 가림' if MASK else ' · 가림 꺼짐'}"
+        f"{' · 이름 가림' if MASK else ' · 이름 공개'}"
+        f"{' · 전화 가림' if MASK_TEL else ' · 전화 공개'}"
         f"{' · 토큰' if TOKEN else ''})")
     if not TOKEN:
         # ★[OWNER 2026-09-03] 「토큰 빼고 Funnel 유지」 — 위험을 알린 뒤의 결정이다.
         #   남은 문턱은 CORS 하나뿐이고 그건 «브라우저» 만 막는다. curl 로는 주소를
-        #   아는 누구나 책 전체를 받는다(딜러는 가려져 있지만 호가·체결·민평은 그대로).
+        #   아는 누구나 책 전체를 받는다. ★[2026-09-22] 딜러 «이름» 도 이제 그 안에
+        #   있다(오너 허락) — 남아 있는 가림은 전화번호뿐이다.
         #   되돌리려면 사용자 환경변수 KBOND_TOKEN 을 넣고 이 태스크를 재기동하면 된다.
         log("[문턱] 토큰 없음 [OWNER 결정] — 인증 없이 연다. Funnel 에 걸려 있으면 "
             "주소를 아는 누구나 받는다.")

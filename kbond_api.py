@@ -74,7 +74,10 @@ async def lifespan(app: FastAPI):
             h, m, s = (os.environ["KBOND_AT"] + ":0:0").split(":")[:3]
             at = KL.REPLAY_AT = int(h) * 3600 + int(m) * 60 + int(s)
     if os.getenv("KBOND_NO_MASK"):
-        KL.MASK = False
+        # 로컬에서 원문 그대로를 볼 때 — 전화 가림까지 함께 끈다.
+        # ★이름 가림은 2026-09-22 부터 기본이 «꺼짐» 이라(오너 허락) 이 변수의
+        #   실질은 이제 «전화까지 연다» 쪽이다.
+        KL.MASK = KL.MASK_TEL = False
     book, poll, ref = KL.start_engine(at=at)
     app.state.book = book
 
@@ -144,7 +147,7 @@ def health(t: str | None = None):
         ver, last = KL.STATE["ver"], KL.STATE["last_evt"]
     return {"ok": True, "uptime_s": round(time.time() - KL.STATE["t0"]), "ver": ver,
             "last_event_age_s": round(time.time() - last, 1) if last else None,
-            "masked": KL.MASK, "engine": "fastapi"}
+            "masked": KL.MASK, "masked_tel": KL.MASK_TEL, "engine": "fastapi"}
 
 
 @app.get("/book.json")
