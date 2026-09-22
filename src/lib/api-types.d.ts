@@ -812,16 +812,24 @@ export interface components {
             csrc?: ("stated" | "level" | "prev") | null;
             /** Lvl */
             lvl?: ("quoted" | "conv" | "est") | null;
-            /** D */
+            /**
+             * P
+             * @description 브로커 이름 — 메신저 대화명(이름 가림이 켜져 있으면 P### 라벨)
+             */
+            p?: string | null;
+            /**
+             * D
+             * @description 데스크 표시명 «유진증권 CM팀» (가림이면 H##-#)
+             */
             d?: string | null;
             /**
              * Bk
-             * @description 딜러 키(가림 뒤 라벨)
+             * @description 딜러 키 — 전화 정규화 값이라 전화 가림에 묶인다(K###)
              */
             bk?: string | null;
             /**
              * H
-             * @description 하우스(가림 뒤 라벨)
+             * @description 하우스 «유진» (가림이면 H##)
              */
             h?: string | null;
             /** Raw */

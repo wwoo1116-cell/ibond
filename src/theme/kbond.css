@@ -505,26 +505,29 @@
  */
 .kb-mainfeed {
   --kb-cols:
-    56px             /* 시간 */
-    17px             /* ☆ */
-    42px             /* 종류 */
-    minmax(0, 210px) /* 종목명 — 14자(«알씨아이파이낸셜서비스코리아»)까지 든다 */
-    minmax(34px, 1fr)/* 매매 — ★남는 폭은 여기가 먹는다 */
-    44px             /* 브로커 */
-    38px             /* 회사명 */
-    56px             /* 전일민평 */
-    62px             /* 할인조정 */
-    52px;            /* 수량 */
+    52px             /* 시간 */
+    16px             /* ☆ */
+    38px             /* 종류 */
+    132px            /* 종목명 */
+    30px             /* 매매 */
+    58px             /* 브로커 — 사람 이름. 3자가 대부분이나 실측 800줄 중 26줄이
+                        46px 에서 잘렸다(네 자 이상·로마자). 원문에서 12px 를 뺐다 */
+    104px            /* 회사명 — «부국증권 금융투자솔루션» 꼴 데스크명 */
+    50px             /* 전일민평 */
+    54px             /* 할인조정 */
+    44px             /* 수량 */
+    minmax(0, 1fr);  /* 원문 — ★남는 폭은 전부 여기 */
+  --kb-gap: 7px;
 }
-/* ★남는 폭을 «종목명» 이 아니라 «매매» 가 먹는 이유: 1fr 을 종목명에 주면 이름이
- *   짧은 날(대부분이다) 종목명과 매도/매수 사이가 400px 벌어져, 한 행을 읽는 데
- *   눈이 두 번 건너뛴다. 왼쪽 덩이(무엇을·어느 쪽)는 붙이고, 남는 폭은 그 덩이와
- *   오른쪽 덩이(누가·얼마에) 사이에 둔다. 칸 순서는 [OWNER] 가 적은 그대로다. */
+/* ★남는 폭은 «원문» 이 먹는다 [OWNER 2026-09-22 오후]. 다른 칸은 전부 «서식 최대치»
+ *   로 고정한다(시간 08:00:00 · 금리 0.000 · 수량 1000억) — 값이 커져도 칸이 안 밀리고,
+ *   피드가 흐르는 동안 칸 폭이 흔들리지 않는다. 원문은 어차피 잘리므로 남는 폭을
+ *   전부 줘도 «더 보일 뿐» 이지 배치를 흔들지 않는다. */
 .kb-fhead,
 .kb-row {
   display: grid;
   grid-template-columns: var(--kb-cols);
-  gap: 0 8px;
+  gap: 0 var(--kb-gap);
   align-items: baseline;
 }
 .kb-fhead {
@@ -535,7 +538,7 @@
   font-size: 11px; font-weight: 600; color: var(--color-fgMuted);
   white-space: nowrap;
 }
-.kb-row { padding: 4px 0 5px; }
+.kb-row { padding: 3px 0; }
 .kb-fhead .num, .kb-row .num { text-align: right; }
 
 .kb-c {
@@ -544,7 +547,12 @@
 }
 .kb-c.num { font-variant-numeric: tabular-nums; }
 .kb-c.t { font-variant-numeric: tabular-nums; }
-.kb-c.n { font-size: 13px; font-weight: 600; color: var(--color-fg); }
+.kb-c.n { font-size: 12.5px; font-weight: 600; color: var(--color-fg); }
+/* 브로커(사람 이름)·회사명(데스크)은 [OWNER 2026-09-22] 부터 실명이다. 라벨
+ * (K041·H29)보다 길어서 넘치는 것은 자르고 `title` 로 넘긴다 — 칸을 더 주면 원문이
+ * 그만큼 줄어든다. 사람 이름은 한 단 진하게: 이 표에서 «누가» 를 찾는 눈이 먼저 닿는다. */
+.kb-c.who { font-size: 11.5px; color: var(--color-fg); }
+.kb-c.h { font-size: 11px; }
 .kb-c.s { font-size: 12px; font-weight: 600; }
 /* 할인조정 = 이 표에서 눈이 가장 먼저 닿아야 할 값. 민평은 그 기준선이라 한 단 낮다. */
 .kb-c.y { font-size: 13.5px; font-weight: 700; color: var(--color-fg); position: relative; }
@@ -569,14 +577,8 @@
   color: var(--color-fgMuted);
 }
 
-/* 원문 — 3열부터 끝까지. 시간·☆ 아래는 비워 값 줄과 구별한다.
- * ★자른다면 이 줄을 둘 이유가 없다. 원문은 칸값을 «검산» 하는 자리라 길면 접힌다
- *   (서버가 이미 170자에서 끊어 보낸다). 행 높이가 제각각이 되는 값은 치른다. */
-.kb-raw {
-  grid-column: 3 / -1;
-  font-size: 11.5px; line-height: 1.45; color: var(--color-fgMuted);
-  overflow-wrap: anywhere;
-}
+/* 원문 — 마지막 칸. 한 줄로 자르고 나머지는 마우스를 올리면 뜬다(`title`). */
+.kb-c.raw { font-size: 11.5px; }
 
 /* ☆ 는 격자 칸이라 옛 flex 규약(flex:none)이 필요 없다 — 폭은 칸이 준다 */
 .kb-row > .kb-star { padding: 0; justify-self: center; }
