@@ -120,6 +120,7 @@ class FeedRow(BaseModel):
     s: Side | None = None
     y: float | None = None
     bp: float | None = None
+    mp: float | None = Field(None, description="어제자 민평 — 국고·통안은 DB 전일 민평, 크레딧·국주·MBS 는 문면에 적힌 민평")
     a: float | None = None
     asrc: AmountSource | None = None
     atmp: bool | None = None

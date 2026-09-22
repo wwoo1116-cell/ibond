@@ -1213,6 +1213,11 @@ class Book:
             "atmp": bool(d["AtMP"]),
             "a": d["AmountEff"], "asrc": d["AmountSource"],
             "bp": d["SpreadValue"],
+            # ★어제자 민평 [OWNER 2026-09-22 「어제자 해당 종목 민평」]. 문면에 적힌 값을
+            #   기본으로 두고(크레딧·국주·MBS 는 늘 적는다), 국고·통안은 아래 갈래가 DB
+            #   전일 민평으로 덮는다 — 그쪽은 문면에 민평을 안 적고 축약호가로 쓴다.
+            #   ⚠통안 최신물은 민평 적재가 며칠 늦어 «전일» 이 아닐 수 있다(mp31date).
+            "mp": (round(float(d["MPYield"]), 3) if d["MPYield"] is not None else None),
             "d": self._disp(d, broker),
             "raw": mask_raw(raw, _raw_disp(d, broker), _raw_house(d, broker))[:170],
             # ★v8.1 하우스 > 데스크 > 딜러 [OWNER]: 딜러 = 브로커키(전화 한 줄)
@@ -1350,7 +1355,8 @@ class Book:
             self._after_quote("msb", key, entry, d["QuoteRaw"], d["AbsYield"])
             if y is None:
                 self._axis(t, "msb", key, self.msb_names.get(key, key), side, d, broker)
-            self._cur.update({"n": self.msb_names.get(key, key), "code": key, "y": y})
+            self._cur.update({"n": self.msb_names.get(key, key), "code": key, "y": y,
+                              "mp": (round(float(mpv), 3) if mpv is not None else None)})
             return
 
         # ★국딱 = «그날 입찰된 국고채». 만기가 아니라 상태다.
@@ -1421,7 +1427,8 @@ class Book:
                 self._after_quote("ktb", d["BondCode"], entry, d["QuoteRaw"], d["AbsYield"])
             else:
                 self._axis(t, "ktb", d["BondCode"], d["BondCode"], side, d, broker)
-            self._cur.update({"n": d["BondCode"], "code": d["BondCode"], "y": y})
+            self._cur.update({"n": d["BondCode"], "code": d["BondCode"], "y": y,
+                              "mp": (round(float(mp), 3) if mp is not None else None)})
             return
 
         # 크레딧 매도 호가. «원» 단위도 받는다(매도의 65%가 원).
