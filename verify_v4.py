@@ -52,24 +52,41 @@ def main() -> int:
         h, m, s2 = at.split(":")
         T = int(h) * 3600 + int(m) * 60 + int(s2)
     import re as _re
+    # ★[2026-09-22] 가림이 «하나» 가 아니게 됐다. 이름(MASK)과 전화(MASK_TEL)가 따로
+    #   돌아, 이름을 공개해도 원문 서명은 여전히 다시 적힌다. 라벨 모양만 보고 판정하면
+    #   그날 이 파일의 원문 대조가 통째로 0 이 되고(실측 2026-09-22: 테이프 0/95 ·
+    #   국주 0/25 · 피드 0/3000) 리플레이에서는 «실패» 로 뒤집힌다.
+    #   그래서 서버에 직접 묻는다 — 서버가 말하는 것이 라벨 모양보다 정확하다.
     _labs = [d.get("d") for d in (book.get("dealers") or [])[:20] if d.get("d")]
     masked = bool(_labs) and all(_re.fullmatch(r"H\d+-\d+", x) for x in _labs)
+    masked_tel = True
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=10) as r:
+            _hz = json.load(r)
+        masked = bool(_hz.get("masked", masked))
+        masked_tel = bool(_hz.get("masked_tel", True))
+    except Exception:                                    # noqa: BLE001
+        pass                                             # 옛 서버 — 라벨 모양으로 간다
+    # 원문이 «다시 적혔는가». 이름이든 전화든 하나라도 가려져 있으면 서명 괄호가
+    # 서버에서 새로 쓰이므로, 원문을 문자열로 맞출 수 없다.
+    rewritten = masked or masked_tel
     print(f"책 시각 {book['now']} · 검증 기준 {at} · "
-          f"리플레이 {book.get('replay')} · 엄격 {strict} · 가림 {masked}")
+          f"리플레이 {book.get('replay')} · 엄격 {strict} · "
+          f"가림 이름 {masked} · 전화 {masked_tel}")
     if strict:
         assert book["now"] == at, f"책 시계({book['now']})가 검증 기준과 다릅니다"
 
     def note(msg):
         """엄격 모드에서는 실패, 라이브에서는 참고."""
-        if strict and not masked:
+        if strict and not rewritten:
             fails.append(msg)
         else:
             print("    (참고) " + msg)
 
     def note_masked(msg):
-        """가림 모드에서는 원문(raw)·딜러 이름이 라벨로 바뀌어 있어 문자열 대조가
-        서지 않는다. 그 대조는 `--no-mask` 리플레이가 맡고, 여기서는 참고로 남긴다."""
-        if masked:
+        """원문이 다시 적혀 있으면 문자열 대조가 서지 않는다. 그 대조는 `--no-mask`
+        리플레이가 맡고, 여기서는 참고로 남긴다."""
+        if rewritten:
             print("    (가림) " + msg)
         else:
             fails.append(msg)
@@ -163,8 +180,8 @@ def main() -> int:
                                  f"{e['y']} != {want}")
     miss = len(tape) - checked
     print(f"    테이프 {len(tape)}건 중 원문 대조 {checked}건 · 못 찾음 {miss}건"
-          + (" (가림 — 원문이 라벨로 바뀌어 문자열로 못 맞춘다)" if masked else ""))
-    if miss and not masked:
+          + (" (가림 — 원문이 라벨로 바뀌어 문자열로 못 맞춘다)" if rewritten else ""))
+    if miss and not rewritten:
         note(f"A5 테이프 {miss}건을 원문에서 못 찾음")
 
     # ── B. 국민주택 ───────────────────────────────────────────────────
@@ -314,7 +331,7 @@ def main() -> int:
     for t, room, sender, tm, body, d, raw in rows_all:
         # 가림이면 책의 raw 가 서명 자리를 라벨로 바꾼 것이라 원문과 다르다.
         # 그때는 (시각, 방) + «서명을 뗀 앞부분» 으로 맞춘다.
-        k_raw = (KL.split_broker(raw)[1][:60] if masked else raw[:170])
+        k_raw = (KL.split_broker(raw)[1][:60] if rewritten else raw[:170])
         idx[(t, room, k_raw)].append((tm, d, body))
     # /feed.json 백필도 같은 잣대로 본다 (새로고침 뒤 스크롤백의 출처다)
     import urllib.request as _u
@@ -333,7 +350,7 @@ def main() -> int:
     okd = unmatched = 0
     for e in feed:
         key = (e["t"], e["r"],
-               (KL.split_broker(e["raw"])[1][:60] if masked else e["raw"]))
+               (KL.split_broker(e["raw"])[1][:60] if rewritten else e["raw"]))
         cands = idx.get(key)
         if not cands:
             unmatched += 1
@@ -376,10 +393,10 @@ def main() -> int:
             continue
         cands.pop(pick)
         okd += 1
-    print(("    (가림 — 원문 대조는 --no-mask 리플레이가 맡는다) " if masked else "")
+    print(("    (가림 — 원문 대조는 --no-mask 리플레이가 맡는다) " if rewritten else "")
           + f"    원본에서 찾아 대조 {okd}/{len(feed)}"
           + (f" · 원본에 없음 {unmatched}건" if unmatched else ""))
-    if unmatched and not masked:
+    if unmatched and not rewritten:
         note(f"D2 피드 {unmatched}건을 원본에서 못 찾음(스냅샷 이후 도착분 포함)")
 
     # ── E. 교체 책 · 내재 행 ───────────────────────────────────────────
@@ -413,13 +430,13 @@ def main() -> int:
         e = got.get(k)
         if e is None:
             # 가림이면 브로커키가 라벨(K001)이라 키로 못 찾는다 — 면·쌍만 본다
-            if masked:
+            if rewritten:
                 if not any(x["s"] == k[1] and x["pair"] == k[2] for x in swap):
                     note_masked(f"E1 책에 없음: {k} :: {body[:40]}")
                 continue
             note(f"E1 책에 없음: {k} :: {body[:40]}")
             continue
-        if masked:
+        if rewritten:
             okE += 1
             continue
         if e["y"] != lvl:
@@ -501,7 +518,7 @@ def main() -> int:
             d = dict(d, BondCode=book["auction"]["bc"])
         qlog.setdefault(brk, []).append((t, d))
     okF = 0
-    if masked:
+    if rewritten:
         print("    (가림 모드 — 딜러 라벨은 서버와 번호가 다를 수 있어 원문 대조를 건너뛴다."
               " 리플레이는 --no-mask 로 검증한다)")
         inf = []
@@ -637,9 +654,16 @@ def main() -> int:
 
     # ── H. 가림 [OWNER 2026-09-03 「딜러이름이랑 번호는 일단 XXX로」] ──
     #   책 어디에도 실명·전화가 남아 있으면 안 된다. 문자열 전체를 훑는다.
+    #
+    # ★[2026-09-22] 이름을 열었다 [OWNER 「브로커 회사명도 이제 공개로 띄워버려」].
+    #   그래서 이 검정은 «전부 아니면 전무» 가 아니게 됐다. 이름이 열려도 **전화는**
+    #   여전히 0 이어야 하고, 그 확인이 오늘 가장 필요한 확인이다 — 이름 가림을 끄자
+    #   가림이 덮고 있던 전화 셋이 드러났다(회사명 칸의 `5603833` · 브로커 칸의
+    #   `다올 2184-2646` · 원문 서명의 `368-427`). H1 은 `masked_tel` 로,
+    #   H2·H3(실명·라벨 꼴)은 `masked` 로 건다.
     print()
-    if not masked:
-        print("[H] 가림 꺼짐 — 딜러 실명·전화가 그대로 나간다(로컬 확인용)")
+    if not rewritten:
+        print("[H] 가림 전부 꺼짐 — 딜러 실명·전화가 그대로 나간다(로컬 확인용)")
     else:
         # ★딜러가 실릴 수 있는 «자리» 만 본다. 책 전체를 훑으면 국고 정식표기
         #   (서명 XXXX-XXXX) 가 전화번호로, 발행사명(«아이엠캐피탈143-2») 이
@@ -692,12 +716,13 @@ def main() -> int:
         leaked = sorted(n for n in names if n in blob or n in (labels - _iss_labels))
         labs = {d.get("d") for d in (book.get("dealers") or [])}
         bad_lab = sorted(x for x in labs if x and not _re.fullmatch(r"H\d+-\d+", x))
-        print(f"[H] 가림 — 딜러 라벨 {len(labs)}개 · 전화번호꼴 {len(tel)} · 실명 노출 {len(leaked)}")
-        if tel:
+        print(f"[H] 가림(이름 {masked} · 전화 {masked_tel}) — 딜러 라벨 {len(labs)}개 · "
+              f"전화번호꼴 {len(tel)} · 실명 노출 {len(leaked)}")
+        if masked_tel and tel:
             fails.append(f"H1 책에 전화번호꼴이 남아 있음 {len(tel)}건: {sorted(tel)[:5]}")
-        if leaked:
+        if masked and leaked:
             fails.append(f"H2 책에 데스크 실명이 남아 있음 {len(leaked)}건: {leaked[:5]}")
-        if bad_lab:
+        if masked and bad_lab:
             fails.append(f"H3 라벨 꼴이 아닌 딜러명 {len(bad_lab)}건: {bad_lab[:5]}")
 
     # ── [I] 체결 귀속의 공격 방향 (v12) ──────────────────
