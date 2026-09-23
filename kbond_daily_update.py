@@ -7,7 +7,7 @@
 
 동작
   1) (방,날짜) 그룹별 지문(파일명·크기·mtime)을 상태파일과 대조해 더러운 그룹만 고른다.
-     파일이 자라기만 해도 지문이 바뀌므로 16:30 실행이 놓친 꼬리는 다음 실행에서 회수된다.
+     파일이 자라기만 해도 지문이 바뀌므로 오후 실행이 놓친 꼬리는 다음 실행에서 회수된다.
   2) 더러운 그룹만 parse_kbond_logs.parse_group 으로 다시 판다.
      중복 제거가 그룹 안에서 닫히므로 그룹 재파싱은 멱등하다.
   3) 기존 parquet 을 행그룹 단위로 흘려보내며 더러운 (Room,Date) 행을 빼고,
@@ -51,16 +51,22 @@ def say(msg: str) -> None:
         fh.write(line + "\n")
 
 
-def warn_if_unfinished() -> None:
-    """직전 실행이 «완료» 줄 없이 끝났으면 소리 내어 말한다. [2026-09-11]
+def prior_unfinished() -> str | None:
+    """직전 실행이 «완료» 줄 없이 끝났으면 그 «시작» 줄을 돌려준다. [2026-09-11]
 
-    ★왜 — 2026-09-07~09-10 의 16:30 자동 실행이 **넷 다 끊겼는데 아무도 못 봤다**.
+    ★왜 — 2026-09-07~09-10 의 오후 실행(그때는 16:30)이 **넷 다 끊겼는데 아무도 못 봤다**.
       원장은 들어갔고 파생 표(다리·체결·KIS)만 안 만들어진 상태라 화면은 멀쩡했다.
       시작 줄만 보면 도는 것처럼 보인다 — 세야 하는 것은 «완료» 줄이다.
       (PC 가 꺼지면 이 경고도 못 남기므로, 판정은 «다음 실행» 이 한다.)
+
+    ★★반드시 이번 실행의 «시작» 줄을 로그에 쓰기 «전에» 부를 것. [2026-09-16]
+      뒤에 부르면 방금 자기가 쓴 시작 줄을 직전 실행으로 집고, 그 뒤에 완료 줄이
+      있을 리 없어 **항상 참**이 된다. 09-11~09-16 실행 8번 중 경보를 단 7번이
+      전부 그렇게 울렸다(경보가 가리킨 시각 = 자기 자신의 시각). 늘 울리는 경보는
+      읽는 사람을 «무시하도록» 훈련시키므로, 안 울리는 경보보다 나쁘다.
     """
     if not LOG.exists():
-        return
+        return None
     tail = LOG.read_text(encoding="utf-8", errors="replace").splitlines()[-400:]
     start = fin = None
     for line in tail:
@@ -68,9 +74,7 @@ def warn_if_unfinished() -> None:
             start, fin = line, None
         elif "  완료 " in line:
             fin = line
-    if start and not fin:
-        say(f"  [경고] 직전 실행이 «완료» 없이 끝났습니다 — {start[:19]}")
-        say("         파생 표(다리·체결·KIS)가 그때 안 만들어졌을 수 있습니다. 이번 실행이 다시 만듭니다.")
+    return start if (start and not fin) else None
 
 
 # --------------------------------------------------------------- 1. 그룹/지문
@@ -235,9 +239,12 @@ def main() -> int:
     args = ap.parse_args()
 
     t0 = time.time()
+    stale = prior_unfinished()   # ★ 내 «시작» 줄을 쓰기 전에 읽는다 (prior_unfinished 주석)
     say("=" * 66)
     say("K-Bond 증분 갱신 시작")
-    warn_if_unfinished()
+    if stale:
+        say(f"  [경고] 직전 실행이 «완료» 없이 끝났습니다 — {stale[:19]}")
+        say("         파생 표(다리·체결·KIS)가 그때 안 만들어졌을 수 있습니다. 이번 실행이 다시 만듭니다.")
 
     groups = scan_groups()
     state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
