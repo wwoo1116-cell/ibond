@@ -210,8 +210,51 @@
 .kb-pill.on { color: inherit; font-weight: 600; border-color: currentColor; background: var(--sr-control); }
 
 .kb-curve, .kb-pulse { display: block; width: 100%; height: auto; padding: 8px 4px 0; }
+/* ★격자·축은 «실선» 헤어라인이다. 점선 격자는 «추정치·문턱» 으로 읽혀서, 그냥
+ *   눈금인 것에 없는 뜻을 붙인다. 한 단 뒤로 물러나 있어야 점이 앞에 선다. */
 .kb-grid { stroke: var(--color-bgLine); stroke-width: 1; }
-.kb-axis { fill: var(--color-fgMuted); font-size: 10px; }
+.kb-grid.v { opacity: .55; }
+.kb-axis { fill: var(--color-fgMuted); font-size: 10px; font-variant-numeric: tabular-nums; }
+
+/* ═══ 커브(잔존×YTM) 상호작용 [OWNER 2026-09-23 「인터렉션도 없고」] ═══ */
+.kb-curvewrap { position: relative; }
+.kb-curve:focus-visible { outline: 2px solid var(--color-bgPrimary, #1652f0); outline-offset: -2px; }
+/* 십자선 — 집힌 점의 자리를 축까지 잇는다. 격자보다 진하되 점보다는 옅다. */
+.kb-xhair line { stroke: var(--color-fgMuted); stroke-width: 1; opacity: .45; }
+/* 집힌 점은 «들린다» — 커지고, 면색 고리를 둘러 겹친 점들 사이에서 떠오른다.
+   ★고리는 테두리가 아니라 «바탕색» 이다: 마크를 가르는 데는 선이 아니라 틈을 쓴다. */
+.kb-pt.on { stroke: var(--sr-card); stroke-width: 2; opacity: 1; }
+
+/* 범례 — 2계열 이상이면 늘 선다(색만으로 말하지 않기). 차트 «위» 한 줄. */
+.kb-legend {
+  display: flex; flex-wrap: wrap; gap: 4px 12px;
+  padding: 6px 12px 0; font-size: 10.5px; color: var(--color-fgMuted);
+}
+.kb-legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.kb-legend .sw { display: inline-block; flex: none; }
+.kb-legend .sw.line { width: 12px; height: 0; border-top: 2px solid var(--color-fgMuted); }
+.kb-legend .sw.line.gr { border-top-style: dashed; border-top-color: var(--sr-up); }
+.kb-legend .sw.dot { width: 6px; height: 6px; border-radius: 50%; }
+.kb-legend .sw.dot.up { background: var(--sr-up); }
+.kb-legend .sw.dot.dn { background: var(--sr-down); }
+
+/* 말풍선 — ★값이 앞, 이름이 뒤. 읽는 사람은 종목을 알고 «수» 를 원한다.
+   포인터를 따라다니지만 점을 가리지 않게 좌우로 비켜선다(컴포넌트가 정한다). */
+.kb-tip {
+  position: absolute; z-index: 4; pointer-events: none;
+  min-width: 108px; padding: 5px 8px; border-radius: 6px;
+  background: var(--sr-card); border: 1px solid var(--color-bgLine);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 14%);
+  font-size: 11px; line-height: 1.5; color: var(--color-fgMuted);
+}
+.kb-tip b {
+  display: block; font-size: 15px; font-weight: 700; color: var(--color-fg);
+  font-variant-numeric: tabular-nums;
+}
+.kb-tip em { display: block; font-style: normal; color: var(--color-fg); }
+.kb-tip .up { color: var(--sr-up); }
+.kb-tip .dn { color: var(--sr-down); }
+.kb-tip .ttm { font-variant-numeric: tabular-nums; }
 .kb-mpline, .kb-prevline { fill: none; stroke: var(--color-fgMuted); stroke-width: 1.5; opacity: .55; }
 .kb-pt { fill: var(--color-fgMuted); opacity: .75; }
 .kb-pt.up { fill: var(--sr-up); }

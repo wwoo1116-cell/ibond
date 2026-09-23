@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text } from '@coinbase/cds-web/typography';
 
 import { getView } from '@/lib/api';
+import { Curve } from '@/components/Curve';
 import { Heat } from '@/components/Heat';
 import type { FeedRow, TtlMode, View } from '@/lib/api';
 
@@ -34,108 +35,6 @@ const hms = (s?: number | null) => {
   const p2 = (n: number) => String(n).padStart(2, '0');
   return `${p2(Math.floor(s / 3600) % 24)}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`;
 };
-
-/** 잔존×YTM 산점도. 서버가 준 점과 민평선을 좌표로만 옮긴다. */
-function Curve({ curve, grade, range }: {
-  curve: NonNullable<View['curve']>;
-  grade?: View['grade_curve'];
-  /** x축 상한(년). 0 이면 전체. 옛 화면 `crvRange` 와 같은 뜻이고 기본도 같은 10년이다.
-   *  ★없으면 국고 50년물 하나가 축을 48년까지 늘려 나머지 점이 왼쪽에 뭉갠다. */
-  range: number;
-}) {
-  const W = 560;
-  const H = 260;
-  const pad = { l: 44, r: 10, t: 12, b: 24 };
-  /* ★`?? []` 는 매 렌더 새 배열을 만든다 — 그대로 useMemo 의존성에 넣으면
-     메모가 매번 다시 돈다(린트가 잡았다). 파생값도 메모로 감싼다. */
-  const line = useMemo(
-    () => ((curve.mp_line ?? []) as number[][]).filter((p) => !range || (p[0] ?? 0) <= range),
-    [curve, range],
-  );
-  const pts = useMemo(
-    () =>
-      ((curve.offers ?? []) as { ttm?: number; ytm?: number; bpe?: number; n?: string }[]).filter(
-        (p) => !range || (p.ttm ?? 0) <= range,
-      ),
-    [curve, range],
-  );
-
-  const box = useMemo(() => {
-    const xs: number[] = [];
-    const ys: number[] = [];
-    for (const p of pts) {
-      if (p.ttm != null) xs.push(p.ttm);
-      if (p.ytm != null) ys.push(p.ytm);
-    }
-    for (const p of line) {
-      if (p[0] != null) xs.push(p[0]);
-      if (p[1] != null) ys.push(p[1]);
-    }
-    /* ★등급 커브는 축을 «지배하면» 안 된다 — 20년까지 뻗어 있어 범위에 넣으면
-       실제 호가 산점도가 좌하단으로 눌린다(실측). 범위는 호가와 민평선으로만
-       잡고, 커브는 그 범위 안으로 잘라 그린다. */
-    if (!xs.length || !ys.length) return null;
-    const x0 = 0;
-    const x1 = range || Math.max(...xs) || 1;
-    let y0 = Math.min(...ys);
-    let y1 = Math.max(...ys);
-    const m = (y1 - y0) * 0.08 || 0.05;
-    y0 -= m;
-    y1 += m;
-    return { x0, x1, y0, y1 };
-  }, [pts, line, range]);
-
-  if (!box) return <div className="kb-empty">그릴 점이 없습니다</div>;
-  const px = (x: number) => pad.l + ((x - box.x0) / (box.x1 - box.x0 || 1)) * (W - pad.l - pad.r);
-  const py = (y: number) => H - pad.b - ((y - box.y0) / (box.y1 - box.y0 || 1)) * (H - pad.t - pad.b);
-
-  const path = line
-    .filter((p) => p[0] != null && p[1] != null)
-    .map((p, i) => `${i ? 'L' : 'M'}${px(p[0]).toFixed(1)},${py(p[1]).toFixed(1)}`)
-    .join(' ');
-
-  /* 등급 커브 — 서버가 `credit_matrix` 최신 한 벌에서 골라 준 것이다. */
-  const gradePath = (grade?.pts ?? [])
-    .filter((p) => p.ttm <= box.x1 && p.y >= box.y0 && p.y <= box.y1)
-    .map((p, i) => `${i ? 'L' : 'M'}${px(p.ttm).toFixed(1)},${py(p.y).toFixed(1)}`)
-    .join(' ');
-
-  const yTicks = [box.y0, (box.y0 + box.y1) / 2, box.y1];
-  const xTicks = [0, box.x1 / 2, box.x1];
-
-  return (
-    <svg className="kb-curve" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="잔존 대 YTM">
-      {yTicks.map((y) => (
-        <g key={`y${y}`}>
-          <line x1={pad.l} x2={W - pad.r} y1={py(y)} y2={py(y)} className="kb-grid" />
-          <text x={pad.l - 6} y={py(y) + 3} className="kb-axis" textAnchor="end">
-            {y.toFixed(2)}
-          </text>
-        </g>
-      ))}
-      {xTicks.map((x) => (
-        <text key={`x${x}`} x={px(x)} y={H - 8} className="kb-axis" textAnchor="middle">
-          {ttmTxt(x)}
-        </text>
-      ))}
-      {path ? <path d={path} className="kb-mpline" /> : null}
-      {gradePath ? <path d={gradePath} className="kb-gradeline" /> : null}
-      {pts.map((p, i) =>
-        p.ttm == null || p.ytm == null ? null : (
-          <circle
-            key={i}
-            cx={px(p.ttm)}
-            cy={py(p.ytm)}
-            r={3}
-            className={`kb-pt ${p.bpe == null ? '' : p.bpe < 0 ? 'dn' : 'up'}`}
-          >
-            <title>{`${p.n ?? ''} · 잔존 ${ttmTxt(p.ttm)} · ${n3(p.ytm)}${p.bpe != null ? ` · 민평대비 ${sbp(p.bpe)}bp` : ''}`}</title>
-          </circle>
-        ),
-      )}
-    </svg>
-  );
-}
 
 export function Credit({ ttl, onTtl, feed = [] }: {
   ttl: TtlMode;
