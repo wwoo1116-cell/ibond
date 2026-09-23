@@ -59,6 +59,7 @@ from enrich_kbond_quotes import (MSB_ORDER, MSB_SLANG, RE_MP_FRAC, engine,   # n
 from parse_kbond_logs import RE_LIST_FRAC, split_broker                # noqa: E402
 import kbond_issuer                                                   # noqa: E402
 import kbond_catcall                                                    # noqa: E402
+import kbond_price                                                      # noqa: E402
 from kbond_legs import split_legs                                       # noqa: E402
 
 HOST, PORT = "127.0.0.1", 8301
@@ -164,6 +165,34 @@ COND = threading.Condition()
 #   ⚠STATE["lock"] 과 «다른» 자물쇠다 — 저건 스냅샷 «결과» 를 지키고,
 #     이건 책 «자체» 를 지킨다. 둘을 하나로 합치면 굽는 동안 /health 가 막힌다.
 ENGINE_LOCK = threading.RLock()
+
+# ─────────────────────────────── 단가 [OWNER 2026-09-23 「주문표에 단가도 같이」]
+#   금리를 «원» 으로 바꾼다. 규약과 정답지는 `kbond_price.py` 와 `test_price.py`.
+#
+#   ★★★결제일을 «당일(T)» 로 둔다 — 고른 것이 아니라 «정확히 계산되는 쪽» 이다.
+#     장외 국채 관행은 익일결제지만, T+1 은 «다음 영업일» 이라 **휴일표가 있어야**
+#     한다. 이번 주가 정확히 그 함정이다 — 2026-09-23 의 익일결제는 09-24 가
+#     아니라 **09-28** 이다(09-24~27 추석 연휴). 요일만 세는 T+1 은 이번 주에
+#     그냥 틀린다. DB 에 휴일표가 없으므로 지어내지 않고 T 로 둔다.
+#   ⚠그래서 화면은 칸 머리글에 «단가(T)» 라고 «어느 결제일인지» 를 적는다. 안 적으면
+#     그 숫자는 읽는 사람마다 달라진다(국고16-8: T 10006.54 대 T+1 10010.90, 4원 차).
+#   휴일표가 붙으면 SETTLE_MODE = "T+1" 한 줄이다.
+SETTLE_MODE = "T"
+
+
+def settle_date():
+    """단가의 결제일. 리플레이면 그날로 센다."""
+    if REPLAY:
+        return date(int(REPLAY[:4]), int(REPLAY[4:6]), int(REPLAY[6:]))
+    return date.today()
+
+
+# ★크레딧 쿠폰 — 문면에 적힌 것만 [OWNER 2026-09-23 「다른 채권들도 분기당으로」]
+#   «민 3.009, 끝전.14, AA+, 쿠폰 2.562» · «쿠.90» · «쿠폰 2.88%» · «표면 3.5»
+#   ⚠2026-08 이후 실측: 비국고/통안 408,928행 중 문면에 쿠폰이 있는 것은 **4.2%**
+#     뿐이다(만기는 88.6%). 그래서 쿠폰은 «있으면 쓰고 없으면 가정» 이다 — 아래
+#     `_credit_spec` 주석 참조.
+RE_COUPON = re.compile(r"(?:쿠폰|표면|쿠)\s*\.?\s*:?\s*(\d{1,2}\.\d{1,4})\s*%?")
 
 
 # ★★★축약호가 복원을 «같은 물음» 마다 다시 묻지 않는다 [2026-09-23].
@@ -1313,10 +1342,12 @@ class Book:
         legs = message_legs(body, ymd, d)
         if len(legs) == 1:
             self._feed_one(room, sender, t, legs[0][0], legs[0][1], body)
+            self._price_cur(legs[0][1], legs[0][0])   # ★단가·검산은 «다 채운 뒤» 에
             return
         for text, dl in legs:
             self._booked, self._last_d = False, dl
             self._feed_one(room, sender, t, text, dl, body)
+            self._price_cur(dl, text)
             self._block_unbooked(sender, t)      # v8 차단자도 다리마다
         self._last_d = None                      # feed() 의 마무리 호출은 무효
 
@@ -1674,6 +1705,139 @@ class Book:
             self._after_quote("cr", str(label)[:14], self.credit[(broker, label, side)],
                               d["QuoteRaw"], d["AbsYield"])
             self._cur.update({"n": str(label)[:16], "y": ytm, "lvl": lvl})
+
+    def _credit_spec(self, row, body):
+        """★크레딧 제원을 «가정» 으로 세운다 [OWNER 2026-09-23 「다른 채권들도 일단은
+        기본적으로 분기당 이자지급으로」]. 반환 (Spec|None, 쿠폰을_가정했나).
+
+        재료가 둘인데 하나만 있다 —
+          만기  문면에 88.6% 적힌다(`d["Maturity"]`). 이건 «자료» 다.
+          쿠폰  문면에 **4.2%** 뿐이다(2026-08 이후 408,928행 실측). 이건 «가정» 이다.
+
+        ★쿠폰을 «전일 민평과 같다» 고 둔다. 왜 이 가정이 쓸 만한가 —
+          데스크가 실제로 읽는 값은 단가 자체가 아니라 **수정가액(민평 대비 원)** 인데,
+          그 값은 쿠폰이 아니라 **듀레이션** 이 정한다. 쿠폰=민평이면 민평 단가가 정확히
+          액면이 되어 «민평에서 몇 원 떨어졌나» 가 바로 읽힌다. 쿠폰을 2%p 틀리게 잡아도
+          듀레이션은 2~3%밖에 안 움직이므로 수정가액의 오차도 그만큼이다.
+        ⚠그 대신 **단가의 «절대 수준» 은 믿을 것이 못 된다** — 액면 언저리로 나온다.
+          그래서 `pxa`(가정) 를 같이 실어 화면이 그 사실을 말하게 한다.
+        ⚠문면에 쿠폰이 적혀 있으면 가정하지 않고 그 값을 쓴다. 그 4.2%는 진짜다.
+        """
+        mat = row.get("mat")
+        spec_mat = None
+        if mat:
+            try:
+                y_, m_, d_ = (int(x) for x in mat.split("-"))
+                spec_mat = date(y_, m_, d_)
+            except Exception:                              # noqa: BLE001
+                spec_mat = None
+        if spec_mat is None:
+            return None, False
+        hit = RE_COUPON.search(body or "")
+        if hit:
+            try:
+                return (kbond_price.Spec(
+                    key=str(row.get("code") or row.get("n") or ""),
+                    name=str(row.get("n") or ""), maturity=spec_mat,
+                    coupon=float(hit.group(1)), m=4, kind="이표채"), False)
+            except Exception:                              # noqa: BLE001
+                pass
+        # ★[OWNER 2026-09-23] 「쿠폰은 그거 쓰는거 아니야 · 쿠폰은 붙일 필요 없어」
+        #   → 「분기로 하셈 일단은 · 이상하면 트레이더한테 물어가면서 컨벤션 고칠거야」
+        #   쿠폰이 없어도 되는 꼴로 간다 — 분기복리 할인(`price_zero_quarterly`).
+        #   전에 여기서 «쿠폰 = 전일 민평» 으로 지어냈다가 물렀다. 지어낸 쿠폰으로
+        #   낸 단가는 빈칸보다 나쁘다 — 빈칸은 모른다고 말하지만 지어낸 수는 안다고
+        #   말한다. 이 꼴은 «모르는 것을 안 쓰는» 쪽이다.
+        return (kbond_price.Spec(
+            key=str(row.get("code") or row.get("n") or ""),
+            name=str(row.get("n") or ""), maturity=spec_mat,
+            coupon=0.0, m=4, kind="분기할인"), True)
+
+    def _price_cur(self, d=None, body=""):
+        """★피드 행에 단가(`px`)·수정가액(`won`)·검산(`chk`) 을 싣는다 [OWNER 2026-09-23].
+
+        ★«다 채운 뒤» 에 부른다. `_cur` 은 `_feed_one` 의 갈래들이 계속 고치는
+          같은 객체라(`stream.append` 뒤에도 바뀐다) 중간에 값매기면 종목·금리가
+          아직 안 들어와 있다. 그래서 `feed()` 가 `_feed_one` 을 마치고 부른다.
+
+        [OWNER] 「단가 = 수정가액 = 실제 금리가 정합한지 확인하는거야. 그래야
+        트레이더가 이를 보고 신뢰해서 따로 원 계산기 안 돌려도 되는거니까」
+
+        비우는 자리 — 크레딧·물가연동국채·STRIPS·만기 지난 종목. 제원이 없으면
+        `spec_of` 가 None 을 주고 여기서 멈춘다. **지어내지 않고 비운다.**
+        """
+        row = self._cur
+        if not row:
+            return
+        code = row.get("code")
+        spec = kbond_price.spec_of(code)
+        if spec is None and code:
+            # ★통안은 피드 `code` 가 ISIN 이 아니라 «만기일 키» 다(2028-07-02).
+            #   제원표는 표준코드로 서 있으므로 책이 이미 들고 있는 사다리로 옮긴다.
+            #   이걸 빼먹으면 통안 309행이 통째로 빈칸이 된다(09-23 실측).
+            spec = kbond_price.spec_of(self.msb_isin.get(code))
+        if spec is None and row.get("sec") == "통안":
+            # ★통안 할인채(DC 91·182일)는 DB 어디에도 없다 — 이표채 마스터를 먼저
+            #   다 뒤진 «뒤» 에만 온다. 할인채는 쿠폰이 없어 만기일 하나로 선다.
+            spec = kbond_price.discount_spec(code, row.get("n"))
+        s = settle_date()
+        # ★국고·통안이 아니면 만기가 문면에서 온다 — 제원을 세우기 «전에» 적어 둔다.
+        if spec is None and d is not None and d.get("Maturity"):
+            ts = maturity_to_ts(d["Maturity"])
+            if ts is not pd.NaT and ts is not None:
+                try:
+                    row["mat"] = ts.date().isoformat()
+                except Exception:                          # noqa: BLE001
+                    pass
+        assumed = False
+        if spec is None:
+            spec, assumed = self._credit_spec(row, body)
+        if spec is None:
+            if row.get("mat"):                             # 만기는 알아도 값은 못 낸다
+                row["ttm"] = round(
+                    (date.fromisoformat(row["mat"]) - s).days / 365.0, 2)
+            return
+        # ★만기일과 잔존은 값(금리)이 없어도 적는다 [OWNER 2026-09-23] — 종목의
+        #   속성이지 호가의 속성이 아니다. 관심·문의 행에도 선다.
+        row["mat"] = spec.maturity.isoformat()
+        row["ttm"] = round((spec.maturity - s).days / 365.0, 2)
+        if assumed:
+            row["pxa"] = 1                                 # 쿠폰을 가정했다 — 화면이 말한다
+        # ★값이 없으면 «민평 그 자리» 를 쓴다 [OWNER 2026-09-23 「값 없어도 할인조정
+        #   없어도 적어줘야지」]. 그 행에 호가는 없지만 종목은 있고, 종목이 있으면
+        #   오늘 그 종목이 얼마짜리인지는 말할 수 있다. 무엇을 기준으로 냈는지는
+        #   `pxb` 로 같이 싣는다 — 호가 단가와 민평 단가를 눈으로 못 가르면 안 된다.
+        y, mp = row.get("y"), row.get("mp")
+        if mp is None:
+            # ★행에 민평이 안 실렸어도 «책은 들고 있다» [OWNER 2026-09-23 「값 없어도
+            #   적어줘야지」]. AXE·문의는 값을 안 적으니 `_cur["mp"]` 가 비는데,
+            #   종목이 정해진 이상 그 종목의 전일 민평은 아침에 이미 받아 뒀다.
+            #   실측 09-23: 국고·통안 «제원은 있는데 값이 없는» 행이 322건이었다.
+            #   ⚠행의 `mp` 칸은 «문면·DB 가 그 행에 준 값» 이라 여기서 덮지 않는다 —
+            #     화면의 «전일민평» 칸은 지금까지와 같은 뜻으로 남아야 한다.
+            ref = self.mp.get(code)
+            if ref is None:
+                ref = self.mp31.get(self.msb_isin.get(code) or code)
+            if ref is not None:
+                mp = round(float(ref), 3)
+        base, basis = (y, "q") if y is not None else (mp, "mp")
+        try:
+            if base is not None:
+                px = kbond_price.price(spec, float(base), s)
+                if px is not None:
+                    row["px"] = round(px, 2)
+                    row["pxs"] = SETTLE_MODE          # 어느 결제일인지 같이 싣는다
+                    row["pxb"] = basis
+            if y is not None and mp is not None:
+                won = kbond_price.won_of(spec, float(y), float(mp), s)
+                if won is not None:
+                    row["won"] = round(won, 2)        # 수정가액 — 민평 대비 원
+                ox, _ = kbond_price.crosscheck(spec, float(y), float(mp), s)
+                if ox:
+                    row["chk"] = ox
+        except Exception as e:                        # noqa: BLE001
+            # 값 하나 때문에 책이 멈출 이유는 없다 — 비우고 넘어간다.
+            log(f"[단가 오류] {type(e).__name__}: {e} :: {row.get('code')}")
 
     # ── v8 다이나믹스 헬퍼 ───────────────────────────────────────────
     def _pulse(self, t, mt, sec):

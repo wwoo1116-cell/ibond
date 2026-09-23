@@ -121,6 +121,16 @@ class FeedRow(BaseModel):
     y: float | None = None
     bp: float | None = None
     mp: float | None = Field(None, description="어제자 민평 — 국고·통안은 DB 전일 민평, 크레딧·국주·MBS 는 문면에 적힌 민평")
+    # ★단가 [OWNER 2026-09-23]. 규약·정답지는 kbond_price.py / test_price.py.
+    #   크레딧·물가채·STRIPS 는 제원이 없어 비운다 — 지어내지 않는다.
+    px: float | None = Field(None, description="단가 — 액면 10,000원당. 관행적 복할인(국고·외평 06M · 통안 03M)")
+    pxs: str | None = Field(None, description="단가의 결제일 규약 — 'T'(당일) 또는 'T+1'(익일). 휴일표가 없어 지금은 T")
+    pxb: str | None = Field(None, description="단가의 기준 — 'q'(이 행의 할인조정) 또는 'mp'(값이 없어 전일 민평으로 냄)")
+    mat: str | None = Field(None, description="만기일 YYYY-MM-DD — 종목의 속성이라 값이 없는 행에도 선다")
+    ttm: float | None = Field(None, description="잔존 연수 — 결제일 기준")
+    pxa: int | None = Field(None, description="1이면 쿠폰을 «전일 민평과 같다»고 가정해 낸 단가 — 절대 수준은 믿지 말 것(수정가액은 쓸 만하다)")
+    won: float | None = Field(None, description="수정가액 — 전일 민평 대비 «원». +원 = 단가 비쌈 = 금리 낮음")
+    chk: str | None = Field(None, description="검산 O/X — 단가·수정가액·실제 금리가 서로 닫히는가. 못 재면 비운다")
     a: float | None = None
     asrc: AmountSource | None = None
     atmp: bool | None = None

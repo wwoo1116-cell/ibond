@@ -46,7 +46,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent))
-import kbond_live as KL                                          # noqa: E402
+import kbond_live as KL
+import kbond_price                                          # noqa: E402
 import kbond_view as KV                                          # noqa: E402
 from kbond_schema import (Basket, CreditQuote, Dealer, Event, FeedRow,   # noqa: E402
                           Fill, Quote, Swap, View)
@@ -164,7 +165,11 @@ def health(t: str | None = None):
             "masked": KL.MASK, "masked_tel": KL.MASK_TEL, "engine": "fastapi",
             # ★절전판이 실제로 아끼고 있는지 밖에서 볼 수 있게 [2026-09-23].
             #   clients=0 인데 ver 이 계속 오르면 절약이 안 되고 있다는 뜻이다.
-            "clients": clients, "dirty": dirty}
+            "clients": clients, "dirty": dirty,
+            # ★단가 계산의 «가정» 을 밖에서 읽을 수 있게 [2026-09-23]. 화면이 이걸
+            #   보고 알림 줄을 띄운다 — 가정을 안 적으면 읽는 사람은 시장 값인 줄 안다.
+            "px_settle": KL.SETTLE_MODE,
+            "px_assume_quarterly": kbond_price.ASSUME_QUARTERLY}
 
 
 @app.get("/book.json")
