@@ -228,8 +228,15 @@ def api_view(t: str | None = None, lane: str = "ktb", ttl: str = "def",
 
 
 @app.get("/events")
-async def events(request: Request, t: str | None = None):
-    """SSE. 책이 바뀔 때만 민다. 15초 조용하면 하트비트(끊김 오인 방지)."""
+async def events(request: Request, t: str | None = None, lite: int = 0):
+    """SSE. 책이 바뀔 때만 민다. 15초 조용하면 하트비트(끊김 오인 방지).
+
+    ★`lite=1` 이면 «화면이 실제로 읽는 것» 만 민다 — now·n_msg·n_seq·feed.
+      [OWNER 2026-09-23 「렉이 미친듯이 걸림」] 책이 1.2MB 인데 매초 통째로
+      밀고 있었고, 새 화면이 그 프레임에서 쓰는 건 feed 와 n_msg 둘뿐이었다.
+      나머지를 매초 JSON.parse 하고 버리던 것이 렉이었다.
+      ⚠기본(lite=0)은 그대로 둔다 — 옛 화면(/)은 프레임 전체를 읽는다.
+    """
     if not KL.token_ok(t):
         return Response(status_code=401)
 
@@ -244,7 +251,8 @@ async def events(request: Request, t: str | None = None):
                 if await request.is_disconnected():
                     return
                 with KL.STATE["lock"]:
-                    ver, raw = KL.STATE["ver"], KL.STATE["raw"]
+                    ver = KL.STATE["ver"]
+                    raw = KL.STATE["raw_lite"] if lite else KL.STATE["raw"]
                 if ver != sent:
                     sent = ver
                     yield b"data: " + raw + b"\n\n"

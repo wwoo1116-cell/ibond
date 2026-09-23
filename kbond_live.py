@@ -77,6 +77,8 @@ POLL_S = 0.4
 # ★굽는 주기의 하한. SSE 가 1초에 한 번 읽으므로 그보다 자주 구울 이유가 없다.
 #   먹이는 주기(POLL_S)와 «다른 것» 이다 — 굽는 삯만 아끼고 체결 시각은 안 민다.
 PUBLISH_MIN_S = 1.0
+# ★SSE 가벼운 프레임이 나르는 피드 꼬리 길이. 화면은 /feed.json 으로 따로 채운다.
+SSE_TAIL = 60
 VIEWER = Path(__file__).parent / "kbond_live.html"
 TTL_DEFAULT = {"ktb": 1800, "credit": 7200}      # 리서치 결과 (독스트링)
 # 크레딧 책에 합류하는 계열 [OWNER 2026-09-07 「저것도 책 경로 열어주고」].
@@ -156,7 +158,8 @@ def log(msg):
 #     STATE["publish"] 는 start_engine 이 꽂는다(HTTP 가 게으르게 부를 수 있게).
 STATE = {"lock": threading.Lock(), "book": {}, "raw": b"{}", "ver": 0,
          "t0": time.time(), "last_evt": 0.0, "stream": [],
-         "clients": 0, "dirty": False, "built": 0.0, "publish": None}
+         "clients": 0, "dirty": False, "built": 0.0, "publish": None,
+         "raw_lite": b"{}"}
 COND = threading.Condition()
 # ★★★책을 만지는 스레드는 «한 번에 하나» 다 [2026-09-23].
 #   2026-09-23 절전판 전에는 book 을 만지는 곳이 폴 스레드 하나뿐이라 자물쇠가
@@ -216,6 +219,60 @@ RATING_ORDER = ["AAA", "AA+", "AA0", "AA-", "A+", "A0", "A-", "BBB+", "BBB0", "B
 def rating_rank(r):
     r = (r or "").split("(")[0]
     return RATING_ORDER.index(r) if r in RATING_ORDER else None
+
+
+# ★★★0.25bp 격자 — 세트호가가 서는 자리 [OWNER 2026-09-23]
+#
+# [OWNER] 「걍 호가를 0.25bp씩 최소단위로 두면 해결되는 문제아닐까?」 — 맞다.
+#
+# 2026-09-23 실측(국고·통안 레벨 145,952행): 마지막 자리(0.1bp)가 **0 또는 5 인
+# 것이 95.02%** 다. 나머지는 0.43~0.79%씩 고르게 흩어져 잡음이다. 즉 지금 격자는
+# 0.5bp 다. 그런데 **0.25bp 는 소수 셋째 자리로 적을 수가 없다**:
+#     0.5bp  = 0.005%  -> X.405    세 자리로 써진다
+#     0.25bp = 0.0025% -> X.4075   네 자리가 필요하다
+# 축약호가는 두세 자리(«405»·«41»)다. 그래서 **딜러는 0.25bp 자리를 한 수로 적을
+# 방법이 없고**, 그 자리를 말하려고 두 다리로 적는다 — 그게 세트호가다.
+#
+# 그래서 세트 중간값은 «아무도 낸 적 없는 값» 이 아니라 **적을 수 없었을 뿐인 값**
+# 이다(이 판단을 09-23 오후에 한 번 뒤집었다 — 처음엔 중간값을 책에 넣지 말자고
+# 했었다). 설명이 맞아떨어지는 자리가 넷이다:
+#   · 세트가 늘 0.5bp 짝인 이유      — 이웃한 두 격자점이라서(99.1% 실측)
+#   · 단독 호가가 «사이»에 선 적 0%  — 0.25bp 는 적을 수가 없어서
+#   · 혼자 말할 땐 자기 쪽 다리       — 적을 수 있는 두 점 중 유리한 쪽
+#     (팔자 앞다리 53.4% · 사자 뒷다리 69.4%, n≈4,000씩)
+#
+# ⚠전 코드의 round(...,3) 25곳을 4자리로 바꾸지 «않는다». 그 반올림은 자리수를
+#   줄이는 일만 하는 게 아니라 복원값을 0.5bp 격자에 **스냅**하는 일을 겸한다.
+#   블랭킷으로 4자리로 열면 그 스냅이 사라져 잡음이 격자로 올라온다.
+#   대신 여기서 «0.25bp 격자로 스냅» 하나를 만들고 세트 자리에만 건다.
+QTICK = 0.0025                        # 0.25bp
+
+
+def lvl_q(v):
+    """0.25bp 격자로 스냅. 0.5bp 값은 그대로 돌아온다(X.405 -> X.405)."""
+    if v is None:
+        return None
+    return round(round(float(v) / QTICK) * QTICK, 4)
+
+
+def set_mid(lo, hi, mpv):
+    """세트 두 다리를 복원해 «중간값» 을 돌려준다. 못 하면 None.
+
+    ★금리 공간에서 잰다 — 파서는 중간값을 문자열로 못 싣는다(«522.5» 는 restore
+      의 handle2/3 규약에 없는 꼴이다). 그래서 두 다리를 각각 복원한 뒤 여기서
+      가운데를 잡는다.
+    ⚠간격이 0.5bp 가 아니면 세트가 아니다(«한국동서발전 / 한국전력 세트 팔자»
+      처럼 종목 둘을 묶는 세트가 따로 있다). 그때는 None 을 준다.
+    """
+    if lo is None or hi is None or mpv is None:
+        return None
+    a = _restore_memo(str(lo), float(mpv))
+    b = _restore_memo(str(hi), float(mpv))
+    if a is None or b is None:
+        return None
+    if abs(abs(b - a) - 0.005) > 1e-6:         # 0.5bp 짝이 아니면 세트가 아니다
+        return None
+    return lvl_q((a + b) / 2.0)
 
 
 # ───────────────────────── 통안 민평을 «커브에서» 붙인다 [OWNER 2026-09-23]
@@ -1565,7 +1622,8 @@ class Book:
                 return
             mpv = self.mp31.get(isin)
             y = None
-            if d["QuoteRaw"] is not None and mpv is not None:
+            y = set_mid(d["QuoteRawLo"], d["QuoteRawHi"], mpv)   # ★세트 중간값 먼저
+            if y is None and d["QuoteRaw"] is not None and mpv is not None:
                 arr, _ = restore(pd.Series([d["QuoteRaw"]]), pd.Series([mpv]))
                 y = None if np.isnan(arr[0]) else round(float(arr[0]), 3)
             if y is None and d["AbsYield"] is not None:
@@ -1635,7 +1693,8 @@ class Book:
         if d["Sector"] == "국고" and d["BondCode"]:
             y = None
             mp = self.mp.get(d["BondCode"])
-            if d["QuoteRaw"] is not None and mp is not None:
+            y = set_mid(d["QuoteRawLo"], d["QuoteRawHi"], mp)    # ★세트 중간값 먼저
+            if y is None and d["QuoteRaw"] is not None and mp is not None:
                 arr, _ = restore(pd.Series([d["QuoteRaw"]]), pd.Series([mp]))
                 y = None if np.isnan(arr[0]) else round(float(arr[0]), 3)
             if y is None and d["AbsYield"] is not None:
@@ -2817,9 +2876,25 @@ def start_engine(at=None, seed_prev_day=True):
         with ENGINE_LOCK:                      # 먹이기와 겹치지 않게
             snap = book.snapshot()
         raw = json.dumps(snap, ensure_ascii=False).encode("utf-8")
+        # ★★★가벼운 프레임 [OWNER 2026-09-23 「렉이 미친듯이 걸림」].
+        #   책이 1.2MB 인데 SSE 가 그걸 매초 통째로 밀고 있었다. 그런데 새 화면이
+        #   그 프레임에서 «실제로 읽는 것» 은 feed 와 n_msg 둘뿐이다(page.tsx).
+        #   나머지 1.15MB 를 매초 JSON.parse 하고 버린다 — 그게 렉이었다.
+        #   ⚠옛 화면(/)은 프레임 전체를 읽으므로 기본은 그대로 두고, 새 화면만
+        #     `/events?lite=1` 로 이 작은 것을 받는다. 한쪽을 고치며 다른 쪽을
+        #     조용히 깨뜨리지 않는다.
+        #   ★꼬리를 짧게 — 화면은 접속할 때 /feed.json 으로 3,000행을 따로 채우므로
+        #     SSE 는 «그 뒤로 새로 온 것» 만 나르면 된다. 오늘 메시지가 초당 0.4개라
+        #     (9,678건 ÷ 7.5시간) 60행이면 3분 멎어도 안 빠진다. 250행을 매초 보내면
+        #     245행이 버려진다 — 105KB 대 25KB 의 차이다.
+        lite = json.dumps({
+            "now": snap.get("now"), "n_msg": snap.get("n_msg"),
+            "n_seq": snap.get("n_seq"), "feed": (snap.get("feed") or [])[-SSE_TAIL:],
+        }, ensure_ascii=False).encode("utf-8")
         with STATE["lock"]:
             STATE["book"] = snap
             STATE["raw"] = raw
+            STATE["raw_lite"] = lite
             STATE["stream"] = book.stream
             STATE["ver"] += 1
             STATE["built"] = time.time()
