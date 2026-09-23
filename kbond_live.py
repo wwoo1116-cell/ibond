@@ -218,6 +218,77 @@ def rating_rank(r):
     return RATING_ORDER.index(r) if r in RATING_ORDER else None
 
 
+# ───────────────────────── 통안 민평을 «커브에서» 붙인다 [OWNER 2026-09-23]
+#
+# [OWNER] 「특정 통의 민평이 사실 필요한 건 아닌데? 저런건 남은 만기 고려해서
+#          거기에 민평 붙여주면 되잖아」
+#
+# 왜 — 살아 있는 통안 20종 중 **16종은 최신 일자 민평이 매 영업일 들어온다**(실측
+# 2026-09-23: 14영업일 중 9~10일 값이 움직인다. 이월이 아니라 진짜다). 못 받는 것은
+# 넷뿐인데, 여태 그 넷을 MSB_MP_WIN 창 안의 «가장 최근» 값으로 메웠다. 그래서
+# 28.07.02통 이 **12일 묵은 3.827** 을 오늘 값처럼 썼고, 그날 호가(3.975)와 15bp
+# 벌어져 수정가액이 −26원이 됐다. 검산 X 597건 중 191건이 그 한 종목이었다.
+#
+# ★★★고칠 자리는 «값» 이 아니라 «정합성» 이다. 책 전체가 «전일 민평 대비» 라는
+#   하나의 기준일 위에 서 있는데 그 넷만 다른 날짜를 쓰면, 같은 화면의 수가 서로
+#   다른 날을 가리킨다. 커브에서 붙이면 **모든 민평이 같은 날짜가 된다.**
+#
+# ★계열을 갈라서 붙인다. 통안 이름 끝의 -01·-02·-03 은 1년물·2년물·3년물이고
+#   **커브가 셋이다** — 27.07.01통이 27.07.02통보다 열흘 내내 꾸준히 14bp 위다
+#   (만기는 7일 차). 한 줄에 놓고 보간하면 그 계단이 잡음으로 섞여 LOO 오차가
+#   6~7bp 가 된다. 계열 안에서 붙이면 28.07.02통이 4.010 이 나와 그날 실제 호가
+#   3.975 와 **3.5bp** 차다(묵은 값은 15bp 차였다).
+#
+# ⚠점이 둘 미만인 계열은 붙이지 않는다 — 지어내지 않고 비운다(레인 규약).
+# ⚠붙인 값은 날짜 대신 «보간» 을 출처로 남긴다. 화면·검산이 «이건 추정» 이라고
+#   말할 수 있어야 한다.
+MSB_MP_FIT = "보간"
+
+
+def _msb_mp_fill(msb_mst, mp31, d0, mp31map, mp31date):
+    """최신 일자 민평이 없는 통안을 «같은 계열 잔존축» 에서 붙인다."""
+    try:
+        d0s = str(d0)[:10]
+        fresh = {c: float(v) for c, v, dt in
+                 zip(mp31["종목코드"], mp31["민평"], mp31["일자"])
+                 if str(dt)[:10] == d0s}
+        if not fresh:
+            return mp31map, mp31date
+        today = pd.Timestamp(date.today())
+        m = msb_mst.copy()
+        m["ttm"] = (pd.to_datetime(m["만기일"]) - today).dt.days / 365.0
+        m = m[m["ttm"] > 0]
+        n_fit = 0
+        for _g, sub in m.groupby("인포맥스소분류"):
+            known = sub[sub["표준코드"].isin(fresh)].sort_values("ttm")
+            if len(known) < 2:
+                continue
+            xs = known["ttm"].to_numpy(dtype=float)
+            ys = np.array([fresh[c] for c in known["표준코드"]], dtype=float)
+            for _, r in sub.iterrows():
+                code = str(r["표준코드"])
+                if code in fresh:
+                    continue
+                x = float(r["ttm"])
+                if x > xs[-1]:            # 계열 밖 — 마지막 기울기로 잇는다
+                    sl = (ys[-1] - ys[-2]) / (xs[-1] - xs[-2])
+                    y = ys[-1] + sl * (x - xs[-1])
+                elif x < xs[0]:
+                    sl = (ys[1] - ys[0]) / (xs[1] - xs[0])
+                    y = ys[0] + sl * (x - xs[0])
+                else:
+                    y = float(np.interp(x, xs, ys))
+                mp31map[code] = round(float(y), 3)
+                mp31date[code] = MSB_MP_FIT
+                n_fit += 1
+        if n_fit:
+            log(f"[민평] 통안 {n_fit}종을 계열 커브에서 붙였다(보간) — "
+                f"최신 일자 보유 {len(fresh)}종")
+    except Exception as e:                                   # noqa: BLE001
+        log(f"[민평 보간 실패] {type(e).__name__}: {e}")      # 붙이기는 «덤» 이다
+    return mp31map, mp31date
+
+
 # ───────────────────────────────────────────── 민평 (아침 1회)
 def load_mp_latest():
     """최신 일자의 국고 지표코드 -> 민평. 전일 민평 대비가 딜러 호가 관행이다.
@@ -332,9 +403,10 @@ def load_mp_latest():
     msb_mst["발행일"] = pd.to_datetime(msb_mst["발행일"])
     msb_mst["만기일"] = pd.to_datetime(msb_mst["만기일"])
     mp31map = dict(zip(mp31["종목코드"], mp31["민평"]))
-    # ★통안 최신물은 민평 적재가 며칠 늦다(7일 폴백). 그래서 «전일 민평 대비» 가
+    # ★통안 최신물은 민평 적재가 며칠 늦다(폴백 창). 그래서 «전일 민평 대비» 가
     #   실은 «며칠 전 민평 대비» 일 수 있다. 값을 고치지 말고 날짜를 같이 준다.
     mp31date = {c: str(d)[:10] for c, d in zip(mp31["종목코드"], mp31["일자"])}
+    mp31map, mp31date = _msb_mp_fill(msb_mst, mp31, d0, mp31map, mp31date)
     log(f"[민평] {d0} 기준 국고 {len(out)}·통안 {len(mp31map)}종 "
         f"(만기 {len(matmap)}·연물 {len(tenmap)}·지표 {len(bset)}·통안마스터 {len(msb_mst)})")
     aucd = None
@@ -1753,6 +1825,26 @@ class Book:
             name=str(row.get("n") or ""), maturity=spec_mat,
             coupon=0.0, m=4, kind="분기할인"), True)
 
+    def _mp_trust(self, row, code):
+        """이 행이 딛고 선 민평이 «오늘 기준» 인가 -> (ok, 왜 아닌지).
+
+        ★통안만 걸린다. 국고 민평은 매일 전 종목이 들어오고, 크레딧·국주·MBS 는
+          문면에 적힌 값이라 그 메시지 시점의 값이다. 통안만 종목마다 적재가
+          늦어(실측 2026-09-23: 살아 있는 20종 중 넷) `mp31date` 가 날짜를 말한다.
+          그 넷은 이제 계열 커브에서 붙이므로(`_msb_mp_fill`) 출처가 «보간» 이다.
+        """
+        if row.get("sec") != "통안":
+            return True, ""
+        isin = self.msb_isin.get(code) or code
+        mpd = self.mp31date.get(isin)
+        if mpd is None:
+            return True, ""                           # 민평이 없으면 애초에 못 잰다
+        if mpd == MSB_MP_FIT:
+            return True, ""                           # 커브에서 붙인 값 — 오늘 기준이다
+        if str(self.mp_date)[:10] == str(mpd)[:10]:
+            return True, ""
+        return False, f"민평이 {str(mpd)[:10]} 것이다 — 오늘 기준이 아니다"
+
     def _price_cur(self, d=None, body=""):
         """★피드 행에 단가(`px`)·수정가액(`won`)·검산(`chk`) 을 싣는다 [OWNER 2026-09-23].
 
@@ -1832,9 +1924,14 @@ class Book:
                 won = kbond_price.won_of(spec, float(y), float(mp), s)
                 if won is not None:
                     row["won"] = round(won, 2)        # 수정가액 — 민평 대비 원
-                ox, _ = kbond_price.crosscheck(spec, float(y), float(mp), s)
-                if ox:
-                    row["chk"] = ox
+            # ★검산 = «이걸 믿어도 되나» [OWNER 2026-09-23 「이걸 믿어도 되는지가
+            #   제일 중요함」]. 뜻과 그 앞 판의 실패는 kbond_price.trustcheck 주석.
+            ok, why = kbond_price.trustcheck(
+                spec, row.get("px"), s, *self._mp_trust(row, code))
+            if ok:
+                row["chk"] = ok
+                if why:
+                    row["chkw"] = why[:90]            # 왜인지 — 툴팁이 읽는다
         except Exception as e:                        # noqa: BLE001
             # 값 하나 때문에 책이 멈출 이유는 없다 — 비우고 넘어간다.
             log(f"[단가 오류] {type(e).__name__}: {e} :: {row.get('code')}")

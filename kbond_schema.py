@@ -130,7 +130,8 @@ class FeedRow(BaseModel):
     ttm: float | None = Field(None, description="잔존 연수 — 결제일 기준")
     pxa: int | None = Field(None, description="1이면 쿠폰을 «전일 민평과 같다»고 가정해 낸 단가 — 절대 수준은 믿지 말 것(수정가액은 쓸 만하다)")
     won: float | None = Field(None, description="수정가액 — 전일 민평 대비 «원». +원 = 단가 비쌈 = 금리 낮음")
-    chk: str | None = Field(None, description="검산 O/X — 단가·수정가액·실제 금리가 서로 닫히는가. 못 재면 비운다")
+    chk: str | None = Field(None, description="검산 O/X — 이 행의 «단가를 믿어도 되나». 못 재면 비운다")
+    chkw: str | None = Field(None, description="X 인 이유(만기 임박·민평이 오늘 것이 아님·단가가 상식 밖)")
     a: float | None = None
     asrc: AmountSource | None = None
     atmp: bool | None = None

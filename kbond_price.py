@@ -246,59 +246,42 @@ def discount_spec(maturity_key: str | None, name: str | None = None) -> Spec | N
 #  [OWNER 2026-09-23] 「단가 = 수정가액 = 실제 금리가 정합한지 확인하는거야.
 #   그래야 트레이더가 이를 보고 신뢰해서 따로 원 계산기 안 돌려도 되는거니까」
 #
-#  ★두 길을 따로 걸어 만나는지 본다 — 한 길로만 가면 검산이 아니라 항등식이다.
-#    길 A  현금흐름으로 «값매겨» 낸 원          price(y) − price(민평)
-#    길 B  데스크가 실제로 쓰는 어림으로 «환산한» 원  `enrich_kbond_quotes.won_to_bp`
-#  길 B 가 곧 트레이더의 원 계산기다. O 는 «그 계산기를 안 돌려도 된다» 는 뜻이고,
-#  X 는 «이 종목에선 그 어림이 안 맞는다» 는 뜻이다.
+#  ★★★2026-09-23 에 뜻을 바꿨다 [OWNER 「이걸 믿어도 되는지가 제일 중요함」].
 #
-#  ★★★길 B 는 잔존 0.125~2.50년 실측표이고 그 밖은 `1/TTM` 으로 잇는다. 그 외삽이
-#    장기물에서 깨진다 — 2026-09-23 실측: 1.7년 0.94배 · 4.5년 0.90배 · 9.2년 0.78배 ·
-#    **29.5년 0.50배**. 그래서 표 밖에서는 길 B 를 «그 종목의 참 bp/원» 으로 바꿔
-#    건다. 09-22 §7 의 「원↔bp 맞는다」 판정은 잔존 2.5년 아래 크레딧 모집단의
-#    것이라 그대로 서지만, 국고 장기물로는 넘어가지 않는다.
-TOL_WON = 0.10          # 두 길의 차 허용치(원). NICE 표시 반올림 0.01 의 열 배.
-TBL_MAX_TTM = 2.50      # `won_to_bp` 실측표(TTM_GRID)의 오른쪽 끝
+#  처음에는 «데스크의 원 계산기(won_to_bp 표)와 맞나» 를 봤다. 그런데 그 표는
+#  잔존 일곱 칸짜리 **테너 평균** 이라 종목마다 최대 24% 어긋나고(잔존 0.16년
+#  실측 6.382 대 4.819 bp/원), 금리가 민평에서 멀수록 원으로 벌어져 멀쩡한 행
+#  572건(14%)에 X 가 떴다. 그건 «이 행이 틀렸다» 가 아니라 «그 표가 거칠다» 는
+#  말이라 행마다 띄울 것이 못 된다. 사흘이면 아무도 안 본다.
+#
+#  ⚠그렇다고 길 B 를 bp_per_won 으로 갈아타면 **두 길이 같은 함수가 되어 검산이
+#    항등식**이 된다. 늘 O 가 뜨는 검산은 없는 것만 못하다.
+#
+#  그래서 «맞나» 가 아니라 **«믿어도 되나»** 를 본다. 재료는 이 행이 실제로 딛고
+#  선 것들이다 — 제원이 있나 · 만기 전인가 · 민평이 오늘 것인가 · 값이 상식 안인가.
+#  ★X 는 이유를 같이 돌려준다. 이유 없는 X 는 읽는 사람을 훈련시키지 못한다.
+TRUST_MIN_TTM = 0.03   # 잔존 하한. 아래로는 환산이 깨진다 — 09-22 §7-C 실측:
+                       # 잔존 0.010년에서 실제 49.33 대 모형 100.00 (2배)
+TRUST_PX_LO, TRUST_PX_HI = 5_000.0, 15_000.0   # 단가 상식 범위(배관 오류 탐지)
 
 
-def _won_desk(ytm: float, ref_ytm: float, ttm: float,
-              spec: Spec, settle: date) -> float | None:
-    """길 B — 데스크 어림으로 «원». 표 밖이면 그 종목의 참 bp/원으로 건다.
+def trustcheck(spec: Spec | None, px: float | None, settle: date,
+               mp_ok: bool = True, mp_note: str = "") -> tuple[str, str]:
+    """('O'|'X'|'', 이유). 잴 수 없으면 ''(빈칸) — 모르는 것을 O 로 적지 않는다.
 
-    ★bp/원을 «두 금리의 가운데» 에서 잰다 [2026-09-23]. 기준(민평)에서 재면
-      볼록성이 통째로 오차로 남는다 — 실측: 국고 25-11(잔존 9.2년)이 6.1bp
-      움직일 때 길 A 43.41원 대 길 B 43.9원으로 **0.5원** 벌어져, 멀쩡한 행
-      87건(13%)에 X 가 떴다. 가운데에서 재면 사다리꼴이 되어 오차가 한 차수
-      더 떨어진다. 검산이 «볼록성» 을 잡으면 트레이더는 X 를 무시하기 시작하고,
-      그러면 진짜 X(묵은 민평·종목 오매칭·만기 임박)를 같이 흘린다.
+    mp_ok    이 행이 딛고 선 민평이 «오늘 기준» 인가(통안 묵은 민평 판정 등)
+    mp_note  아닐 때 화면에 적을 말
     """
-    mid = (ytm + ref_ytm) / 2.0
-    if ttm <= TBL_MAX_TTM:
-        try:
-            from enrich_kbond_quotes import won_to_bp
-        except Exception:
-            return None
-        # won_to_bp(원, 잔존) -> bp. 1원이 몇 bp 인지 그 표에 물어본다.
-        r = abs(float(won_to_bp(1.0, ttm)))
-    else:
-        r = bp_per_won(spec, mid, settle) or 0.0
-    return None if not r else -(ytm - ref_ytm) * 100.0 / r   # +원 = 금리 낮음
-
-
-def crosscheck(spec: Spec | None, ytm: float | None, ref_ytm: float | None,
-               settle: date, tol: float = TOL_WON) -> tuple[str, dict]:
-    """('O'|'X'|'', 근거). 잴 수 없으면 ''(빈칸) — 모르는 것을 O 로 적지 않는다."""
-    if spec is None or ytm is None or ref_ytm is None:
-        return "", {}
-    won_cf = won_of(spec, ytm, ref_ytm, settle)               # 길 A
-    if won_cf is None:
-        return "", {}
+    if spec is None or px is None:
+        return "", ""
     ttm = (spec.maturity - settle).days / 365.0
-    won_desk = _won_desk(ytm, ref_ytm, ttm, spec, settle)     # 길 B
-    if won_desk is None:
-        return "", {}
-    gap = abs(won_cf - won_desk)
-    return ("O" if gap <= tol else "X"), {
-        "won": round(won_cf, 2), "won_desk": round(won_desk, 2),
-        "gap": round(gap, 3), "ttm": round(ttm, 2),
-        "src": "표" if ttm <= TBL_MAX_TTM else "값매김"}
+    if ttm <= 0:
+        return "X", "만기가 지났다"
+    why = []
+    if ttm < TRUST_MIN_TTM:
+        why.append(f"만기 임박({int(ttm * 365)}일) — 원↔bp 환산이 깨지는 구간")
+    if not (TRUST_PX_LO <= px <= TRUST_PX_HI):
+        why.append(f"단가가 상식 밖({px:,.0f}원)")
+    if not mp_ok:
+        why.append(mp_note or "민평이 오늘 것이 아니다")
+    return ("X", " · ".join(why)) if why else ("O", "")
