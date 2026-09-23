@@ -135,6 +135,19 @@ def _deny_if_no_token(t):
 
 
 def _snapshot():
+    """★HTTP 는 굽는 주기를 안 기다린다 — 밀렸으면 여기서 바로 굽는다.
+
+    엔진은 2026-09-23 부터 «보는 사람이 있을 때 초당 한 번» 만 굽는다(kbond_live
+    의 «굽는 삯» 주석). 그 절약이 `/book.json`·`/api/view` 를 묵은 값으로 만들면
+    안 되므로, 요청이 오면 그 자리에서 굽는다. 안 밀렸으면 publish 가 곧장 False
+    를 주고 지나간다 — 그래서 연달아 때려도 두 번 굽지 않는다.
+    """
+    pub = KL.STATE.get("publish")
+    if pub is not None:
+        try:
+            pub()
+        except Exception as e:                               # noqa: BLE001
+            KL.log(f"[publish 오류] {type(e).__name__}: {e}")
     with KL.STATE["lock"]:
         return KL.STATE["book"], KL.STATE["raw"], KL.STATE["ver"]
 
@@ -145,9 +158,13 @@ def health(t: str | None = None):
         return {"ok": True}
     with KL.STATE["lock"]:
         ver, last = KL.STATE["ver"], KL.STATE["last_evt"]
+        clients, dirty = KL.STATE["clients"], KL.STATE["dirty"]
     return {"ok": True, "uptime_s": round(time.time() - KL.STATE["t0"]), "ver": ver,
             "last_event_age_s": round(time.time() - last, 1) if last else None,
-            "masked": KL.MASK, "masked_tel": KL.MASK_TEL, "engine": "fastapi"}
+            "masked": KL.MASK, "masked_tel": KL.MASK_TEL, "engine": "fastapi",
+            # ★절전판이 실제로 아끼고 있는지 밖에서 볼 수 있게 [2026-09-23].
+            #   clients=0 인데 ver 이 계속 오르면 절약이 안 되고 있다는 뜻이다.
+            "clients": clients, "dirty": dirty}
 
 
 @app.get("/book.json")
@@ -212,19 +229,28 @@ async def events(request: Request, t: str | None = None):
         return Response(status_code=401)
 
     async def gen():
-        sent = -1
-        while True:
-            if await request.is_disconnected():
-                return
+        # ★보는 사람을 센다. 엔진은 이 수가 0이면 굽지 않는다(kbond_live «굽는 삯»).
+        #   세다가 빼먹으면 화면이 멈추므로 try/finally 로 «나갈 때» 를 못 놓치게 한다.
+        with KL.STATE["lock"]:
+            KL.STATE["clients"] += 1
+        try:
+            sent = -1
+            while True:
+                if await request.is_disconnected():
+                    return
+                with KL.STATE["lock"]:
+                    ver, raw = KL.STATE["ver"], KL.STATE["raw"]
+                if ver != sent:
+                    sent = ver
+                    yield b"data: " + raw + b"\n\n"
+                else:
+                    hb = json.dumps({"now": time.strftime("%H:%M:%S"),
+                                     "ver": ver}).encode()
+                    yield b"event: hb\ndata: " + hb + b"\n\n"
+                await asyncio.sleep(1.0)
+        finally:
             with KL.STATE["lock"]:
-                ver, raw = KL.STATE["ver"], KL.STATE["raw"]
-            if ver != sent:
-                sent = ver
-                yield b"data: " + raw + b"\n\n"
-            else:
-                hb = json.dumps({"now": time.strftime("%H:%M:%S"), "ver": ver}).encode()
-                yield b"event: hb\ndata: " + hb + b"\n\n"
-            await asyncio.sleep(1.0)
+                KL.STATE["clients"] = max(0, KL.STATE["clients"] - 1)
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-store",

@@ -45,6 +45,7 @@ import sys
 import threading
 import time
 from datetime import date, datetime
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -72,6 +73,9 @@ REPLAY_AT = None
 # 파일 stat 몇 개는 공짜라 0.4초로 내리고, 뷰어에는 SSE 로 «밀어» 준다.
 # 끝단 지연 = 파일 폴링(<=0.4s) + 푸시(~0) ≈ 0.5초 미만.
 POLL_S = 0.4
+# ★굽는 주기의 하한. SSE 가 1초에 한 번 읽으므로 그보다 자주 구울 이유가 없다.
+#   먹이는 주기(POLL_S)와 «다른 것» 이다 — 굽는 삯만 아끼고 체결 시각은 안 민다.
+PUBLISH_MIN_S = 1.0
 VIEWER = Path(__file__).parent / "kbond_live.html"
 TTL_DEFAULT = {"ktb": 1800, "credit": 7200}      # 리서치 결과 (독스트링)
 # 크레딧 책에 합류하는 계열 [OWNER 2026-09-07 「저것도 책 경로 열어주고」].
@@ -147,9 +151,36 @@ def log(msg):
         pass
 
 
+#   ★`clients`·`dirty`·`built`·`publish` 는 2026-09-23 절전판이다 — §「굽는 삯」.
+#     STATE["publish"] 는 start_engine 이 꽂는다(HTTP 가 게으르게 부를 수 있게).
 STATE = {"lock": threading.Lock(), "book": {}, "raw": b"{}", "ver": 0,
-         "t0": time.time(), "last_evt": 0.0, "stream": []}
+         "t0": time.time(), "last_evt": 0.0, "stream": [],
+         "clients": 0, "dirty": False, "built": 0.0, "publish": None}
 COND = threading.Condition()
+# ★★★책을 만지는 스레드는 «한 번에 하나» 다 [2026-09-23].
+#   2026-09-23 절전판 전에는 book 을 만지는 곳이 폴 스레드 하나뿐이라 자물쇠가
+#   필요 없었다. 이제 HTTP 도 게으르게 굽기(publish)를 부르므로 `book.feed` 와
+#   `book.snapshot`(안에서 _match 가 책을 고친다)이 겹칠 수 있다.
+#   ⚠STATE["lock"] 과 «다른» 자물쇠다 — 저건 스냅샷 «결과» 를 지키고,
+#     이건 책 «자체» 를 지킨다. 둘을 하나로 합치면 굽는 동안 /health 가 막힌다.
+ENGINE_LOCK = threading.RLock()
+
+
+# ★★★축약호가 복원을 «같은 물음» 마다 다시 묻지 않는다 [2026-09-23].
+#   `restore()` 는 원장(배치)용 **벡터** 함수라 값 하나를 물어도 pandas Series 를
+#   짓는다. 라이브는 그걸 «스칼라 하나씩» 부르고 있었고, `_resolve_nhb` 가 폴마다
+#   국주 전부를 다시 복원했다 — 2026-09-23 프로파일: poll() 시간의 **99%**,
+#   폴 한 번에 Series **330개**. 초당 2.5폴이면 코어 5%가 여기였다.
+#
+#   ★배치 함수를 라이브에서 떼어내지 «않는다» — 같은 규약이 같은 자리에 와야 한다는
+#     것이 이 레인의 규율이다(v1 대사 규칙). 그래서 함수를 바꾸는 대신 **덜 부른다.**
+#   `_restore1` 은 인자만 읽는 순수 함수라(자기 상태를 안 본다) 메모가 안전하다.
+#   ⚠순수하지 않게 고치는 순간 이 캐시가 거짓말을 한다 — `_restore1` 에 self 를
+#     읽는 줄을 넣으려거든 이 캐시부터 지워라.
+@lru_cache(maxsize=8192)
+def _restore_memo(qr: str, mpv: float):
+    arr, _ = restore(pd.Series([qr]), pd.Series([mpv]))
+    return None if np.isnan(arr[0]) else round(float(arr[0]), 3)
 
 # 등급 서열 (매칭용). 앞일수록 좋다.
 RATING_ORDER = ["AAA", "AA+", "AA0", "AA-", "A+", "A0", "A-", "BBB+", "BBB0", "BBB-", "BBB"]
@@ -346,12 +377,30 @@ class Tail:
     def __init__(self):
         self.pos: dict[Path, int] = {}
         self.buf: dict[Path, str] = {}
+        self._files: list[tuple[str, Path]] = []
+        self._files_at = 0.0
+        self._files_ymd: str | None = None
+
+    # ★★★파일 «목록» 은 5초에 한 번만 본다 [2026-09-23].
+    #   2026-09-23 실측: SRC_DIR 에 파일이 **8,415개** 쌓여 있어 방마다 glob 을
+    #   돌리면 한 번에 **35.2ms** 다. poll 이 0.4초마다 부르니 그것만으로
+    #   **코어의 8.8%** 를 «디렉터리 목록 읽기» 에 썼다. 읽는 내용(read_new)은
+    #   오프셋만 옮기는 싼 일인데, 그 앞의 «어느 파일을 읽을지» 가 비쌌다.
+    #   ⚠목록은 싸지만 «자라는 것» 은 매번 봐야 한다 — 캐시는 목록에만 걸고
+    #     stat/seek 은 그대로 매 폴마다 한다. 새 파일이 생기면 최대 5초 늦게
+    #     붙는데, 회전은 하루 한 번꼴이라(오늘 5개 = 방당 하나) 값이 싸다.
+    FILES_TTL_S = 5.0
 
     def today_files(self):
         ymd = REPLAY or date.today().strftime("%Y%m%d")
-        for room in ROOMS:
-            for p in sorted(Path(SRC_DIR).glob(f"채권_{room}_{ymd}_*.txt")):
-                yield room, p
+        now = time.time()
+        if ymd != self._files_ymd or now - self._files_at >= self.FILES_TTL_S:
+            out: list[tuple[str, Path]] = []
+            for room in ROOMS:
+                for p in sorted(Path(SRC_DIR).glob(f"채권_{room}_{ymd}_*.txt")):
+                    out.append((room, p))
+            self._files, self._files_at, self._files_ymd = out, now, ymd
+        return self._files
 
     def read_new(self):
         chunks = []
@@ -1058,9 +1107,9 @@ class Book:
             앞의 두 갈래와 겹치지 않는다. 그래서 맨 뒤에 둔다.
         """
         if qr is not None and mpv is not None:
-            arr, _ = restore(pd.Series([qr]), pd.Series([float(mpv)]))
-            if not np.isnan(arr[0]):
-                return round(float(arr[0]), 3)
+            y = _restore_memo(qr, float(mpv))
+            if y is not None:
+                return y
         if absy is not None:
             return round(float(absy), 3)
         if at_mp and mpv is not None:
@@ -2311,6 +2360,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
             sent = -1
+            # ★옛 판도 보는 사람을 센다 — 안 세면 엔진이 안 굽고 이 화면이 멎는다.
+            #   (2026-09-23 절전판. kbond_live 의 «굽는 삯» 주석 참조)
+            with STATE["lock"]:
+                STATE["clients"] += 1
             try:
                 while True:
                     with COND:
@@ -2331,6 +2384,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.flush()
             except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError):
                 return
+            finally:
+                with STATE["lock"]:
+                    STATE["clients"] = max(0, STATE["clients"] - 1)
         elif self.path.startswith("/health"):
             if token_ok(_q.get("t")):
                 up = time.time() - STATE["t0"]
@@ -2505,29 +2561,65 @@ def start_engine(at=None, seed_prev_day=True):
     # 시작 시 오늘치 전체를 한 번 접는다 (아침이 아니라 장중에 켜도 책이 선다)
     FORCE = {"v": False}                 # 어제 책이 늦게 도착하면 한 번 밀어 준다
 
+    # ★★★굽는 삯 [2026-09-23] — «먹이는 것» 과 «굽는 것» 을 갈랐다.
+    #
+    #   먹이기(tail.read_new + book.feed)는 싸고, 0.4초를 지켜야 체결 시각이 안 밀린다.
+    #   굽기(book.snapshot + json.dumps)는 비싸다 — 책이 520KB 라 한 번에 61ms 다.
+    #   그런데 SSE 는 `asyncio.sleep(1.0)` 이라 **초당 한 번밖에 안 읽는다.** 0.4초마다
+    #   구우면 보는 사람이 있어도 60%가 버려지고, **아무도 안 보면 전부 버려진다.**
+    #   2026-09-23 실측: 보는 사람 0명인데 기동 2시간 11분 동안 CPU 1,213초
+    #   (= 한 코어의 15.3%)를 태우고 있었다.
+    #
+    #   그래서 굽는 조건을 셋으로 좁혔다 — ①첫 판 ②강제 ③«바뀌었고 · 보는 사람이
+    #   있고 · 지난 굽기에서 1초가 지났을 때». HTTP 는 이 주기를 안 기다린다.
+    #   `publish(force=True)` 를 스스로 불러 늘 갓 구운 것을 받는다(kbond_api._snapshot).
+    #
+    #   ⚠«보는 사람» 을 안 세면 이 절약은 곧 «화면이 멈추는» 버그가 된다. SSE 가
+    #     들어오고 나갈 때 STATE["clients"] 를 세는 것이 이 최적화의 안전장치다.
+    def publish(force=False):
+        """책을 굽는다. 돌려주는 값은 «구웠나» — 게으른 호출자가 알 수 있게."""
+        with STATE["lock"]:
+            if not (force or STATE["dirty"]):
+                return False
+            STATE["dirty"] = False
+        with ENGINE_LOCK:                      # 먹이기와 겹치지 않게
+            snap = book.snapshot()
+        raw = json.dumps(snap, ensure_ascii=False).encode("utf-8")
+        with STATE["lock"]:
+            STATE["book"] = snap
+            STATE["raw"] = raw
+            STATE["stream"] = book.stream
+            STATE["ver"] += 1
+            STATE["built"] = time.time()
+        with COND:
+            COND.notify_all()
+        return True
+
+    STATE["publish"] = publish
+
     def poll():
         changed = False
-        for room, chunk in tail.read_new():
-            for sender, tm, body in split_messages(chunk):
-                changed = True
-                try:
-                    book.feed(room, sender, tm, body)
-                except Exception as e:                   # noqa: BLE001
-                    log(f"[feed 오류] {type(e).__name__}: {e} :: {body[:60]}")
-        book.sample_mid()
-        if changed or STATE["ver"] == 0 or FORCE["v"]:
-            FORCE["v"] = False
-            snap = book.snapshot()
-            raw = json.dumps(snap, ensure_ascii=False).encode("utf-8")
+        with ENGINE_LOCK:                      # 굽기와 겹치지 않게
+            for room, chunk in tail.read_new():
+                for sender, tm, body in split_messages(chunk):
+                    changed = True
+                    try:
+                        book.feed(room, sender, tm, body)
+                    except Exception as e:               # noqa: BLE001
+                        log(f"[feed 오류] {type(e).__name__}: {e} :: {body[:60]}")
+            book.sample_mid()
+        now = time.time()
+        if changed:
             with STATE["lock"]:
-                STATE["book"] = snap
-                STATE["raw"] = raw
-                STATE["stream"] = book.stream
-                STATE["ver"] += 1
-                if changed:
-                    STATE["last_evt"] = time.time()
-            with COND:
-                COND.notify_all()
+                STATE["dirty"] = True
+                STATE["last_evt"] = now
+        first = STATE["ver"] == 0
+        if first or FORCE["v"]:
+            FORCE["v"] = False
+            publish(force=True)
+        elif STATE["dirty"] and STATE["clients"] > 0 \
+                and now - STATE["built"] >= PUBLISH_MIN_S:
+            publish()
 
     # ★기동 되감기(라이브·리플레이 공통). 오늘 파일을 방을 가로질러 «시각순» 으로
     #   먹이면서 10초마다 mid 를 표본한다. 한 번에 먹이면 hist 가 한 점만 남아
