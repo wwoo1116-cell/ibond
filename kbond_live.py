@@ -1779,51 +1779,22 @@ class Book:
             self._cur.update({"n": str(label)[:16], "y": ytm, "lvl": lvl})
 
     def _credit_spec(self, row, body):
-        """★크레딧 제원을 «가정» 으로 세운다 [OWNER 2026-09-23 「다른 채권들도 일단은
-        기본적으로 분기당 이자지급으로」]. 반환 (Spec|None, 쿠폰을_가정했나).
+        """★크레딧은 단가를 내지 않는다 [OWNER 2026-09-23 「크레딧은 일단 단가 제공 X」].
 
-        재료가 둘인데 하나만 있다 —
-          만기  문면에 88.6% 적힌다(`d["Maturity"]`). 이건 «자료» 다.
-          쿠폰  문면에 **4.2%** 뿐이다(2026-08 이후 408,928행 실측). 이건 «가정» 이다.
+        여기까지 온 길 — 쿠폰이 문면에 4.2%만 적혀서, ①«쿠폰 = 전일 민평» 으로
+        지어냈다가 물렀고 ②쿠폰이 안 드는 꼴(분기복리 할인)로 갈아탔다. 그런데
+        그 꼴이 **긴 쪽에서 무너졌다** — 검산이 잡아냈다:
+            한국도로공사884  잔존 17.5년 -> 4,394원
+            한국토지주택공사   잔존  9.2년 -> 6,582원
+        (액면 근처여야 하는 값이다. 8년 넘는 크레딧이 그날 30행 있었다.)
 
-        ★쿠폰을 «전일 민평과 같다» 고 둔다. 왜 이 가정이 쓸 만한가 —
-          데스크가 실제로 읽는 값은 단가 자체가 아니라 **수정가액(민평 대비 원)** 인데,
-          그 값은 쿠폰이 아니라 **듀레이션** 이 정한다. 쿠폰=민평이면 민평 단가가 정확히
-          액면이 되어 «민평에서 몇 원 떨어졌나» 가 바로 읽힌다. 쿠폰을 2%p 틀리게 잡아도
-          듀레이션은 2~3%밖에 안 움직이므로 수정가액의 오차도 그만큼이다.
-        ⚠그 대신 **단가의 «절대 수준» 은 믿을 것이 못 된다** — 액면 언저리로 나온다.
-          그래서 `pxa`(가정) 를 같이 실어 화면이 그 사실을 말하게 한다.
-        ⚠문면에 쿠폰이 적혀 있으면 가정하지 않고 그 값을 쓴다. 그 4.2%는 진짜다.
+        짧은 쪽은 쓸 만했지만 «어디까지가 쓸 만한가» 를 우리가 정할 수 없다.
+        그래서 낸다/안 낸다를 잔존으로 가르지 않고 **통째로 비운다.** 반쪽짜리
+        규약은 읽는 사람이 경계를 모른다는 점에서 없느니만 못하다.
+        ⚠만기일·잔존은 그대로 싣는다 — 그건 가정이 아니라 문면에 적힌 «자료» 다.
         """
-        mat = row.get("mat")
-        spec_mat = None
-        if mat:
-            try:
-                y_, m_, d_ = (int(x) for x in mat.split("-"))
-                spec_mat = date(y_, m_, d_)
-            except Exception:                              # noqa: BLE001
-                spec_mat = None
-        if spec_mat is None:
-            return None, False
-        hit = RE_COUPON.search(body or "")
-        if hit:
-            try:
-                return (kbond_price.Spec(
-                    key=str(row.get("code") or row.get("n") or ""),
-                    name=str(row.get("n") or ""), maturity=spec_mat,
-                    coupon=float(hit.group(1)), m=4, kind="이표채"), False)
-            except Exception:                              # noqa: BLE001
-                pass
-        # ★[OWNER 2026-09-23] 「쿠폰은 그거 쓰는거 아니야 · 쿠폰은 붙일 필요 없어」
-        #   → 「분기로 하셈 일단은 · 이상하면 트레이더한테 물어가면서 컨벤션 고칠거야」
-        #   쿠폰이 없어도 되는 꼴로 간다 — 분기복리 할인(`price_zero_quarterly`).
-        #   전에 여기서 «쿠폰 = 전일 민평» 으로 지어냈다가 물렀다. 지어낸 쿠폰으로
-        #   낸 단가는 빈칸보다 나쁘다 — 빈칸은 모른다고 말하지만 지어낸 수는 안다고
-        #   말한다. 이 꼴은 «모르는 것을 안 쓰는» 쪽이다.
-        return (kbond_price.Spec(
-            key=str(row.get("code") or row.get("n") or ""),
-            name=str(row.get("n") or ""), maturity=spec_mat,
-            coupon=0.0, m=4, kind="분기할인"), True)
+        return None, False
+
 
     def _mp_trust(self, row, code):
         """이 행이 딛고 선 민평이 «오늘 기준» 인가 -> (ok, 왜 아닌지).
