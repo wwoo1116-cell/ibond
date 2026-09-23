@@ -41,9 +41,26 @@ const KIND: Record<string, [string, string]> = {
 const p2 = (n: number) => String(n).padStart(2, '0');
 const hms = (t: number) =>
   `${p2(Math.floor(t / 3600))}:${p2(Math.floor((t % 3600) / 60))}:${p2(t % 60)}`;
-const n3 = (v?: number | null) => (v == null ? '' : v.toFixed(3));
+/** 금리 표기 [2026-09-23] — ★0.25bp 자리는 넷째 자리까지 적는다.
+ *  세트호가(두 다리의 중간값)가 서는 자리라 셋째 자리로 뭉개면 «세트라는 사실»
+ *  자체가 화면에서 사라진다: 3.9975 -> 3.998 은 그냥 다른 호가로 읽힌다.
+ *  0.5bp 격자 값은 지금처럼 세 자리다(3.405). */
+const n3 = (v?: number | null) => {
+  if (v == null) return '';
+  const q = Math.round(v * 10000);
+  return q % 10 === 0 ? v.toFixed(3) : v.toFixed(4);
+};
 /** 수량 기본단위 100억 [OWNER] — «1계약» 이 아니라 «100억» 으로 적어야 합산이 된다. */
 const lot = (a?: number | null) => (a == null || !a ? '' : `${Math.round(a * 10) / 10}억`);
+
+/** 잔존 [2026-09-23] — ★1년 안쪽은 «일» 로 적는다.
+ *  0.2년 이라고 적으면 만기가 코앞인 것이 안 보인다. 그 구간은 하루가 곧 값이다
+ *  (잔존 78일이면 1원이 4.7bp 다 — 같은 1원이 30년물에선 0.06bp). */
+const ttmTxt = (t?: number | null) => {
+  if (t == null) return '';
+  if (t < 0) return '만기';
+  return t < 1 ? `${Math.round(t * 365)}일` : `${t.toFixed(1)}년`;
+};
 
 /** 머리글 — 행(`.kb-row`)과 같은 격자를 쓴다. 둘째 칸(☆)은 이름이 없다. */
 function Head() {
@@ -53,13 +70,19 @@ function Head() {
       <span />
       <span>종류</span>
       <span>종목명</span>
+      <span className="num">만기일</span>
+      <span className="num">잔존</span>
       <span>매매</span>
       <span>브로커</span>
       <span>회사명</span>
       <span className="num">전일민평</span>
       <span className="num">할인조정</span>
+      {/* ★«어느 결제일인지» 를 머리글에 적는다 [2026-09-23]. 안 적으면 이 숫자는
+          읽는 사람마다 달라진다 — 국고16-8 이 당일 10006.54 · 익일 10010.90 이다. */}
+      <span className="num" title="액면 10,000원당 단가 · 당일결제(T) 기준">단가(T)</span>
       <span className="num">수량</span>
       <span>원문</span>
+      <span className="ctr" title="이 행의 단가를 믿어도 되나 — X 는 마우스를 올리면 이유가 뜬다">검산</span>
     </div>
   );
 }
@@ -90,6 +113,15 @@ const Row = memo(function Row({ e, on, onStar }: {
       <span className="kb-c n" title={e.n ?? undefined}>
         {e.n ?? ''}
       </span>
+      {/* 만기일·잔존 [OWNER 2026-09-23]. ★호가의 속성이 아니라 «종목» 의 속성이라
+          값(할인조정)이 없는 행에도 선다 — AXE·문의에서도 「뭐가 언제 만기인지」는
+          알 수 있어야 한다. 앞 넷(연도)은 잘라 적는다: 2031-03-10 → 31-03-10. */}
+      <span className="kb-c num mat" title={e.mat ?? undefined}>
+        {e.mat ? e.mat.slice(2) : ''}
+      </span>
+      <span className="kb-c num ttm" title={e.mat ? `${e.ttm}년` : undefined}>
+        {ttmTxt(e.ttm)}
+      </span>
       <span className={`kb-c s${e.s === 'S' ? ' sr-down' : e.s === 'B' ? ' sr-up' : ''}`}>
         {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
       </span>
@@ -117,12 +149,44 @@ const Row = memo(function Row({ e, on, onStar }: {
           </i>
         ) : null}
       </span>
+      {/* 단가 — 액면 1만원당, 당일결제(T). 제원이 없는 종목(크레딧·물가채·STRIPS)은
+          서버가 비워 보낸다. ★빈칸은 «0원» 이 아니라 «못 잰다» 는 뜻이다 —
+          지어내지 않고 비우는 것이 이 레인의 규약이다.
+          툴팁에 수정가액(민평 대비 원)을 같이 준다 — 칸을 하나 더 늘리지 않으려고. */}
+      <span
+        className={`kb-c num px${e.pxa ? ' asm' : ''}`}
+        title={
+          e.px == null
+            ? '제원이 없어 단가를 못 만든다 (크레딧·물가채·분리채)'
+            : `단가 ${e.px} (결제 ${e.pxs ?? 'T'})${
+                e.won != null ? ` · 수정가액 ${e.won > 0 ? '+' : ''}${e.won}원` : ''
+              }${e.pxb === 'mp' ? ' · 값이 없어 전일 민평으로 냄' : ''}${
+                e.pxa ? ' · 쿠폰 없이 분기복리 할인 — 잠정 규약' : ''
+              }`
+        }
+      >
+        {e.px == null ? '' : e.px.toFixed(2)}
+      </span>
       <span className="kb-c num a">{lot(e.a)}</span>
-      {/* 원문 — 마지막 칸이고 남는 폭을 전부 먹는다 [OWNER 2026-09-22 오후].
+      {/* 원문 — 남는 폭을 전부 먹는다 [OWNER 2026-09-22 오후].
           ★`title` 은 여기서 장식이 아니다. 이 칸이 잘리면 칸값을 검산할 길이 없어지고,
             검산이 이 화면의 요점이다(값이 안 붙은 행을 숨기지 않는 것과 같은 이유). */}
       <span className="kb-c raw" title={e.raw ?? undefined}>
         {e.raw ?? ''}
+      </span>
+      {/* 검산 — 원문 «뒤» [OWNER 2026-09-23]. O = 단가·수정가액·실제 금리가 서로
+          닫힌다(따로 원 계산기를 안 돌려도 된다). X = 어긋난다. 빈칸 = 못 잰다. */}
+      <span
+        className={`kb-c ctr chk${e.chk === 'O' ? ' ok' : e.chk === 'X' ? ' no' : ''}`}
+        title={
+          e.chk === 'O'
+            ? '이 단가를 믿어도 된다 — 제원이 있고, 만기 전이고, 민평이 오늘 것이다'
+            : e.chk === 'X'
+              ? `믿지 말 것 — ${e.chkw ?? '이유 미상'}`
+              : '잴 수 없다 (제원·민평이 없다)'
+        }
+      >
+        {e.chk ?? ''}
       </span>
     </div>
   );

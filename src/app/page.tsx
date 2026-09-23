@@ -61,6 +61,9 @@ const FILTS: [Filt, string, (k?: string | null) => boolean][] = [
 
 export default function Page() {
   const [rows, setRows] = useState<FeedRow[]>([]);
+  /* 단가 계산의 가정 — 서버가 말해 준다. 화면이 제 마음대로 적으면 스위치를
+     되돌렸을 때 알림만 남아 거짓말이 된다. [2026-09-23] */
+  const [pxQ, setPxQ] = useState(false);
   const [conn, setConn] = useState<Conn>('booting');
   const [tab, setTab] = useState<Tab>('main');
   const [nMsg, setNMsg] = useState(0);
@@ -100,8 +103,9 @@ export default function Page() {
   useEffect(() => {
     let live = true;
     getHealth()
-      .then(() => {
+      .then((h) => {
         if (!live) return;
+        setPxQ(Boolean(h?.px_assume_quarterly));
         setConn('live');
         void backfill();
       })
@@ -185,7 +189,9 @@ export default function Page() {
   /* SSE — 책이 바뀔 때만 온다. 15초 조용하면 «끊김» 으로 본다(하트비트가 있다). */
   useEffect(() => {
     if (conn === 'setup' || conn === 'booting') return;
-    const es = new EventSource(url('/events'));
+    /* ★`lite=1` — 화면이 실제로 읽는 것(feed·n_msg)만 받는다 [2026-09-23].
+       책 전체(1.2MB)를 매초 받아 JSON.parse 하고 버리던 것이 렉이었다. */
+    const es = new EventSource(url('/events', { lite: 1 }));
     es.onmessage = (ev) => {
       lastBeat.current = Date.now();
       setConn('live');
@@ -350,6 +356,19 @@ export default function Page() {
         할인조정 = 그 민평에 오바/언더·«원» 호가를 얹어 복원한 값, «민» 표식은 문면에 레벨이 없어
         민평 그 자리라는 뜻입니다 · 브로커 = 메신저 대화명(사람) · 회사명 = 데스크 ·
         원문이 잘린 줄은 마우스를 올리면 전체가 뜹니다(전화번호는 XXX 로 지웁니다)
+        {pxQ ? (
+          <>
+            {' · '}
+            {/* ★단가 가정은 «여기» 에 적는다 [OWNER 2026-09-23 「맨 밑에 블커본드
+                막무가내 어쩌고 옆에 달아주면 되잖아」]. 표 위에 sticky 로 뒀더니
+                머리글(.kb-fhead)과 같은 top:0 이라 호가와 겹쳤다. */}
+            <b>단가는 잠정 규약</b>입니다 — 국고·통안은 분기(3개월) 이자지급 이표채로
+            가정하고(국고·외평은 실제로 반기라 그만큼 낮습니다: 24-4 −81원 · 16-8 −37원),
+            크레딧·MBS 는 쿠폰이 문면에 4.2%만 적혀 쿠폰 없이 분기복리로 할인합니다
+            (10,000/(1+y/4)^(4×잔존)) · 결제일 당일(T) · 단가의 절대 수준보다
+            «민평 대비 몇 원»(마우스를 올리면 뜹니다)이 믿을 만합니다
+          </>
+        ) : null}
       </div>
     </div>
   );

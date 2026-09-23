@@ -115,4 +115,7 @@ export const getFeed = (since: number, limit = 3000) =>
   get<FeedPage>('/feed.json', { since, limit });
 
 /** 살아 있는지. 문턱 밖이라 토큰이 없어도 200 이 온다(대신 {ok:true} 만). */
-export const getHealth = () => get<{ ok: boolean; ver?: number }>('/health');
+export const getHealth = () =>
+  get<{ ok: boolean; ver?: number; px_settle?: string; px_assume_quarterly?: boolean }>(
+    '/health',
+  );

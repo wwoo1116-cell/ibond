@@ -509,14 +509,18 @@
     16px             /* ☆ */
     38px             /* 종류 */
     132px            /* 종목명 */
+    64px             /* 만기일 — «2031-03-10» 을 26-03-10 으로 줄여 적는다 [2026-09-23] */
+    42px             /* 잔존 — «29.5년» / 1년 안쪽은 «78일» */
     30px             /* 매매 */
     58px             /* 브로커 — 사람 이름. 3자가 대부분이나 실측 800줄 중 26줄이
                         46px 에서 잘렸다(네 자 이상·로마자). 원문에서 12px 를 뺐다 */
     104px            /* 회사명 — «부국증권 금융투자솔루션» 꼴 데스크명 */
     50px             /* 전일민평 */
-    54px             /* 할인조정 */
+    60px             /* 할인조정 — 0.25bp 자리는 «3.9975» 네 자리다 [2026-09-23] */
+    62px             /* 단가 — 액면 1만원당. 서식 최대치 «10127.09» [OWNER 2026-09-23] */
     44px             /* 수량 */
-    minmax(0, 1fr);  /* 원문 — ★남는 폭은 전부 여기 */
+    minmax(0, 1fr)   /* 원문 — ★남는 폭은 전부 여기 */
+    26px;            /* 검산 O/X — ★원문 «뒤» [OWNER 2026-09-23] */
   --kb-gap: 7px;
 }
 /* ★남는 폭은 «원문» 이 먹는다 [OWNER 2026-09-22 오후]. 다른 칸은 전부 «서식 최대치»
@@ -538,7 +542,22 @@
   font-size: 11px; font-weight: 600; color: var(--color-fgMuted);
   white-space: nowrap;
 }
-.kb-row { padding: 3px 0; }
+/* ★★★화면 밖 행은 «배치도 칠도» 건너뛴다 [OWNER 2026-09-23 「렉이 심한데」].
+ *
+ * 실측: 피드가 800행 × 15칸 = **격자 항목 12,000개** 를 한 스크롤 상자에 담는다.
+ * 눈에 보이는 건 서른 줄 남짓인데 나머지 770행도 매 갱신마다 배치된다. 브라우저
+ * rAF 프레임이 0.5초를 넘어 확장 프로그램의 평가조차 45초 안에 안 끝났다.
+ * ⚠오늘 오후에 칸 넷(만기일·잔존·단가·검산)을 더하면서 8,800 -> 12,000 이 됐다.
+ *   렉이 «갑자기» 심해진 것이 아니라 한 행의 값이 36% 비싸진 것이다.
+ *
+ * `content-visibility:auto` 는 뷰포트 밖 행의 배치·페인트를 건너뛴다. 스크롤바
+ * 길이가 튀지 않게 `contain-intrinsic-size` 로 «행 높이는 이만큼» 을 미리 알린다
+ * (실측 22px). 가상 스크롤을 새로 짜지 않고 같은 효과를 낸다. */
+.kb-row {
+  padding: 3px 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 22px;
+}
 .kb-fhead .num, .kb-row .num { text-align: right; }
 
 .kb-c {
@@ -557,6 +576,17 @@
 /* 할인조정 = 이 표에서 눈이 가장 먼저 닿아야 할 값. 민평은 그 기준선이라 한 단 낮다. */
 .kb-c.y { font-size: 13.5px; font-weight: 700; color: var(--color-fg); position: relative; }
 .kb-c.num:not(.y) { font-size: 12px; }
+/* 단가 [2026-09-23] — 할인조정의 «같은 값을 원으로 말한 것» 이라 한 단 낮게 둔다.
+ * 눈이 먼저 닿아야 할 값은 여전히 할인조정이고, 단가는 그 옆에서 확인해 주는 자리다. */
+.kb-c.px { color: var(--color-fgMuted); }
+/* 만기일·잔존 [2026-09-23] — 종목의 «주소» 라 한 단 옅게 둔다. 값이 아니라 좌표다. */
+.kb-c.mat, .kb-c.ttm { font-size: 11px; color: var(--color-fgMuted); opacity: .78; }
+/* 검산 — 글자 하나짜리 칸. ★색만으로 말하지 않는다(O/X 글자가 곧 값이다) — 색각
+ * 이상에서도, 흑백 인쇄에서도 읽혀야 한다. 색은 «훑을 때» 를 돕는 보조일 뿐이다. */
+.kb-fhead .ctr, .kb-row .ctr { text-align: center; }
+.kb-c.chk { font-size: 11px; font-weight: 700; }
+.kb-c.chk.ok { color: var(--color-fgMuted); }
+.kb-c.chk.no { color: var(--sr-down, #d4183d); }
 
 /* 종류 알약 — 옛 화면의 색 규약 그대로(호가 파랑기 · 체결 보조 · 나머지 무채색) */
 .kb-kd {
@@ -583,3 +613,9 @@
 /* ☆ 는 격자 칸이라 옛 flex 규약(flex:none)이 필요 없다 — 폭은 칸이 준다 */
 .kb-row > .kb-star { padding: 0; justify-self: center; }
 .kb-row > .kb-star.ph { width: auto; }
+
+/* (단가 가정 알림은 2026-09-23 에 하단 캡션(.kb-foot)으로 옮겼다 — 표 위에
+ * sticky 로 두면 머리글과 같은 top:0 이라 호가와 겹친다.) */
+/* 쿠폰을 가정해 낸 단가 [2026-09-23] — 한 단 더 옅게. 값이 아니라 «어림» 이라는
+ * 것이 훑을 때 보여야 한다. 툴팁이 그 뜻을 말한다. */
+.kb-c.px.asm { opacity: .62; font-style: italic; }

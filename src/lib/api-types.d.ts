@@ -802,6 +802,51 @@ export interface components {
              * @description 어제자 민평 — 국고·통안은 DB 전일 민평, 크레딧·국주·MBS 는 문면에 적힌 민평
              */
             mp?: number | null;
+            /**
+             * Px
+             * @description 단가 — 액면 10,000원당. 관행적 복할인(국고·외평 06M · 통안 03M)
+             */
+            px?: number | null;
+            /**
+             * Pxs
+             * @description 단가의 결제일 규약 — 'T'(당일) 또는 'T+1'(익일). 휴일표가 없어 지금은 T
+             */
+            pxs?: string | null;
+            /**
+             * Pxb
+             * @description 단가의 기준 — 'q'(이 행의 할인조정) 또는 'mp'(값이 없어 전일 민평으로 냄)
+             */
+            pxb?: string | null;
+            /**
+             * Mat
+             * @description 만기일 YYYY-MM-DD — 종목의 속성이라 값이 없는 행에도 선다
+             */
+            mat?: string | null;
+            /**
+             * Ttm
+             * @description 잔존 연수 — 결제일 기준
+             */
+            ttm?: number | null;
+            /**
+             * Pxa
+             * @description 1이면 쿠폰을 «전일 민평과 같다»고 가정해 낸 단가 — 절대 수준은 믿지 말 것(수정가액은 쓸 만하다)
+             */
+            pxa?: number | null;
+            /**
+             * Won
+             * @description 수정가액 — 전일 민평 대비 «원». +원 = 단가 비쌈 = 금리 낮음
+             */
+            won?: number | null;
+            /**
+             * Chk
+             * @description 검산 O/X — 이 행의 «단가를 믿어도 되나». 못 재면 비운다
+             */
+            chk?: string | null;
+            /**
+             * Chkw
+             * @description X 인 이유(만기 임박·민평이 오늘 것이 아님·단가가 상식 밖)
+             */
+            chkw?: string | null;
             /** A */
             a?: number | null;
             /** Asrc */
