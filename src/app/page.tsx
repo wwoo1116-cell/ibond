@@ -262,7 +262,16 @@ export default function Page() {
         </Text>
         <div className="kb-seg">
           {TABS.map(([k, label, ck]) => (
-            <button key={k} className={tab === k ? 'on' : undefined} onClick={() => setTab(k)}>
+            /* ★생김새는 v2 의 `.sr-navitem` 이 진다 — 같은 모양을 손으로 다시
+               만들지 않는다(캐논 규칙 1). 현재 표시는 그 클래스의 규약대로
+               `data-on` 이고, `aria-current` 는 낭독기에 같은 말을 한다. */
+            <button
+              key={k}
+              className="sr-navitem"
+              data-on={tab === k}
+              aria-current={tab === k ? 'page' : undefined}
+              onClick={() => setTab(k)}
+            >
               {label}
               {counts[ck] ? <span className="c">{fmtCount(counts[ck])}</span> : null}
             </button>
@@ -306,7 +315,7 @@ export default function Page() {
               <Text as="span" font="label2">
                 K-Bond
               </Text>
-              <Text as="span" font="legal" color="fgMuted">
+              <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
                 블커본드 · 막무가내 통합
               </Text>
               <Text as="span" font="legal" color="fgMuted">
@@ -332,7 +341,7 @@ export default function Page() {
               <Text as="span" font="label2">
                 전일 민평 대비
               </Text>
-              <Text as="span" font="legal" color="fgMuted">
+              <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
                 테너별 · bp
               </Text>
             </div>

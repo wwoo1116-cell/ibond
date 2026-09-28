@@ -83,10 +83,10 @@ export function Credit({ ttl, onTtl, feed = [] }: {
 
   return (
     <div className="kb-credit">
-      <div className="kb-card kb-list">
+      <div className="kb-card">
         <div className="kb-ch">
           <Text as="span" font="label2">분류</Text>
-          <Text as="span" font="legal" color="fgMuted">
+          <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
             {/* ★단위는 열 머리가 «한 번» 말한다 [v2 `unitSuffix` 규칙] — 서른 줄이 각자
                 `bp` 를 달면 그만큼 숫자가 벌어지고, 숫자를 세로로 견주라고 만든 열에서
                 그건 가장 하면 안 되는 일이다. 칸에서 뗀 자리가 종목명으로 간다. */}
@@ -159,7 +159,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">커브</Text>
-            <Text as="span" font="legal" color="fgMuted">
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
               {govSel
                 ? `잔존 × YTM · 기준선 = 종목 전일 민평 · 민평선 ${v.curve?.mp_n ?? 0}종`
                 : `잔존 × YTM · 민평선 ${v.curve?.mp_n ?? 0}종${v.grade_curve ? ` · 등급커브 ${v.grade_curve.group}` : ''}`}
@@ -187,7 +187,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">히트맵</Text>
-            <Text as="span" font="legal" color="fgMuted">종별 × 잔존 · 중앙 민평대비</Text>
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">종별 × 잔존 · 중앙 민평대비</Text>
           </div>
           {v.heat ? <Heat heat={v.heat} /> : null}
         </div>
@@ -195,7 +195,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">매수 니즈</Text>
-            <Text as="span" font="legal" color="fgMuted">{needs.length}건</Text>
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">{needs.length}건</Text>
           </div>
           {needs.length ? (
             <table className="kb-tbl">
@@ -267,7 +267,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">오퍼</Text>
-            <Text as="span" font="legal" color="fgMuted">
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
               잔존 순{noLvl.length ? ` · 레벨 미상 ${noLvl.length}` : ''}
             </Text>
             {onTtl ? (

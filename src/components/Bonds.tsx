@@ -268,10 +268,10 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
 
   return (
     <div className="kb-bonds">
-      <div className="kb-card kb-list">
+      <div className="kb-card">
         <div className="kb-ch">
           <Text as="span" font="label2">종목</Text>
-          <Text as="span" font="legal" color="fgMuted">{rows.length}종</Text>
+          <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">{rows.length}종</Text>
         </div>
         <div className="kb-scroll">
           {sections.map(({ head, list }) => (
@@ -335,7 +335,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           <div className="kb-ch">
             <Text as="span" font="label2">{sel?.nm ?? '—'}</Text>
             {sel?.alias ? <b className="kb-badge al">{sel.alias}</b> : null}
-            <Text as="span" font="legal" color="fgMuted">
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
               {sel?.full && sel.full !== sel.nm ? sel.full : (sel?.ten ?? '')}
             </Text>
           </div>
@@ -386,7 +386,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">시세</Text>
-            <Text as="span" font="legal" color="fgMuted">
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
               {v.px?.mp != null ? `민평 ${fmtYield(v.px.mp)} 중앙` : 'mid 이력'}
             </Text>
           </div>
@@ -396,7 +396,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">메시지</Text>
-            <Text as="span" font="legal" color="fgMuted">이 종목 {tape.length}건</Text>
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">이 종목 {tape.length}건</Text>
           </div>
           {tape.length ? (
             <div className="kb-scroll">
@@ -420,7 +420,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           <div className="kb-card">
             <div className="kb-ch">
               <Text as="span" font="label2">교체</Text>
-              <Text as="span" font="legal" color="fgMuted">
+              <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
                 {v.swap.n}건 · 신형−구형 bp
               </Text>
             </div>
@@ -505,7 +505,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           <div className="kb-card">
             <div className="kb-ch">
               <Text as="span" font="label2">관심</Text>
-              <Text as="span" font="legal" color="fgMuted">
+              <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
                 레벨 없는 호가 {ax.length}건 · 책에는 안 들어갑니다
               </Text>
             </div>

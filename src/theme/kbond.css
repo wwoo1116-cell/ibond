@@ -33,21 +33,6 @@
   border-top: 1px solid var(--color-bgLine);
 }
 .kb-row:hover { background: var(--sr-control); }
-.kb-chip {
-  display: inline-block;
-  padding: 0 6px;
-  border-radius: var(--borderRadius-200);
-  background: var(--sr-control);
-}
-.kb-chip-q { background: var(--color-bgPrimaryWash); }
-.kb-chip-c { background: var(--color-bgPositiveWash, var(--color-bgAlternate)); }
-.kb-setup {
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--sr-page);
-}
 .kb-card {
   width: min(460px, 100%);
   background: var(--sr-card);
@@ -142,7 +127,6 @@
 .kb-li2.on .kb-delta,
 .kb-pill.on .c,
 .kb-pill.on .kb-n,
-.kb-seg button.on .c,
 .kb-tbl tr.dl.on .kb-n,
 .kb-tbl tr[aria-current='true'] .kb-n,
 .kb-obr.lock .kb-n { color: var(--color-fg); }
@@ -191,7 +175,7 @@
 .kb-badge.stale { color: var(--color-fgMuted); border-color: var(--color-fgMuted); }
 .kb-axl { overflow-y: auto; max-height: 220px; }
 
-.kb-big { padding: 10px 12px 0; font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kb-big { padding: 10px 12px 0; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .kb-sub { padding: 0 12px 10px; font-size: 12px; color: var(--color-fgMuted); }
 .kb-kv { padding: 0 12px 12px; }
 
@@ -269,12 +253,6 @@
   border: 1px solid var(--color-bgLine); border-radius: var(--borderRadius-200);
   background: transparent; color: inherit;
 }
-.kb-tabs { display: flex; gap: 2px; }
-.kb-tab {
-  padding: 4px 10px; border: 0; background: transparent; cursor: pointer;
-  font: inherit; font-size: 12px; color: var(--color-fgMuted); border-radius: var(--borderRadius-200);
-}
-.kb-tab.on { color: inherit; font-weight: 600; background: var(--sr-control); }
 
 .kb-pills {
   display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px;
@@ -282,7 +260,9 @@
 }
 .kb-pill {
   padding: 0 12px; height: 28px; border: 0; border-radius: 999px;
-  display: inline-flex; align-items: center;
+  /* ★`gap` 이 필요하다 — flex 상자 안에서는 글자 사이의 공백이 접힌다.
+     없으면 「첫호가4」 처럼 이름과 건수가 붙는다(2026-09-28 실측). */
+  display: inline-flex; align-items: center; gap: 4px;
   background: transparent; color: var(--color-fgMuted);
   font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap;
 }
@@ -324,19 +304,16 @@
 .kb-pt.up { fill: var(--sr-up); }
 .kb-pt.dn { fill: var(--sr-down); }
 
-.kb-trends {
-  --kb-p-q: var(--sr-down);
-  --kb-p-a: color-mix(in srgb, var(--sr-down) 28%, transparent);
-  --kb-p-c: var(--sr-up);
-  --kb-p-i: var(--color-bgLine);
-  --kb-p-o: var(--sr-control);
-}
+/* 맥박의 범주색은 이제 `components/PulseChart.tsx` 의 `CATS` 가 든다 [2026-09-28].
+   여기 있던 `--kb-p-*` 다섯은 옛 SVG 판이 읽던 것이고, 그중 둘이 방향색이었다
+   (호가 파랑 · 체결 빨강). 캔버스는 `var()` 를 못 읽어 팔레트가 풀어 줘야 하므로
+   변수로 둘 자리가 아니기도 하다. */
 .kb-kvgrid {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
   background: var(--color-bgLine); border-bottom: 1px solid var(--color-bgLine);
 }
 .kb-kvc { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: var(--sr-card); }
-.kb-kvc b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kb-kvc b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .kb-ev {
   display: grid; grid-template-columns: 56px 46px 30px minmax(0, 1fr) 118px;
   gap: 6px; align-items: baseline; padding: 4px 10px; font-size: 12px;
@@ -356,6 +333,8 @@
    «내렸다» 로 읽힌다. 둘 다 방향이 없는 사실이다. 참조색은 방향쌍과 안 겹치고
    라이트·다크 쌍이 실측돼 있다. */
 .kb-evk { font-size: 11px; color: var(--color-fgMuted); }
+/* 이벤트 문장 — 이름 칸과 같은 판단: 잘리면 «…» 로 보이고 행의 `title` 이 전체를 준다. */
+.kb-evt { text-overflow: ellipsis; }
 .kb-evk.cross { color: var(--sr-ref-cd); }
 .kb-evk.fill { color: var(--sr-ref-roll); }
 .kb-sb {
@@ -426,21 +405,15 @@
  */
 .kb-bar { height: 64px; padding: 0 24px; gap: 24px; }
 
+/* ★생김새는 `.sr-navitem` 이 진다(`theme/type.css`) — 여기서 베껴 적지 않는다.
+   v2 캐논 규칙 1: 같은 모양을 손으로 다시 만들면 한쪽만 낡는다. 이 파일이 주는
+   것은 «줄» 뿐이고, 항목 하나하나의 높이·모양·상태는 그 클래스가 준다. */
 .kb-seg { display: flex; align-items: center; gap: 4px; }
-.kb-seg button {
-  padding: 0 14px; height: 32px; border: 0; border-radius: 999px; background: transparent;
-  display: inline-flex; align-items: center; justify-content: center;
-  font: inherit; font-size: 14px; font-weight: var(--fontWeight-headline, 600);
-  color: var(--color-fgMuted); cursor: pointer; white-space: nowrap;
-  transition: background var(--sr-motion-fast) var(--sr-ease-out),
-              color var(--sr-motion-fast) var(--sr-ease-out);
-}
-.kb-seg button:hover { background: color-mix(in srgb, var(--color-fg) 6%, transparent); color: var(--color-fg); }
-.kb-seg button.on { background: var(--sr-control); color: var(--color-fg); }
-.kb-seg button:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
-.kb-seg button .c {
+/* 탭 옆의 건수 — 이 앱에만 있는 것이라 여기서 준다. 굵기를 낮춰 이름 뒤로 물린다. */
+.kb-seg .sr-navitem .c {
   font-size: 12px; font-weight: 400; color: var(--color-fgMuted); margin-left: 4px;
 }
+.kb-seg .sr-navitem[data-on='true'] .c { color: var(--color-fg); }
 
 .kb-dot {
   width: 7px; height: 7px; border-radius: 50%; display: inline-block;
@@ -451,7 +424,7 @@
    다크 #2dd4bf ≈9:1 로 그래픽 기준 3:1 을 넉넉히 넘는다. */
 .kb-dot.on { background: var(--sr-ref-roll); }
 .kb-clock {
-  font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
   margin-left: 2px;
 }
 
@@ -538,7 +511,7 @@
   padding: 0 12px; height: 28px; border: 0; border-radius: 999px; cursor: pointer;
   background: transparent; color: var(--color-fgMuted);
   font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
-  display: inline-flex; align-items: center;
+  display: inline-flex; align-items: center; gap: 4px;
   transition: background var(--sr-motion-fast) var(--sr-ease-out),
               color var(--sr-motion-fast) var(--sr-ease-out);
 }
@@ -548,7 +521,7 @@
 .kb-pill:focus-visible,
 .kb-bell:focus-visible,
 .kb-star:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
-.kb-filt button .c { font-size: 11px; font-weight: 500; margin-left: 5px; opacity: .75; }
+.kb-filt button .c { font-size: 11px; font-weight: 500; opacity: .75; }
 
 /* 요약 네 칸 — 옛 화면의 오퍼·비드·스프레드·당일체결 */
 .kb-quad {
@@ -560,7 +533,7 @@
   display: flex; flex-direction: column; gap: 3px; padding: 10px 12px;
   background: var(--sr-card);
 }
-.kb-quad b { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kb-quad b { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .kb-sub2 { padding: 8px 12px 12px; font-size: 12px; color: var(--color-fgMuted); }
 /* alias 배지 — 통안의 «구구삼통» 처럼 딜러가 부르는 이름 */
 .kb-badge.al {
@@ -615,7 +588,7 @@
   padding: 0 12px; height: 28px; border-radius: 999px; border: 0;
   background: transparent; color: var(--color-fgMuted);
   font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
-  display: inline-flex; align-items: center;
+  display: inline-flex; align-items: center; gap: 4px;
   transition: background var(--sr-motion-fast) var(--sr-ease-out),
               color var(--sr-motion-fast) var(--sr-ease-out);
 }

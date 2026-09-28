@@ -201,7 +201,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">시장 맥박</Text>
-            <Text as="span" font="legal" color="fgMuted">
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
               {p.bin / 60}분 단위
               {p.t0 != null ? ` · ${fmtHm(p.t0)}~${fmtHm(p.t1 ?? p.t0)}` : ''}
             </Text>
@@ -277,7 +277,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">이벤트</Text>
-            <Text as="span" font="legal" color="fgMuted">
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
               최근 {(v.events ?? []).length}건 중 {evs.length}
             </Text>
           </div>
@@ -294,7 +294,9 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
           </div>
           <div className="kb-scroll">
             {evs.slice(0, 300).map((e, i) => (
-              <div className="kb-ev" key={i}>
+              /* 이벤트 문장은 길이가 자료라 어떤 폭도 모자랄 수 있다 —
+                 잘리면 «…» 로 보이고 전체는 이 `title` 이 준다. */
+              <div className="kb-ev" key={i} title={evText(e)}>
                 <span className="kb-n">{fmtHms(e.t ?? 0)}</span>
                 <span className={`kb-evk ${e.k}`}>{EVK[e.k ?? ''] ?? e.k}</span>
                 <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
@@ -312,7 +314,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">커브 오늘</Text>
-            <Text as="span" font="legal" color="fgMuted">지표 · 차기지표</Text>
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">지표 · 차기지표</Text>
           </div>
           <table className="kb-tbl">
             {/* ★인라인 px 를 걷었다 [2026-09-28] — 폭은 `lib/columns` 한 곳이 정한다.
@@ -369,7 +371,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">딜러</Text>
-            <Text as="span" font="legal" color="fgMuted">
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
               오늘 {v.leaderboard?.n ?? 0}곳 · 건수 순
             </Text>
           </div>
