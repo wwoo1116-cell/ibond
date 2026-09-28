@@ -2,5 +2,7 @@
 # ★그대로 두면 Vercel 의 pnpm install 이 «set this to true or false» 를 불리언으로
 #   읽지 못해 깨진다. unrs-resolver 는 eslint 해석기의 네이티브 바이너리다.
 allowBuilds:
+  # esbuild 는 vitest 가 쓰는 트랜스폼기다 [2026-09-28 가드 레인].
+  esbuild: true
   sharp: true
   unrs-resolver: true
