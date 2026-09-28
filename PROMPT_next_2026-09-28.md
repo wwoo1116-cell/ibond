@@ -9,7 +9,9 @@
 K-Bond 레인. 2026-09-15 [OWNER] 「락만 고치고 얼린다」로 얼렸다. 09-22 화면 · 09-23 단가 · 09-28 경량화로
 잠깐씩 열렸다. 개발을 이어서 하지 마라. 내가 지정하는 것만 한다.
 
-정본 —  Projects\apps\kbond\PROMPT_next_2026-09-28.md   (이 한 장뿐 · 옛 판은 archive/docs/)
+정본 —  Projects\apps\kbond\PROMPT_next_2026-09-28.md          (이 파일 · 레인 상태·배관·함정)
+        Projects\apps\kbond\PROMPT_next_2026-09-28-design.md   (화면 문법 — 09-28 오후 v2 이식)
+        옛 판은 archive/docs/
 
 규율 —
 - 백엔드를 만졌으면 셋 다: verify_v4 [A]~[I5] · gate_meaning [J][K][L](메모리 9GB · 25분) · pytest.
@@ -88,6 +90,20 @@ python tools\gen_dyn_fonts.py    (kbond-web · 글꼴 원본을 바꿨을 때만
   `test_cors_token` · `test_issuer` · `test_fresh` · `test_stale_warn` · `kbond_test`([I]) · `replay_verify` · `verify_external`
 - **연구·일회성(14)** `kbond_dyn_study` · `kbond_mark_test` · `slang_*`(4) · `kbond_issuer_{derive,near,todo,dict}` · `audit_kbond_parse` ·
   `backfill_amounteff` · `scrub_desk_names` · `kbond_sector`
+
+## §4½. 화면 문법은 별도 정본이다 [2026-09-28 오후]
+
+[OWNER] 「디자인 문법들 전반적으로 다듬기 — v2 문법 참조」로 화면 전체를 sauron-v2 문법에
+맞췄다. **값은 한 자리도 안 바뀌었다**(지문 ×2 = 0건). 규칙·예외·함정은
+`PROMPT_next_2026-09-28-design.md` 에 있다. 요지만:
+
+- 차트 넷이 한 얼굴이 됐다 — 눈금 알고리즘 셋 → 하나(v2 `canonOptions`), 리드아웃은
+  그림 밖 한 줄. 시세·맥박은 lightweight-charts, 커브는 SVG 유지(LWC 에 산점도가 없다).
+- 서식 여섯 벌 → `lib/format.ts` 하나 · 변화는 화살표 ↗↘(v2 D4.1) · 방향색은 부호와 매매에만.
+- 표 폭은 서식 최대치(`lib/columns.ts`) · 말줄임은 이름 칸에만(그것도 `title` 이 있을 때).
+- **`guards/` 126개**가 이 규칙을 잰다(`pnpm test`) — 규칙을 외울 필요가 없다.
+- 새 도구 둘: `probe_screen.mjs`(대비·넘침·글자폭) · `measure_load.mjs`(첫 화면 실제 바이트).
+  화면을 고쳤으면 지문 ×2 · probe · 눈으로 한 장, 셋을 다 돌린다.
 
 ## §5. 함정 — 데인 것만
 
