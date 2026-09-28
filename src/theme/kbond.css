@@ -249,6 +249,10 @@
    갖춰야 «조용한 잘림» 이 아니다: 남는 폭을 다 먹고 · «…» 로 잘림을 보이고 ·
    `title` 이 전체를 준다. `.kb-li .nm` 과 같은 판단이다. */
 .kb-tbl td.nm { overflow: hidden; text-overflow: ellipsis; }
+/* ★«무리 1위» 배지 [2026-09-28] — 같은 계열·등급·잔존에서 값을 부른 오퍼 중
+   가장 싼 것. 방향이 아니라 **뽑힘**을 뜻하므로 방향색을 쓰지 않는다(빨강·파랑은
+   부호와 매매의 것이다). 「지금 이것」과 같은 면(`--sr-control`)에 잉크로 선다. */
+.kb-badge.best { background: var(--sr-control); color: var(--color-fg); font-weight: 700; }
 .kb-tbl td.best { font-weight: 600; }
 .kb-tbl tbody tr:hover { background: var(--sr-control); }
 .kb-tbl tr.mut td { opacity: .55; }

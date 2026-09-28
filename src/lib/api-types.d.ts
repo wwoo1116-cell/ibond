@@ -476,6 +476,26 @@ export interface components {
              */
             cmv?: number | null;
             /**
+             * Pr
+             * @description 같은 무리 안 순위. 1 = 가장 싸다(금리가 가장 높다)
+             */
+            pr?: number | null;
+            /**
+             * Pn
+             * @description 그 무리에서 값을 부른 오퍼 수. 넷 미만이면 순위를 안 낸다
+             */
+            pn?: number | null;
+            /**
+             * Pk
+             * @description 무리 이름 — «계열 등급 잔존칸», 넷이 안 되면 등급을 품어 «계열 잔존칸»
+             */
+            pk?: string | null;
+            /**
+             * Padj
+             * @description 그 무리를 커브 반영값으로 줄 세웠나(전원이 가졌을 때만)
+             */
+            padj?: boolean | null;
+            /**
              * Won
              * @description 문면 원 스프레드
              */

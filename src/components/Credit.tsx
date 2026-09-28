@@ -43,6 +43,16 @@ export function Credit({ ttl, onTtl, feed = [] }: {
   const [cls, setCls] = useState<string | null>(null);
   const [rt, setRt] = useState<string | null>(null);
   const [crv, setCrv] = useState(10);
+  /* ★[OWNER 2026-09-28] 「싼 것부터」 — 거르기가 아니라 **보기 한 가지**다.
+     처음엔 「값 부른 것만」(거르기)으로 지었다가 **재서 바꿨다**: 표는 잔존 순
+     60줄까지만 그리는데 무리 1위들은 책 825개에 흩어져 있어, 걸러도 화면에 뜬
+     1위 배지가 **1개**였다(실측). 3분의 2를 감춰도 여전히 «짧은 것 60개» 를 볼 뿐이다.
+     ▎그래서 이 단추는 두 가지를 같이 한다 — 「민평에」를 감추고 **싼 것부터 줄 세운다**.
+       그러면 표 맨 위가 곧 오늘의 후보 목록이 된다.
+     ▎잔존 순은 기본 보기의 규칙(오너)이고 여기서 그대로다. 이 단추는 «누른 동안만»
+       다른 순서로 보는 것이고, 누른 상태가 머리줄에 적힌다.
+     ▎서버로 안 보낸다 — 이미 받은 줄을 다시 세우는 «보기» 일 뿐이라 책이 안 바뀐다. */
+  const [cheap, setCheap] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const pull = useCallback(async () => {
@@ -79,7 +89,14 @@ export function Credit({ ttl, onTtl, feed = [] }: {
      크레딧 메시지가 흐르면 읽는 사람이 속는다). */
   const tapeSec = govSel && cls ? cls : '크레딧/기타';
   const tape = feed.filter((e) => e.sec === tapeSec).slice(-200).reverse();
-  const lvl = offers.filter((o) => o.ytm != null);
+  const lvl0 = offers.filter((o) => o.ytm != null);
+  const nAtmp = lvl0.filter((o) => o.atmp).length;
+  /* 싸다 = 금리가 높다. 커브 반영값이 있으면 그것으로 줄 세운다(시장 이동을 걷어낸
+     뒤라야 «이 종목이» 싼지가 나온다). 없으면 민평대비로 — 짧은 쪽은 둘이 거의 같다. */
+  const cheapOf = (o: Offer) => o.bpc ?? o.bpe ?? -Infinity;
+  const lvl = cheap
+    ? lvl0.filter((o) => !o.atmp).sort((a, z) => cheapOf(z) - cheapOf(a))
+    : lvl0;
   const noLvl = offers.filter((o) => o.ytm == null);
   /* ★커브 반영 민평대비 [OWNER 2026-09-28].
      «민평대비» 에는 두 가지가 섞여 있다 — «이 종목이 싸졌다» 와 «오늘 시장이
@@ -297,13 +314,26 @@ export function Credit({ ttl, onTtl, feed = [] }: {
                   `title` 이 지고, 보이는 줄은 믿을지 말지 정할 만큼만 적는다:
                   얼마나 뺐나(커브) · 무엇으로 뺐나(닻 수).
                   단위 `bp` 는 옆 칸(민평대비)이 행마다 달고 있어 겹쳐 적지 않는다. */}
-              잔존 순{noLvl.length ? ` · 미상 ${noLvl.length}` : ''}
+              {cheap ? `싼 것부터 ${lvl.length}` : '잔존 순'}
+              {noLvl.length ? ` · 미상 ${noLvl.length}` : ''}
               {cmOn
                 ? ` · 커브 ${fmtBpUnit(cm!.med)} · 닻 ${cm!.n}`
                 : govSel
                   ? ''
                   : ' · 커브 반영 불가'}
             </Text>
+            {nAtmp ? (
+              <button
+                className={`kb-pill${cheap ? ' on' : ''}`}
+                onClick={() => setCheap((x) => !x)}
+                aria-pressed={cheap}
+                title={`「민평에」 ${nAtmp}건을 감추고 싼 것(금리 높은 것)부터 줄 세웁니다.`
+                  + ` 그 줄들은 레벨이 아니라 «기준 그 자리» 라 싼 것을 고를 때는 셀 수 없습니다.`
+                  + ` 커브 반영값이 있으면 그것으로, 없으면 민평대비로 셉니다.`}
+              >
+                싼 것부터
+              </button>
+            ) : null}
             {onTtl ? (
               <select
                 className="kb-sel"
@@ -332,8 +362,19 @@ export function Credit({ ttl, onTtl, feed = [] }: {
               </thead>
               <tbody>
                 {lvl.slice(0, 60).map((e, i) => (
-                  <tr key={i} title={`${e.d ?? ''}`}>
-                    <td className="l nm" title={e.n ?? undefined}>{e.n}</td>
+                  /* ★순위는 칸을 안 쓴다 — 표는 이미 여섯 칸이고 일곱째를 내면
+                      종목 이름이 «…» 만 남는다. 무리의 **1위에만 배지**를 달고
+                      나머지 순위는 줄 툴팁이 진다: 훑는 눈에는 «여기» 하나면 되고,
+                      따져 볼 때는 마우스를 올린다. */
+                  <tr
+                    key={i}
+                    title={[e.d ?? '', e.pk && e.pn ? `${e.pk} ${e.pn}개 중 ${e.pr}위` : '']
+                      .filter(Boolean).join(' · ') || undefined}
+                  >
+                    <td className="l nm" title={e.n ?? undefined}>
+                      {e.n}
+                      {e.pr === 1 ? <b className="kb-badge best">1위</b> : null}
+                    </td>
                     <td className="num kb-n">{fmtTtm(e.ttm)}</td>
                     {/* «민평에 팔자» 는 +0.0bp 가 아니라 «민평» 으로 읽어야 한다 —
                         0.0 으로 쓰면 딜러가 정확히 0 을 부른 것처럼 보인다 [OWNER 2026-09-07] */}
