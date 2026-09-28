@@ -816,28 +816,95 @@ def _idx(seq, x):
         return -1
 
 
+# ── 또래 순위 [OWNER 2026-09-28] ───────────────────────────────────────────
+# 「커브 반영」은 «시장 탓이 아니다» 까지만 말한다. 트레이더가 다음에 묻는 것은
+# «그래서 이게 그중 제일 싸냐» 다. 그건 커브가 아니라 **옆 종목**이 답한다.
+#
+# ★★★처음 설계는 «또래 중앙 대비 몇 bp» 였고, **재서 버렸다**(2026-09-28 실측).
+#   책의 67%(825 중 556)가 「민평에」라 또래 중앙이 곧 민평 자리다 —
+#   무리 4개 이상 53개 중 **50개(94%)의 중앙이 |0.05bp| 안**이고, 그래서
+#   «또래 대비» 가 «민평대비» 와 사실상 같은 오퍼가 **756 중 737(97%)** 이었다.
+#   ▎이미 화면에 있는 칸의 복사본을 한 칸 더 만들 뻔했다.
+#
+# ★남은 것은 **순위**다. 값 부른 것끼리는 무리 안 폭이 중앙 6.5bp · p90 17bp 로
+#   고를 여지가 분명히 있고, 「9개 중 2위」는 민평대비를 봐서는 안 나온다(훑어야 나온다).
+#
+# ★「민평에」는 순위에서 뺀다 [OWNER 2026-09-07 「둘은 다른 관측이다 — 하나는 가격,
+#   하나는 «기준 그 자리»」]. 섞으면 무리의 3분의 2가 0 에서 동률이 되어 순위가 잡음이 된다.
+PEER_MIN = 4              # 이보다 작은 무리에서는 순위가 뜻이 없다
+PEER_BUCKETS = BUCKETS    # 잔존 칸은 히트맵과 같은 것을 쓴다 — 한 화면이 두 축을 말하면 안 된다
+
+
+def _peer_bucket(ttm):
+    if ttm is None or ttm <= 0:
+        return None
+    for lo, hi, nm in PEER_BUCKETS:
+        if lo <= ttm < hi:
+            return nm
+    return None
+
+
+def peer_rank(rows):
+    """값 부른 오퍼에 «같은 무리 안 순위» 를 매긴다. 1위 = 가장 싸다.
+
+    무리 = 계열 × 등급 × 잔존 칸. 넷 미만이면 **등급을 품어** 계열 × 잔존으로 한 단
+    넓히고, 그래도 넷 미만이면 아무 말도 안 한다(실측 채택률 ①84.5% · ②8.7% · ③6.7%).
+
+    ★싸다 = 금리가 높다. 민평대비가 클수록 싸다(같은 종목을 더 높은 금리에 판다).
+    ★부르는 쪽이 **거르기 전** 목록을 줘야 한다 — 무리가 화면 필터를 따라 좁아지면
+      같은 오퍼가 필터에 따라 다른 순위를 말한다.
+    ★무리 안에서 **재는 자가 하나**여야 한다 — 값 부른 것이 전부 커브 반영값을
+      갖고 있으면 그걸로, 하나라도 없으면 전원 민평대비로 잰다. 섞어서 재지 않는다.
+    """
+    live = [e for e in rows
+            if not e.get("atmp") and e.get("bpe") is not None
+            and _peer_bucket(e.get("ttm")) is not None]
+    narrow, wide = {}, {}
+    for e in live:
+        b = _peer_bucket(e["ttm"])
+        narrow.setdefault((e.get("cls"), e.get("rt"), b), []).append(e)
+        wide.setdefault((e.get("cls"), b), []).append(e)
+
+    out = {}
+    for e in live:
+        b = _peer_bucket(e["ttm"])
+        g = narrow[(e.get("cls"), e.get("rt"), b)]
+        lab = f"{e.get('cls') or '회사채'} {e.get('rt') or '미상'} {b}"
+        if len(g) < PEER_MIN:
+            g = wide[(e.get("cls"), b)]
+            lab = f"{e.get('cls') or '회사채'} {b}"      # 등급을 품었다
+            if len(g) < PEER_MIN:
+                continue
+        adj = all(x.get("bpc") is not None for x in g)
+        key = (lambda x: x["bpc"]) if adj else (lambda x: x["bpe"])
+        order = sorted(g, key=key, reverse=True)          # 싼 것(=금리 높은 것)부터
+        out[id(e)] = {"pr": order.index(e) + 1, "pn": len(g), "pk": lab, "padj": adj}
+    return out
+
+
 def cr_sel(snap, T, mode="def", cls=None, rt=None, cv=None):
     """고른 버킷(cls|rt) 또는 종별의 살아 있는 오퍼. 화면 crSel 그대로.
 
     ★결과금리가 없는 원 호가는 정렬할 금리가 없다 — 걸러내지 않고 그대로 실어
       보낸다. 화면이 «레벨 미상» 구획으로 따로 모은다 [OWNER].
     """
-    rows = cr_alive(snap, T, mode)
+    # ★얕은 복사다 — `cr_alive` 가 내주는 것은 책 그 자체라 여기서 고치면
+    #   스냅샷이 오염된다(다음 폴에서 «이미 반영된» 값을 또 민다).
+    # ★★★순위는 **거르기 전에** 매긴다. 화면이 「은행채 AAA」를 골라 두었다고 해서
+    #   순위의 모집단이 같이 좁아지면, 같은 오퍼가 필터에 따라 다른 순위를 말한다
+    #   (등급을 품는 넓은 무리가 그 필터 안쪽만 보게 되어서다). 책은 하나다.
+    allr = [{**e, **dict(zip(("bpc", "cmv"), curve_adj(cv, e)))}
+            for e in cr_alive(snap, T, mode)]
+    ranks = peer_rank(allr)                 # 커브 반영 뒤에 — 재는 자가 그 순서로 정해진다
+    for e in allr:
+        e.update(ranks.get(id(e)) or {"pr": None, "pn": None, "pk": None, "padj": None})
+    rows = allr
     if rt:
         key = f"{cls}|{rt}"
         rows = [e for e in rows if bkey(e) == key]
     elif cls:
         rows = [e for e in rows if (e.get("cls") or "회사채") == cls]
-    rows = sorted(rows, key=lambda e: e["ttm"] if e.get("ttm") is not None else 99)
-    if cv is None:
-        return rows
-    # ★얕은 복사다 — `cr_alive` 가 내주는 것은 책 그 자체라 여기서 고치면
-    #   스냅샷이 오염된다(다음 폴에서 «이미 반영된» 값을 또 민다).
-    out = []
-    for e in rows:
-        bpc, mv = curve_adj(cv, e)
-        out.append({**e, "bpc": bpc, "cmv": mv})
-    return out
+    return sorted(rows, key=lambda e: e["ttm"] if e.get("ttm") is not None else 99)
 
 
 def cr_needs(snap, T, mode="def", cls=None, rt=None):

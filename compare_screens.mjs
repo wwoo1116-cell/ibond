@@ -117,8 +117,19 @@ const NEW_CRLIST = `[...document.querySelectorAll('.kb-li.cr')].map(e=>{
   const s=[...e.children].map(x=>x.textContent.replace(/\\s+/g,' ').trim());
   return {nm:s[0]||'', sub:s[1]||'', v:s[2]||'', d:s[3]||''};
 })`;
+/* ★배지는 값이 아니라 «주석» 이다 — 읽기 전에 떼어 낸다 [2026-09-28].
+   옛 화면에 짝이 없는 표식이고(집계·환산·추정·**1위**), 그중 「1위」는 이름 칸에
+   **숫자를 넣는다**. 안 떼면 `nums()` 가 종목명에서 1 을 주워 «값이 바뀌었다» 고
+   말한다. 종목 줄이 이미 같은 이유로 지표·차기를 떼고 있다(`NEW_BONDS`).
+   ⚠떼는 것은 배지뿐이다. 칸을 통째로 버리면 종목명 대조가 사라진다.
+   ⚠이 수리 전에는 지문이 «운으로» 통과했다 — 첫 15줄이 전부 짧은 잔존이라
+     마침 1위가 하나도 없었을 뿐이다. 다른 날이면 거짓 경보가 됐다. */
 const NEW_OB = `[...document.querySelectorAll('.kb-right .kb-tbl tbody tr')].slice(0,15).map(tr=>
-  [...tr.children].map(td=>td.textContent.replace(/\\s+/g,' ').trim()))`;
+  [...tr.children].map(td=>{
+    const c = td.cloneNode(true);
+    c.querySelectorAll('.kb-badge').forEach(x=>x.remove());
+    return c.textContent.replace(/\\s+/g,' ').trim();
+  }))`;
 /* ★새 화면의 종목 줄은 `.kb-li2` 다. `.kb-li` 로 잡으면 «관심»(axes) 목록이 먼저
    걸려 «22-8 사자 100억 19초» 같은 딴 줄을 세게 된다 — 첫 실행에서 그랬다. */
 const NEW_BONDS = `[...document.querySelectorAll('.kb-li2')].slice(0,15).map(e=>{

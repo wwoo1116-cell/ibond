@@ -65,6 +65,13 @@ class CreditQuote(BaseModel):
         None, description="커브 반영 민평대비 = bpe − 같은 잔존 국고 커브의 오늘 이동. "
                           "닻이 둘 미만이면 None 이다(0 이 아니다)")
     cmv: float | None = Field(None, description="그 잔존에서 «뺀 양»(bp) — 화면이 되짚게 한다")
+    # ── 또래 순위 [OWNER 2026-09-28] ─────────────────────────────────────
+    # 「그래서 이게 그중 제일 싸냐」에 답하는 자리. 「민평에」 오퍼는 순위에서 뺀다
+    # (책의 3분의 2라 섞으면 무리 대부분이 0 에서 동률이 된다).
+    pr: int | None = Field(None, description="같은 무리 안 순위. 1 = 가장 싸다(금리가 가장 높다)")
+    pn: int | None = Field(None, description="그 무리에서 값을 부른 오퍼 수. 넷 미만이면 순위를 안 낸다")
+    pk: str | None = Field(None, description="무리 이름 — «계열 등급 잔존칸», 넷이 안 되면 등급을 품어 «계열 잔존칸»")
+    padj: bool | None = Field(None, description="그 무리를 커브 반영값으로 줄 세웠나(전원이 가졌을 때만)")
     won: float | None = Field(None, description="문면 원 스프레드")
     ytm: float | None = None
     y: float | None = Field(None, description="ytm 과 같다(피드 호환)")
