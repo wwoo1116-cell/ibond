@@ -73,8 +73,11 @@ export function Setup({
         <Button onClick={connect} disabled={busy}>
           연결
         </Button>
+        {/* ★오류는 방향이 없다 [2026-09-28]. `sr-up` 은 «올랐다» 의 색이라 오류문에
+            쓰면 그 색이 뜻하는 것이 화면마다 달라진다. 오류는 낱말이 지고
+            (`role="alert"` 로 낭독기에도), 색은 잉크다. */}
         {err ? (
-          <Text as="p" font="legal" className="sr-up">
+          <Text as="p" font="legal" role="alert">
             {err}
           </Text>
         ) : null}

@@ -21,6 +21,8 @@ import {
   EMDASH, fmtAge, fmtBpLevel, fmtBpUnit, fmtHms, fmtLot, fmtYield,
 } from '@/lib/format';
 import { Delta } from '@/ui/Delta';
+import { ColGroup } from '@/ui/ColGroup';
+import { TABLES } from '@/lib/columns';
 
 type ObLadder = NonNullable<View['ob']>;
 type ObLevel = NonNullable<ObLadder['levels']>[number];
@@ -156,6 +158,7 @@ function Dealers({ d, T }: { d: NonNullable<View['dealers']>; T: number }) {
   if (!rows.length) return <div className="kb-empty">살아 있는 호가가 없습니다</div>;
   return (
     <table className="kb-tbl">
+      <ColGroup cols={TABLES.dealers} />
       <thead>
         <tr>
           <th className="l">딜러</th>
@@ -346,11 +349,13 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           <div className="kb-quad">
             <div>
               <span className="kb-n">매도 (오퍼)</span>
-              <b className="sr-down">{fmtYield(sel?.fa?.y)}</b>
+              {/* ★레벨은 잉크다 — 이 칸이 «매도(오퍼)» 라는 것은 바로 위 라벨이
+                  말한다. 값에까지 옆색을 주면 같은 화면의 부호색과 구별이 안 된다. */}
+              <b>{fmtYield(sel?.fa?.y)}</b>
             </div>
             <div>
               <span className="kb-n">매수 (비드)</span>
-              <b className="sr-up">{fmtYield(sel?.fb?.y)}</b>
+              <b>{fmtYield(sel?.fb?.y)}</b>
             </div>
             <div>
               <span className="kb-n">{v.ob?.best?.lock ? '락' : '스프레드'}</span>
@@ -398,7 +403,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               {tape.map((e) => (
                 <div className="kb-tp" key={e.i}>
                   <span className="kb-n">{fmtHms(e.t)}</span>
-                  <span className={e.s === 'S' ? 'sr-down' : e.s === 'B' ? 'sr-up' : undefined}>
+                  <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
                     {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
                   </span>
                   <span className="kb-tpr">{e.raw}</span>
@@ -508,8 +513,10 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               {ax.slice(0, 24).map((e, i2) => (
                 <div className="kb-li ax" key={i2} title={`${e.d ?? ''} · ${fmtAge(T - e.t)} 전`}>
                   <span className="nm">{e.n}</span>
-                  {/* ★방향색은 데스크 관례 — 매수 빨강(sr-up) · 매도 파랑(sr-down) */}
-                  <span className={`num ${e.s === 'B' ? 'sr-up' : 'sr-down'}`}>
+                  {/* ★옆색은 데스크 관례 — 매수 빨강 · 매도 파랑. 부호색(`.sr-*`)이
+                      아니라 옆색(`.kb-side-*`)이다: 여기 색은 «올랐다» 가 아니라
+                      «어느 쪽» 을 말한다. */}
+                  <span className={`num ${e.s === 'B' ? 'kb-side-b' : 'kb-side-s'}`}>
                     {e.s === 'B' ? '사자' : '팔자'}
                   </span>
                   <span className="num kb-n">{e.a ? `${e.a}억` : ''}</span>

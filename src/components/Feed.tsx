@@ -100,7 +100,7 @@ const Row = memo(function Row({ e, on, onStar }: {
       <span className="kb-c num ttm" title={e.mat ? `${e.ttm}년` : undefined}>
         {fmtTtm(e.ttm)}
       </span>
-      <span className={`kb-c s${e.s === 'S' ? ' sr-down' : e.s === 'B' ? ' sr-up' : ''}`}>
+      <span className={`kb-c s${e.s === 'S' ? ' kb-side-s' : e.s === 'B' ? ' kb-side-b' : ''}`}>
         {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
       </span>
       {/* 브로커 = 사람 이름(메신저 대화명) · 회사명 = 데스크 «유진증권 CM팀»

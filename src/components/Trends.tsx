@@ -21,6 +21,8 @@ import {
   fmtYield,
 } from '@/lib/format';
 import { Delta } from '@/ui/Delta';
+import { ColGroup } from '@/ui/ColGroup';
+import { TABLES } from '@/lib/columns';
 
 type Ev = NonNullable<View['events']>[number];
 type Leader = NonNullable<View['leaderboard']>;
@@ -81,6 +83,7 @@ function Leaderboard({ lb, lane, onLane }: {
         ))}
       </div>
       <table className="kb-tbl">
+        <ColGroup cols={TABLES.leaderboard} />
         <thead>
           <tr>
             <th className="l">딜러</th>
@@ -294,7 +297,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
               <div className="kb-ev" key={i}>
                 <span className="kb-n">{fmtHms(e.t ?? 0)}</span>
                 <span className={`kb-evk ${e.k}`}>{EVK[e.k ?? ''] ?? e.k}</span>
-                <span className={e.s === 'S' ? 'sr-down' : e.s === 'B' ? 'sr-up' : undefined}>
+                <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
                   {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
                 </span>
                 <span className="kb-evt">{evText(e)}</span>
@@ -312,14 +315,17 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
             <Text as="span" font="legal" color="fgMuted">지표 · 차기지표</Text>
           </div>
           <table className="kb-tbl">
+            {/* ★인라인 px 를 걷었다 [2026-09-28] — 폭은 `lib/columns` 한 곳이 정한다.
+                다섯 표 중 하나만 자기 폭을 들고 있으면 그 표만 다른 규칙으로 산다. */}
+            <ColGroup cols={TABLES.curveToday} />
             <thead>
               <tr>
-                <th className="l" style={{ width: 44 }}>연물</th>
+                <th className="l">연물</th>
                 <th className="l">종목</th>
-                <th style={{ width: 62 }}>전일민평</th>
-                <th style={{ width: 58 }}>mid</th>
-                <th style={{ width: 50 }}>Δbp</th>
-                <th style={{ width: 58 }} title="살아 있는 오퍼 딜러 · 비드 딜러 (▲ 비드 우세 · ▼ 오퍼 우세)">딜러</th>
+                <th>전일민평</th>
+                <th>mid</th>
+                <th>Δbp</th>
+                <th title="살아 있는 오퍼 딜러 · 비드 딜러 (▲ 비드 우세 · ▼ 오퍼 우세)">딜러</th>
               </tr>
             </thead>
             <tbody>

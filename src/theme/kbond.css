@@ -32,11 +32,11 @@
 .kb-row + .kb-row {
   border-top: 1px solid var(--color-bgLine);
 }
-.kb-row:hover { background: var(--sr-page); }
+.kb-row:hover { background: var(--sr-control); }
 .kb-chip {
   display: inline-block;
   padding: 0 6px;
-  border-radius: 6px;
+  border-radius: var(--borderRadius-200);
   background: var(--sr-control);
 }
 .kb-chip-q { background: var(--color-bgPrimaryWash); }
@@ -51,7 +51,7 @@
 .kb-card {
   width: min(460px, 100%);
   background: var(--sr-card);
-  border-radius: 16px;
+  border-radius: var(--borderRadius-400);
   padding: 28px 30px;
 }
 
@@ -87,34 +87,89 @@
 .kb-trends { grid-template-columns: minmax(420px, 1fr) minmax(400px, 480px); }
 
 .kb-bonds .kb-card, .kb-credit .kb-card, .kb-trends .kb-card, .kb-main .kb-card {
-  width: auto; padding: 0; border-radius: 10px;
+  width: auto; padding: 0; border-radius: var(--borderRadius-300);
   background: var(--sr-card);
   border: 1px solid var(--color-bgLine);
   overflow: hidden;
 }
 .kb-mid, .kb-right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
+/* ── 카드 머리 [v2 얼라인 5: 같은 위계의 카드 머리는 같은 패딩 리듬] ────────
+ *
+ * `paddingX 16 · top 12 · bottom 4`. 한 화면에서 카드마다 머리 높이가 다르면
+ * 나란히 선 카드의 첫 줄이 계단이 진다.
+ *
+ * ★자리를 «마지막 자식» 으로 정하지 않는다 [2026-09-28]. 종전 규칙
+ * (`> :last-child { margin-left: auto }`)은 머리에 컨트롤이 붙은 카드 여섯에서
+ * **메타 글자가 아니라 컨트롤을** 오른쪽으로 보냈고, 그래서 메타가 제목 옆에
+ * 붙은 카드와 오른쪽 끝에 선 카드가 섞였다. 이제 자리는 이름이 정한다.
+ *
+ * 바닥 정렬인 이유: 머리에 32px 컨트롤이 서는 카드와 안 서는 카드의 제목이
+ * 같은 기준선에 놓인다(v2 얼라인 3).
+ */
 .kb-ch {
-  display: flex; align-items: baseline; gap: 8px;
-  padding: 9px 12px; border-bottom: 1px solid var(--color-bgLine);
+  display: flex; align-items: flex-end; gap: 8px; min-height: 48px;
+  padding: 12px 16px 4px;
 }
-.kb-ch > :last-child { margin-left: auto; }
+/** 메타 — 늘 오른쪽 끝. */
+.kb-ch-meta { margin-left: auto; }
+/** 컨트롤 묶음 — 메타 뒤에 선다. */
+.kb-ch-ctl { display: flex; align-items: center; gap: 4px; margin-left: 12px; }
+.kb-ch-meta ~ .kb-ch-ctl { margin-left: 12px; }
+.kb-ch:not(:has(.kb-ch-meta)) > :last-child { margin-left: auto; }
 .kb-scroll { max-height: 58vh; overflow-y: auto; overflow-x: hidden; }
 .kb-empty { padding: 18px 12px; color: var(--color-fgMuted); font-size: 13px; }
 .kb-n { color: var(--color-fgMuted); font-size: 11px; }
 
+/* ★짚은 면 위에서는 뮤트가 **잉크로 한 단 오른다** [2026-09-28 실측].
+ *
+ * 두 가지가 같은 답을 가리킨다.
+ *   ① 대비 — CDS `fgMuted`(다크 rgb 138,145,158)는 컨트롤 면(rgb 40,43,49) 위에서
+ *      **4.47:1** 이라 본문 기준 4.5 를 못 넘는다. 같은 글자가 카드 위에서는 5.87 로
+ *      넉넉하다. 즉 «면이 밝아진 만큼» 글자가 따라 올라야 한다
+ *      (`probe_screen.mjs` 가 잡았다 — 색 이름이 아니라 «어느 면 위인가» 가 답이었다).
+ *   ② 뜻 — 지금 고른 줄의 글자가 화면에서 가장 흐릴 이유가 없다.
+ *
+ * CDS 팔레트를 고치는 길은 안 쓴다(v2 규율: 코인베이스의 값을 우리가 편집하지
+ * 않는다). 고치는 것은 «어느 자리에서 어느 토큰을 쓰는가» 다.
+ */
+.kb-li.on .kb-n,
+.kb-li.on .sub,
+.kb-li.on .sr-flat,
+.kb-li2.on .kb-n,
+.kb-li2.on .sub,
+.kb-li2.on .sr-flat,
+.kb-li2.on .kb-delta,
+.kb-pill.on .c,
+.kb-pill.on .kb-n,
+.kb-seg button.on .c,
+.kb-tbl tr.dl.on .kb-n,
+.kb-tbl tr[aria-current='true'] .kb-n,
+.kb-obr.lock .kb-n { color: var(--color-fg); }
+
 /* 목록 — 이름은 접지 않는다. 접히면 행 높이가 들쭉날쭉해 눈이 줄을 못 따라간다. */
 .kb-li {
   display: grid; grid-template-columns: minmax(0, 1fr) 34px 52px 46px;
-  gap: 5px; align-items: baseline; width: 100%;
+  gap: 4px; align-items: baseline; width: 100%;
   padding: 6px 10px; border: 0; background: transparent; cursor: pointer;
   text-align: left; font: inherit; color: inherit;
   border-bottom: 1px solid var(--color-bgLine);
 }
 .kb-li:hover { background: var(--sr-control); }
-.kb-li.on { background: var(--color-bgPrimaryWash); }
+/* ★「지금 이것」은 한 가지 면이다 [2026-09-28] — `--sr-control`.
+   종전에는 목록 행이 `bgPrimaryWash`(CDS 의 파랑 워시)였는데, 이 앱에서 파랑은
+   낱말이다(«내림»). 고른 행이 파래지면 그 행이 내렸다고 말하는 셈이 된다. */
+.kb-li.on { background: var(--sr-control); }
 .kb-li.mut { opacity: .5; }
-.kb-li > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-li > span { white-space: nowrap; overflow: hidden; }
+/* ★이름 칸만 «…» 를 남긴다 [2026-09-28, 피드의 이름 칸과 같은 판단].
+ *
+ * 분류 줄은 한 칸(둘째)이 **두 사실**(건수·수요)을 지고, 그 둘 다 09-11 지문
+ * 대조에서 되찾은 값이라 뺄 수 없다. 남는 폭이 이름에게 모자란 줄이 여섯 있고,
+ * 그 이름은 «무위험 미상» 처럼 분류명이라 더 줄일 수도 없다.
+ * 그래서 셋을 함께 지킨다: 폭은 남는 만큼 · 잘리면 «…» 로 **보이게** · 전체는
+ * 행의 `title` 이 준다(`Credit.tsx` 의 그 속성). 조용히 잘리는 것이 금지다. */
+.kb-li .nm { text-overflow: ellipsis; }
 .kb-li .ten, .kb-li .num { text-align: right; font-variant-numeric: tabular-nums; }
 .kb-li .nm { font-weight: 600; }
 /* ★넷째 칸은 «서식 최대치» 로 잡는다 [2026-09-28] — 66px 은 옛 `-25.2bp` 에 맞춘
@@ -123,7 +178,12 @@
    서른 줄이 각자 달면 그만큼 숫자가 벌어진다. 그래서 이 칸의 최대치는 `↘ 999.9`
    = 61.5px(실측, 이 칸의 글꼴로 잰 값)이고, 62px 면 문법이 낼 수 있는 어떤 값도 안 잘린다.
    오늘 자료가 아니라 «문법» 으로 잡아야 값이 커져도 칸이 안 움직인다. */
-.kb-li.cr { grid-template-columns: minmax(0, 1fr) 30px 46px 62px; }
+/* ★둘째 칸은 `auto` 다 [2026-09-28] — 이 칸만 **두 사실**을 담는다(건수, 그리고
+   있을 때의 «수요 N»). 30px 은 건수만 보고 잡은 폭이라 수요가 붙은 서른여섯 줄이
+   잘리고 있었다. 고정폭으로 72px 을 주면 수요가 없는 날에도 그 폭을 물고 있어
+   종목명이 그만큼 준다. `auto` 는 격자라 **모든 줄이 같은 폭**을 쓰고(줄마다
+   들쭉날쭉해지지 않는다) 그 폭이 «지금 이 표가 내는 가장 넓은 글자» 다. */
+.kb-li.cr { grid-template-columns: minmax(0, 1fr) auto 46px 62px; }
 /* 레벨 없는 «관심» [OWNER 2026-09-07] — 책이 아니라는 게 눈에 보여야 한다.
    그래서 값 열이 없고, 방향 낱말과 나이만 있다. */
 .kb-li.ax { grid-template-columns: minmax(0, 1fr) 40px 52px 44px; }
@@ -150,13 +210,17 @@
 .kb-obr.ag2 { opacity: .60; }
 /* 락 — 같은 레벨에 양면이 함께 선 칸. 거래가 나는 자리라 바램을 먹이지 않는다
    (귀속 체결의 84%가 락 상태에서 난다). [OWNER 2026-09-15] */
-.kb-obr.lock { opacity: 1; background: var(--sr-hl, rgba(127, 127, 127, .09)); }
+/* ★락 칸의 강조 — `--sr-hl` 은 **어디에도 정의된 적이 없다**(2026-09-28 확인).
+   늘 폴백 `rgba()` 가 그려지고 있었고, 그건 이 앱에서 유일한 «토큰 아닌 색» 이었다.
+   고른 것은 `--sr-control` 이다: 「지금 이 줄」을 뜻하는 면이 이미 그것이고
+   (선택된 행·현재 탭), 락도 같은 «짚은 자리» 다. */
+.kb-obr.lock { opacity: 1; background: var(--sr-control); }
 .kb-p { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; }
 .kb-p.mut { color: var(--color-fgMuted); font-weight: 400; }
 .kb-q { position: relative; height: 18px; display: flex; align-items: center; font-size: 11px; }
 .kb-q.l { justify-content: flex-end; padding-right: 6px; }
 .kb-q.r { justify-content: flex-start; padding-left: 6px; }
-.kb-q > i { position: absolute; top: 2px; bottom: 2px; display: block; border-radius: 1px; }
+.kb-q > i { position: absolute; top: 2px; bottom: 2px; display: block; border-radius: 0; }
 .kb-q.l > i { right: 0; background: color-mix(in srgb, var(--sr-down) 16%, transparent); }
 .kb-q.r > i { left: 0; background: color-mix(in srgb, var(--sr-up) 16%, transparent); }
 .kb-q > span { position: relative; font-variant-numeric: tabular-nums; }
@@ -174,19 +238,27 @@
   border-top: 1px solid var(--color-bgLine); border-bottom: 1px solid var(--color-bgLine);
 }
 .kb-badge {
-  margin-left: 4px; padding: 0 3px; font-size: 9px; font-weight: 400;
-  border: 1px solid var(--color-bgLine); border-radius: 2px; color: var(--color-fgMuted);
+  margin-left: 4px; padding: 0 3px; font-size: 11px; font-weight: 400;
+  border: 1px solid var(--color-bgLine); border-radius: var(--borderRadius-100); color: var(--color-fgMuted);
 }
 
 .kb-tbl { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+/* ★머리는 **700 muted**, 크기는 그대로다 [v2 §5.3 「분리는 굵기가 하고 크기는
+   하지 않는다」]. 크기로 가르면 머리가 한 줄 더 높아져 표마다 첫 행이 계단이 진다. */
 .kb-tbl th {
-  padding: 6px 10px; font-weight: 400; font-size: 11px; text-align: right;
+  padding: 6px 10px; font-weight: 700; font-size: 11px; text-align: right;
   color: var(--color-fgMuted); border-bottom: 1px solid var(--color-bgLine);
 }
+/* ★말줄임을 걷었다 [v2 「말줄임 절대 금지」] — 잘린 「국고…」는 읽는 사람에게
+   «없는 것» 이다. 폭은 `lib/columns.ts` 의 서식 최대치가 대신 진다. 예외는 원문
+   칸 둘뿐이고(아래 `.kb-c.raw`·`.kb-tpr`) 그 둘은 툴팁이 전체를 준다. */
 .kb-tbl td {
   padding: 5px 10px; text-align: right; font-variant-numeric: tabular-nums;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
+/* 카드 안쪽 선과 맞춘다 — 머리글의 `paddingX 16` 과 같은 자리에 첫 글자가 선다. */
+.kb-tbl th:first-child, .kb-tbl td:first-child { padding-left: 16px; }
+.kb-tbl th:last-child, .kb-tbl td:last-child { padding-right: 16px; }
 .kb-tbl th.l, .kb-tbl td.l { text-align: left; }
 .kb-tbl td.best { font-weight: 600; }
 .kb-tbl tbody tr:hover { background: var(--sr-control); }
@@ -194,13 +266,13 @@
 
 .kb-sel {
   font: inherit; font-size: 11px; padding: 2px 4px;
-  border: 1px solid var(--color-bgLine); border-radius: 3px;
+  border: 1px solid var(--color-bgLine); border-radius: var(--borderRadius-200);
   background: transparent; color: inherit;
 }
 .kb-tabs { display: flex; gap: 2px; }
 .kb-tab {
   padding: 4px 10px; border: 0; background: transparent; cursor: pointer;
-  font: inherit; font-size: 12px; color: var(--color-fgMuted); border-radius: 3px;
+  font: inherit; font-size: 12px; color: var(--color-fgMuted); border-radius: var(--borderRadius-200);
 }
 .kb-tab.on { color: inherit; font-weight: 600; background: var(--sr-control); }
 
@@ -209,7 +281,8 @@
   border-bottom: 1px solid var(--color-bgLine);
 }
 .kb-pill {
-  padding: 3px 9px; border: 1px solid var(--color-bgLine); border-radius: 11px;
+  padding: 0 12px; height: 28px; border: 0; border-radius: 999px;
+  display: inline-flex; align-items: center;
   background: transparent; color: var(--color-fgMuted);
   font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap;
 }
@@ -232,7 +305,11 @@
 
 /* ═══ 커브(잔존×YTM) 상호작용 [OWNER 2026-09-23 「인터렉션도 없고」] ═══ */
 .kb-curvewrap { position: relative; }
-.kb-curve:focus-visible { outline: 2px solid var(--color-bgPrimary, #1652f0); outline-offset: -2px; }
+/* ★포커스 링은 **한 가지**다 [v2 `.sr-navitem:focus-visible`] — 잉크 2px.
+   파랑을 쓰면 이 앱에서 그건 낱말이다(«내림»), 그리고 링 색이 자리마다 다르면
+   읽는 사람이 «무엇이 지금 초점인가» 를 색으로 못 배운다. */
+.kb-curve:focus-visible,
+.sr-plot > [role='application']:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
 /* 집힌 점은 «들린다» — 커지고, 면색 고리를 둘러 겹친 점들 사이에서 떠오른다.
    ★고리는 테두리가 아니라 «바탕색» 이다: 마크를 가르는 데는 선이 아니라 틈을 쓴다. */
 .kb-pt.on { stroke: var(--sr-card); stroke-width: 2; opacity: 1; }
@@ -265,18 +342,29 @@
   gap: 6px; align-items: baseline; padding: 4px 10px; font-size: 12px;
   border-bottom: 1px solid var(--color-bgLine);
 }
-.kb-ev > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-ev > * { white-space: nowrap; overflow: hidden; }
 .kb-ev > :last-child { text-align: right; }
-.kb-evk { font-size: 10px; color: var(--color-fgMuted); }
-.kb-evk.cross { color: var(--sr-up); }
-.kb-evk.fill { color: var(--sr-down); }
+/* ★매매 낱말의 옆색 [2026-09-28]. `.sr-up`/`.sr-down` 과 **같은 색, 다른 이름**이다.
+   그 둘은 «부호»(오름·내림)의 클래스고 이것은 «옆»(매수·매도)의 클래스라, 한 카드에서
+   둘이 같이 서도 어느 쪽 뜻인지 코드가 말해 준다. 색이 같은 것은 데스크 관례다
+   [OWNER 2026-09-03 매도 파랑 · 매수 빨강]. */
+.kb-side-s { color: var(--sr-down); }
+.kb-side-b { color: var(--sr-up); }
+
+/* 이벤트 종류 — 색은 뜻이다. 크로스는 «값이 뚫렸다», 체결은 «거래가 났다».
+   ★방향쌍을 안 쓴다 [2026-09-28]: 크로스가 빨강이면 «올랐다» 로, 체결이 파랑이면
+   «내렸다» 로 읽힌다. 둘 다 방향이 없는 사실이다. 참조색은 방향쌍과 안 겹치고
+   라이트·다크 쌍이 실측돼 있다. */
+.kb-evk { font-size: 11px; color: var(--color-fgMuted); }
+.kb-evk.cross { color: var(--sr-ref-cd); }
+.kb-evk.fill { color: var(--sr-ref-roll); }
 .kb-sb {
-  display: inline-block; height: 8px; background: var(--sr-down); border-radius: 1px;
+  display: inline-block; height: 8px; background: var(--sr-down); border-radius: 0;
   position: relative; vertical-align: middle;
 }
 .kb-sb > i {
   position: absolute; right: 0; top: 0; bottom: 0; display: block;
-  background: var(--sr-up); border-radius: 0 1px 1px 0;
+  background: var(--sr-up); border-radius: 0;
 }
 
 /* 교체 다리 — 사다리와 같은 세 열 배치. 레벨은 신형−구형 bp 다. */
@@ -285,11 +373,13 @@
   display: grid; grid-template-columns: 1fr 92px 1fr; align-items: center;
   padding: 2px 12px; height: 20px; font-size: 11px;
 }
-.kb-swr .w { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-swr .w { overflow: hidden; white-space: nowrap; }
 .kb-swr .w.r { text-align: right; }
 .kb-swr .lv { text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
-.kb-swr.a .lv { color: var(--sr-down); }
-.kb-swr.b .lv { color: var(--sr-up); }
+/* ★스왑 다리의 레벨은 **잉크**다 [2026-09-28]. 색으로 «오퍼·비드» 를 말하고
+   있었는데, 그건 이미 행의 자리(왼쪽·오른쪽)와 머리글이 말한다. 레벨에 색을 주면
+   같은 화면의 부호색과 구별이 안 된다 — v1 §4 「레벨은 잉크」. */
+.kb-swr .lv { color: var(--color-fg); }
 
 /* ThemeProvider 자식 래퍼 — `providers.tsx` 참조. 상자를 만들지 않아야
  * 배치에 영향이 없다. 커스텀 속성과 `color` 는 그래도 상속된다. */
@@ -301,7 +391,11 @@
   gap: 6px; align-items: baseline; padding: 4px 10px; font-size: 12px;
   border-bottom: 1px solid var(--color-bgLine);
 }
-.kb-tp > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ★원문 칸 하나 — 예외다 [OWNER 2026-09-22: 800줄 중 9줄이 잘리고, 잘린 줄은
+   마우스를 올리면 전체가 뜬다]. 원문은 «값» 이 아니라 «근거» 라, 칸에 다 안 들어가는
+   것이 값이 안 보이는 것과 같은 등급이 아니다. */
+.kb-tp > * { white-space: nowrap; overflow: hidden; }
+.kb-tp > .kb-tpr { text-overflow: ellipsis; }
 .kb-tp > :last-child { text-align: right; }
 .kb-tpr { color: var(--color-fg); }
 
@@ -315,36 +409,47 @@
  * [OWNER 2026-09-04 「원래 ibond 랑 유사하게」]
  * 원본 `kbond_live.html` 의 CSS 를 읽어 값을 그대로 옮겼다(짐작 아님):
  *   .seg  = flex·gap 6·radius 12·padding 4, 버튼 radius 9·14px·600,
- *           on = 카드 바탕 + box-shadow 0 1px 3px rgba(0,0,0,.07)
+ *           on = --sr-control (이 앱의 «지금 이것» 은 한 가지 면이다)
  *   .hm   = border-spacing 3px·table-layout fixed, 칸 height 34·radius 8·13px·700,
  *           건수는 10px·weight 500·opacity .6 으로 값 뒤에
  *   .bar  = height 60·padding 0 18px
  * 색만 이 앱 토큰으로 바꿔 라이트/다크가 같이 돌게 했다. */
-.kb-bar { height: 60px; padding: 0 18px; gap: 8px; }
+/* ── 머리 띠와 탭 [2026-09-28: v2 `.sr-navitem` 문법으로] ──────────────────
+ *
+ * v2 의 나브는 실측에서 나온 한 벌이다: **32px 스타디움 · 14px/600 · 현재는
+ * `--sr-control` 채움 · 호버는 잉크 6% 섞기**. 그리고 그 파일의 규율 한 줄 —
+ * «두 톤의 한 모양이지 두 모양이 아니다»: 밑줄이나 그림자로 «지금» 을 말하면
+ * 스타디움 위에서 곡선을 그어 엉뚱한 테두리로 읽힌다.
+ *
+ * 종전 이 앱의 탭은 «페이지 톤 상자 + 카드색 알약 + 그림자» 였다. 그림자는 이
+ * 앱에서 유일한 «떠 있는 것» 이었고, 카드 안에 서는 탭이 카드보다 떠 보였다.
+ */
+.kb-bar { height: 64px; padding: 0 24px; gap: 24px; }
 
-.kb-seg {
-  display: flex; gap: 6px; padding: 4px; border-radius: 12px;
-  background: var(--sr-page); margin-left: 10px;
-}
+.kb-seg { display: flex; align-items: center; gap: 4px; }
 .kb-seg button {
-  padding: 7px 14px; border: 0; border-radius: 9px; background: transparent;
-  font: inherit; font-size: 14px; font-weight: 600; color: var(--color-fgMuted);
-  cursor: pointer; white-space: nowrap;
+  padding: 0 14px; height: 32px; border: 0; border-radius: 999px; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 14px; font-weight: var(--fontWeight-headline, 600);
+  color: var(--color-fgMuted); cursor: pointer; white-space: nowrap;
+  transition: background var(--sr-motion-fast) var(--sr-ease-out),
+              color var(--sr-motion-fast) var(--sr-ease-out);
 }
-.kb-seg button:hover { color: var(--color-fg); }
-.kb-seg button.on {
-  background: var(--sr-card); color: var(--color-fg);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 7%);
-}
+.kb-seg button:hover { background: color-mix(in srgb, var(--color-fg) 6%, transparent); color: var(--color-fg); }
+.kb-seg button.on { background: var(--sr-control); color: var(--color-fg); }
+.kb-seg button:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
 .kb-seg button .c {
-  font-size: 12px; font-weight: 500; color: var(--color-fgMuted); margin-left: 5px;
+  font-size: 12px; font-weight: 400; color: var(--color-fgMuted); margin-left: 4px;
 }
 
 .kb-dot {
   width: 7px; height: 7px; border-radius: 50%; display: inline-block;
   background: var(--color-fgMuted);
 }
-.kb-dot.on { background: #15C47E; }
+/* 상태 점 — 참조색 청록. hex 는 `direction.css` 밖에 없어야 하고(v2 규율),
+   방향쌍을 쓰면 «실시간» 이 «올랐다» 로 읽힌다. 라이트 #0f766e ≈5.4:1 ·
+   다크 #2dd4bf ≈9:1 로 그래픽 기준 3:1 을 넉넉히 넘는다. */
+.kb-dot.on { background: var(--sr-ref-roll); }
 .kb-clock {
   font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
   margin-left: 2px;
@@ -374,7 +479,7 @@
   padding: 10px 12px 4px; border-top: 1px solid var(--color-bgLine); margin-top: 6px;
 }
 .kb-scroll > .kb-sec:first-child { border-top: none; margin-top: 0; padding-top: 4px; }
-.kb-mb { font-size: 10px; color: var(--color-fgMuted); margin-left: 4px; font-weight: 500; }
+.kb-mb { font-size: 11px; color: var(--color-fgMuted); margin-left: 4px; font-weight: 500; }
 .kb-crv { margin-left: auto; display: flex; gap: 4px; }
 .kb-crv .kb-pill { padding: 2px 8px; font-size: 11px; }
 .kb-hmnote {
@@ -383,13 +488,13 @@
 }
 .kb-hm { width: 100%; border-collapse: separate; border-spacing: 3px; table-layout: fixed; }
 .kb-hm th {
-  font-size: 11.5px; font-weight: 500; color: var(--color-fgMuted);
+  font-size: 11px; font-weight: 500; color: var(--color-fgMuted);
   padding: 0 0 4px; text-align: center;
 }
 .kb-hm th.l { text-align: left; }
 .kb-hm td {
   height: 34px; padding: 0; text-align: center; font-size: 13px; font-weight: 700;
-  border-radius: 8px; background: var(--sr-page); color: var(--color-fg);
+  border-radius: var(--borderRadius-200); background: var(--sr-card); color: var(--color-fg);
   font-variant-numeric: tabular-nums;
 }
 .kb-hm td.l {
@@ -397,15 +502,21 @@
   background: none; padding-left: 2px;
 }
 .kb-hm td.l .g { font-size: 11px; font-weight: 600; color: var(--color-fgMuted); margin-left: 4px; }
-.kb-hm td .c { font-size: 10px; font-weight: 500; opacity: .6; margin-left: 3px; }
+/* ★틴트가 칠해진 칸의 글자는 **잉크**다 [v2 `theme/tint.ts` 실측: 같은 부호 틴트
+   위의 방향색 글자는 30%에서 3.0 · 42%에서 2.5 · 62%에서 1.8 이라 4.5 를 넘는
+   지점이 없다]. 농도 조절 문제가 아니라 범주적 규칙이라 칸 전체가 잉크로 간다. */
+.kb-hm td { background: var(--sr-card); color: var(--color-fg); }
+.kb-hm td .c { font-size: 11px; font-weight: 500; margin-left: 3px; }
 .kb-hm td.e { color: var(--color-bgLine); font-weight: 400; background: none; }
 .kb-hmleg {
   display: flex; align-items: center; gap: 6px; margin-top: 10px;
-  font-size: 11.5px; color: var(--color-fgMuted);
+  font-size: 11px; color: var(--color-fgMuted);
 }
-.kb-hmleg i { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
-.kb-hmleg i.dn { background: color-mix(in srgb, var(--sr-down) 26%, var(--sr-page)); }
-.kb-hmleg i.up { background: color-mix(in srgb, var(--sr-up) 26%, var(--sr-page)); }
+.kb-hmleg i { width: 14px; height: 10px; border-radius: var(--borderRadius-100); display: inline-block; }
+/* 견본은 램프의 **천장**이고, 섞는 바탕은 셀과 같은 «카드» 다 [2026-09-28].
+   페이지 톤에 섞으면 카드 위에 놓인 견본이 셀과 다른 색이 된다. */
+.kb-hmleg i.dn { background: color-mix(in srgb, var(--sr-down) 55%, var(--sr-card)); }
+.kb-hmleg i.up { background: color-mix(in srgb, var(--sr-up) 55%, var(--sr-card)); }
 .kb-hmleg > :last-child { margin-left: auto; }
 
 /* 히트맵 첫 열 — 종별+등급이 붙어 다음 칸과 겹치던 것을 폭으로 푼다 */
@@ -420,20 +531,30 @@
   display: flex; gap: 6px; padding: 8px 12px;
   border-bottom: 1px solid var(--color-bgLine);
 }
+/* ★알약은 한 문법이다 [v2 `.sr-pillbtn`] — 바탕 없는 스타디움, 호버는 면,
+   **켜짐은 잉크 반전**. 종전에는 필터가 «페이지 톤 → 잉크 반전», 분류가
+   «테두리 → 면», 벨이 «호박» 이라 셋이 각자였다. */
 .kb-filt button {
-  padding: 5px 12px; border: 0; border-radius: 999px; cursor: pointer;
-  background: var(--sr-page); color: var(--color-fgMuted);
+  padding: 0 12px; height: 28px; border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--color-fgMuted);
   font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+  display: inline-flex; align-items: center;
+  transition: background var(--sr-motion-fast) var(--sr-ease-out),
+              color var(--sr-motion-fast) var(--sr-ease-out);
 }
-.kb-filt button:hover { color: var(--color-fg); }
+.kb-filt button:hover { background: var(--sr-control); color: var(--color-fg); }
 .kb-filt button.on { background: var(--color-fg); color: var(--sr-card); }
+.kb-filt button:focus-visible,
+.kb-pill:focus-visible,
+.kb-bell:focus-visible,
+.kb-star:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
 .kb-filt button .c { font-size: 11px; font-weight: 500; margin-left: 5px; opacity: .75; }
 
 /* 요약 네 칸 — 옛 화면의 오퍼·비드·스프레드·당일체결 */
 .kb-quad {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
   margin: 8px 12px 0; background: var(--color-bgLine);
-  border: 1px solid var(--color-bgLine); border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--color-bgLine); border-radius: var(--borderRadius-300); overflow: hidden;
 }
 .kb-quad > div {
   display: flex; flex-direction: column; gap: 3px; padding: 10px 12px;
@@ -456,7 +577,7 @@
   border-bottom: 1px solid var(--color-bgLine);
 }
 .kb-li2:hover { background: var(--sr-control); }
-.kb-li2.on { background: var(--color-bgPrimaryWash); }
+.kb-li2.on { background: var(--sr-control); }
 .kb-li2.mut { opacity: .5; }
 .kb-li2 .nm {
   grid-column: 1; grid-row: 1; font-weight: 600; font-size: 13px;
@@ -467,9 +588,11 @@
   grid-column: 2; grid-row: 1; text-align: right; font-weight: 600;
   font-size: 13px; font-variant-numeric: tabular-nums;
 }
+/* 부제는 서식이다(«2년 · 2028-09-10 · 64건») — 자를 일이 없어야 맞고,
+   그래도 모자라면 조용히 자르지 말고 넘치게 둔다. */
 .kb-li2 .sub {
   grid-column: 1; grid-row: 2; font-size: 11px; color: var(--color-fgMuted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .kb-li2 .d {
   grid-column: 2; grid-row: 2; text-align: right; font-size: 11px;
@@ -482,21 +605,30 @@
   border: 0; background: transparent; cursor: pointer;
   color: var(--color-bgLineHeavy);
 }
-.kb-star.on, .kb-star:hover { color: #F5A623; }
+/* 관심 별 — 참조색 호박. 13px 글리프라 글자 기준 4.5:1 이 필요하고
+   (라이트 #b45309 ≈5:1 · 다크 #f59e0b ≈9:1) 방향쌍과 안 겹친다. */
+.kb-star.on, .kb-star:hover { color: var(--sr-ref-cd); }
 .kb-star.ph { width: 17px; display: inline-block; cursor: default; }
 
 /* 알림 버튼 */
 .kb-bell {
-  padding: 5px 11px; border-radius: 999px; border: 1px solid var(--color-bgLine);
+  padding: 0 12px; height: 28px; border-radius: 999px; border: 0;
   background: transparent; color: var(--color-fgMuted);
   font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center;
+  transition: background var(--sr-motion-fast) var(--sr-ease-out),
+              color var(--sr-motion-fast) var(--sr-ease-out);
 }
-.kb-bell:hover { color: var(--color-fg); }
-.kb-bell.on { background: #FFF3E0; border-color: #F5A623; color: #C77700; }
+.kb-bell:hover { background: var(--sr-control); color: var(--color-fg); }
+/* ★켜진 토글은 **잉크 반전**이다 [v2 `.sr-pillbtn[data-on]`] — 이 앱의 «켜짐» 은
+   한 가지 모양이어야 하고(필터 알약과 같은 것), 호박 배경 한 벌을 따로 두면
+   그 색이 뜻하는 것이 자리마다 달라진다. */
+.kb-bell.on { background: var(--color-fg); border-color: var(--color-fg); color: var(--sr-card); }
 
 /* 딜러 상세 — 줄을 누르면 아래가 펼쳐진다 */
 .kb-tbl tr.dl { cursor: pointer; }
-.kb-tbl tr.dl.on { background: var(--color-bgPrimaryWash); }
+.kb-tbl tr.dl.on,
+.kb-tbl tr[aria-current='true'] > td { background: var(--sr-control); }
 .kb-tbl tr.dld td { padding: 0; }
 .kb-dld {
   display: flex; flex-direction: column; gap: 6px;
@@ -508,7 +640,7 @@
 
 /* 하단 캡션 */
 .kb-foot {
-  flex: none; padding: 10px 18px; font-size: 11.5px; line-height: 1.6;
+  flex: none; padding: 10px 18px; font-size: 11px; line-height: 1.6;
   color: var(--color-fgMuted); background: var(--sr-page);
   border-top: 1px solid var(--color-bgLine);
 }
@@ -531,13 +663,17 @@
     52px             /* 시간 */
     16px             /* ☆ */
     38px             /* 종류 */
-    132px            /* 종목명 */
+    146px            /* 종목명 — ★서식 최대치까지 넓혔다 [2026-09-28]. 132px 에서
+                        «한국주택금융공사(MBS)201»·«한국토지주택공사용지24-12» 가
+                        잘렸다(실측 최대 144px). 표시명 상한이 18자라 이보다 긴
+                        이름은 이미 서버가 줄여 보낸다. 원문에서 14px 를 뺐다 */
     64px             /* 만기일 — «2031-03-10» 을 26-03-10 으로 줄여 적는다 [2026-09-23] */
     42px             /* 잔존 — «29.5년» / 1년 안쪽은 «78일» */
     30px             /* 매매 */
     58px             /* 브로커 — 사람 이름. 3자가 대부분이나 실측 800줄 중 26줄이
                         46px 에서 잘렸다(네 자 이상·로마자). 원문에서 12px 를 뺐다 */
-    104px            /* 회사명 — «부국증권 금융투자솔루션» 꼴 데스크명 */
+    114px            /* 회사명 — «상상인증권 FICC금융 2팀» 이 104px 에서 잘렸다
+                        (실측 최대 112px). 원문에서 10px 를 뺐다 [2026-09-28] */
     50px             /* 전일민평 */
     60px             /* 할인조정 — 0.25bp 자리는 «3.9975» 네 자리다 [2026-09-23] */
     62px             /* 단가 — 액면 1만원당. 서식 최대치 «10127.09» [OWNER 2026-09-23] */
@@ -584,20 +720,31 @@
 .kb-fhead .num, .kb-row .num { text-align: right; }
 
 .kb-c {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 11.5px; color: var(--color-fgMuted);
+  min-width: 0; overflow: hidden; white-space: nowrap;
+  font-size: 11px; color: var(--color-fgMuted);
 }
+/* ★말줄임은 «이름 칸» 에만 남긴다 [2026-09-28, v2 「말줄임 절대 금지」의 예외].
+ *
+ * 규칙은 «자르지 말고 맞게 만들어라» 이고, 숫자 칸은 서식 최대치로 맞췄으므로
+ * 자를 일이 없다. 이름은 다르다 — 사람·데스크·종목의 이름은 서식이 아니라
+ * 자료라, 어떤 폭을 잡아도 더 긴 것이 온다. 그 칸들은 **셋을 함께** 지킨다:
+ *   ① 실측한 최대치까지 폭을 넓히고(위 `--kb-cols` 의 주석들),
+ *   ② 남는 것은 «…» 로 **잘렸다는 사실이 보이게** 자르고,
+ *   ③ 마우스를 올리면 전체가 뜬다(`title`, `Feed.tsx` 의 그 속성들).
+ * 조용히 잘리는 것(그냥 `overflow: hidden`)이 이 규칙이 진짜 금지하는 것이다.
+ */
+.kb-c.n, .kb-c.who, .kb-c.h, .kb-c.raw, .kb-c.mat { text-overflow: ellipsis; }
 .kb-c.num { font-variant-numeric: tabular-nums; }
 .kb-c.t { font-variant-numeric: tabular-nums; }
-.kb-c.n { font-size: 12.5px; font-weight: 600; color: var(--color-fg); }
+.kb-c.n { font-size: 12px; font-weight: 600; color: var(--color-fg); }
 /* 브로커(사람 이름)·회사명(데스크)은 [OWNER 2026-09-22] 부터 실명이다. 라벨
  * (K041·H29)보다 길어서 넘치는 것은 자르고 `title` 로 넘긴다 — 칸을 더 주면 원문이
  * 그만큼 줄어든다. 사람 이름은 한 단 진하게: 이 표에서 «누가» 를 찾는 눈이 먼저 닿는다. */
-.kb-c.who { font-size: 11.5px; color: var(--color-fg); }
+.kb-c.who { font-size: 11px; color: var(--color-fg); }
 .kb-c.h { font-size: 11px; }
 .kb-c.s { font-size: 12px; font-weight: 600; }
 /* 할인조정 = 이 표에서 눈이 가장 먼저 닿아야 할 값. 민평은 그 기준선이라 한 단 낮다. */
-.kb-c.y { font-size: 13.5px; font-weight: 700; color: var(--color-fg); position: relative; }
+.kb-c.y { font-size: 13px; font-weight: 700; color: var(--color-fg); position: relative; }
 .kb-c.num:not(.y) { font-size: 12px; }
 /* 단가 [2026-09-23] — 할인조정의 «같은 값을 원으로 말한 것» 이라 한 단 낮게 둔다.
  * 눈이 먼저 닿아야 할 값은 여전히 할인조정이고, 단가는 그 옆에서 확인해 주는 자리다. */
@@ -609,16 +756,20 @@
 .kb-fhead .ctr, .kb-row .ctr { text-align: center; }
 .kb-c.chk { font-size: 11px; font-weight: 700; }
 .kb-c.chk.ok { color: var(--color-fgMuted); }
-.kb-c.chk.no { color: var(--sr-down, #d4183d); }
+/* ★검산 X 는 색이 아니라 **글자가 값**이다 [OWNER 2026-09-23 「색만으로 말하지
+   않는다」]. 방향색을 주면 «내렸다» 로 읽히는데 검산에는 방향이 없다. */
+.kb-c.chk.no { color: var(--color-fg); font-weight: 700; }
 
 /* 종류 알약 — 옛 화면의 색 규약 그대로(호가 파랑기 · 체결 보조 · 나머지 무채색) */
 .kb-kd {
   font-size: 11px; font-weight: 600; text-align: center;
-  padding: 1px 0; border-radius: 5px;
+  padding: 1px 0; border-radius: var(--borderRadius-100);
   background: var(--color-bgAlternate); color: var(--color-fgMuted);
   white-space: nowrap;
 }
-.kb-kd.q { background: var(--color-bgPrimaryWash); color: var(--color-fg); }
+/* 종류 배지 — 면은 «컨트롤» 톤이다 [2026-09-28]. CDS 의 파랑 워시를 쓰면
+   이 앱에서 그건 낱말이라(«내림») 「호가」 배지가 내렸다고 말하는 셈이 된다. */
+.kb-kd.q { background: var(--sr-control); color: var(--color-fg); }
 .kb-kd.c { background: var(--color-bgSecondary); color: var(--color-fg); }
 
 /* «민평 그 자리» 표식 — 값이 민평과 같은 이유를 칸 안에서 말한다.
@@ -626,12 +777,12 @@
  *   없고에 따라 자리수가 어긋난다 — tabular-nums 를 켠 이유가 사라진다. */
 .kb-atmp {
   position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  font-size: 9.5px; font-weight: 600; font-style: normal;
+  font-size: 11px; font-weight: 600; font-style: normal;
   color: var(--color-fgMuted);
 }
 
 /* 원문 — 마지막 칸. 한 줄로 자르고 나머지는 마우스를 올리면 뜬다(`title`). */
-.kb-c.raw { font-size: 11.5px; }
+.kb-c.raw { font-size: 11px; }
 
 /* ☆ 는 격자 칸이라 옛 flex 규약(flex:none)이 필요 없다 — 폭은 칸이 준다 */
 .kb-row > .kb-star { padding: 0; justify-self: center; }

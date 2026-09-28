@@ -23,6 +23,8 @@ import {
   EMDASH, fmtBpUnit, fmtCount, fmtHms, fmtLot, fmtTtm, fmtTtmRange, fmtYield,
 } from '@/lib/format';
 import { Delta } from '@/ui/Delta';
+import { ColGroup } from '@/ui/ColGroup';
+import { TABLES } from '@/lib/columns';
 
 type Bucket = NonNullable<View['buckets']>[number];
 type Offer = NonNullable<View['offers']>[number];
@@ -197,6 +199,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
           </div>
           {needs.length ? (
             <table className="kb-tbl">
+              <ColGroup cols={TABLES.needs} />
               <thead>
                 <tr>
                   <th className="l">딜러</th>
@@ -246,7 +249,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
               {tape.map((e) => (
                 <div className="kb-tp" key={e.i}>
                   <span className="kb-n">{fmtHms(e.t)}</span>
-                  <span className={e.s === 'S' ? 'sr-down' : e.s === 'B' ? 'sr-up' : undefined}>
+                  <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
                     {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
                   </span>
                   <span className="kb-tpr">{e.raw}</span>
@@ -282,6 +285,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
           </div>
           {offers.length ? (
             <table className="kb-tbl">
+              <ColGroup cols={TABLES.offers} />
               <thead>
                 <tr>
                   <th className="l">종목</th>

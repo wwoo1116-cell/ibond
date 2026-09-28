@@ -45,7 +45,7 @@ import {
 import type { DeepPartial, IChartApiBase, ChartOptions } from 'lightweight-charts';
 
 import { fmtHm } from '@/lib/format';
-import { AXIS_FONT_PX, CROSSHAIR_LABEL_MIN_W, TICK_DENSITY } from './metrics';
+import { AXIS_FONT_PX, TICK_DENSITY } from './metrics';
 import { pixelColorParser, useLwPalette, type LwPalette } from './palette';
 import { LabelledHorzScale } from './horzScale';
 

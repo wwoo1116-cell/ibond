@@ -24,6 +24,7 @@ import { useState } from 'react';
 
 import type { View } from '@/lib/api';
 import { Delta } from '@/ui/Delta';
+import { tintFor } from '@/theme/tint';
 
 
 type Cell = { med?: number | null; n?: number; est?: number };
@@ -96,16 +97,16 @@ export function Heat({ heat, title }: { heat: NonNullable<View['heat']>; title?:
                       </td>
                     );
                   }
-                  /* 진하기는 |값|/최댓값. 0.18 을 바닥으로 둬 «값이 있다» 가 보이게 한다. */
-                  const w = Math.max(0.18, Math.min(1, Math.abs(c.med) / mx));
-                  const col = c.med < 0 ? 'var(--sr-down)' : 'var(--sr-up)';
+                  /* ★틴트는 v2 의 램프를 그대로 쓴다(`theme/tint.ts`) — √ 로 눌러
+                     한 칸이 튀어도 표가 납작해지지 않고, **카드 톤에** 섞어 0 이
+                     면색과 같아진다. 종전에는 페이지 톤에 섞어서, 카드 위에 놓인
+                     칸이 카드가 아닌 색 위에 뜬 것처럼 보였다.
+                     글자에는 색을 **안 준다** — 틴트 위 방향색은 어느 농도에서도
+                     4.5:1 을 못 넘는다(그 파일의 실측). 칸 전체가 잉크다. */
                   return (
                     <td
                       key={b}
-                      style={{
-                        background: `color-mix(in srgb, ${col} ${(w * 26).toFixed(0)}%, var(--sr-page))`,
-                        color: `color-mix(in srgb, ${col} 88%, var(--color-fg))`,
-                      }}
+                      style={{ background: tintFor(c.med, mx) }}
                       title={`${cls} ${rt == null ? '' : all ? '전체' : rt} · 잔존 ${b} · ${c.n}건${c.est ? ` · 추정 ${c.est}` : ''}${rowStale ? ' · 민평이 그날 것이 아님' : ''}`}
                     >
                       <Delta v={c.med} ink />
