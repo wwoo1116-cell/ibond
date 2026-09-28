@@ -8,6 +8,8 @@
  *   여기서는 칸 값을 막대 높이로 옮길 뿐이다.
  */
 import { Fragment, useCallback, useEffect, useState } from 'react';
+
+import dynamic from 'next/dynamic';
 import type React from 'react';
 
 import { Text } from '@coinbase/cds-web/typography';
@@ -20,19 +22,17 @@ import {
 } from '@/lib/format';
 import { Delta } from '@/ui/Delta';
 
-type Pulse = NonNullable<View['pulse']>;
 type Ev = NonNullable<View['events']>[number];
 type Leader = NonNullable<View['leaderboard']>;
 
 
-/** 맥박 색 — 옛 화면과 같은 순서·같은 뜻(호가 파랑 · 관심 하늘 · 체결 초록 · 문의 회색). */
-const PK: [keyof Pick<Pulse['bins'][number], 'q' | 'a' | 'c' | 'i' | 'o'>, string, string][] = [
-  ['q', '호가', 'var(--kb-p-q)'],
-  ['a', '관심', 'var(--kb-p-a)'],
-  ['c', '체결', 'var(--kb-p-c)'],
-  ['i', '문의', 'var(--kb-p-i)'],
-  ['o', '기타', 'var(--kb-p-o)'],
-];
+/* 맥박 차트는 `components/PulseChart.tsx` 로 나갔다 [2026-09-28] — 손 SVG 를 걷고
+   v2 차트 캐논으로 다시 그렸다. 범주색도 그때 방향쌍(매도 파랑·매수 빨강)에서
+   참조색으로 옮겼다: 이 앱에서 빨강·파랑은 이미 두 뜻을 지고 있다. */
+const PulseChart = dynamic(() => import('./PulseChart').then((m) => m.PulseChart), {
+  ssr: false,
+  loading: () => <div className="kb-empty">맥박을 그리는 중…</div>,
+});
 
 const LANE_LBL: Record<string, string> = { ktb: '국고', msb: '통안', nhb: '국민주택', cr: '크레딧' };
 
@@ -43,76 +43,6 @@ const EVK: Record<string, string> = {
   size: '대량',
   fill: '체결',
 };
-
-function PulseChart({ p }: { p: Pulse }) {
-  /* viewBox 비율이 곧 표시 높이다(width:100% · height:auto).
-     3.4:1 이면 1100px 폭에서 320px 까지 자라 화면을 잡아먹는다 — 5.5:1 로 눕힌다. */
-  const W = 1200;
-  const H = 220;
-  const pad = { l: 4, r: 38, t: 8, b: 18 };
-  const bins = p.bins ?? [];
-  const prev = p.prev_bins ?? [];
-  if (!bins.length && !prev.length) return <div className="kb-empty">아직 메시지가 없습니다</div>;
-
-  const bin = p.bin || 600;
-  const b0 = Math.min(8 * 3600, ...bins.map((b) => b.t), ...prev.map((b) => b.t));
-  const b1 = Math.max(
-    17 * 3600,
-    ...bins.map((b) => b.t + bin),
-    ...prev.map((b) => b.t + bin),
-  );
-  const tot = (b: Pulse['bins'][number]) => b.q + b.a + b.c + b.i + b.o;
-  const mx = Math.max(1, ...bins.map(tot), ...prev.map((b) => b.n));
-  const X = (t: number) => pad.l + ((W - pad.l - pad.r) * (t - b0)) / (b1 - b0 || 1);
-  const Y = (v: number) => pad.t + (H - pad.t - pad.b) * (1 - v / mx);
-  const bw = Math.max(2, X(b0 + bin) - X(b0) - 1);
-
-  const hours: number[] = [];
-  for (let s = Math.ceil(b0 / 3600) * 3600; s <= b1; s += 3600) hours.push(s);
-
-  const line = prev
-    .slice()
-    .sort((a, b) => a.t - b.t)
-    .map((b, i) => `${i ? 'L' : 'M'}${(X(b.t) + bw / 2).toFixed(1)},${Y(b.n).toFixed(1)}`)
-    .join(' ');
-
-  return (
-    <svg className="kb-pulse" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="시장 맥박">
-      {[0, 0.5, 1].map((f) => (
-        <g key={f}>
-          <line x1={pad.l} x2={W - pad.r} y1={Y(mx * f)} y2={Y(mx * f)} className="kb-grid" />
-          <text x={W - pad.r + 5} y={Y(mx * f) + 3} className="kb-axis">
-            {Math.round(mx * f)}
-          </text>
-        </g>
-      ))}
-      {hours.map((s) => (
-        <text key={s} x={Math.max(pad.l, X(s))} y={H - 4} className="kb-axis">
-          {fmtHm(s)}
-        </text>
-      ))}
-      {bins.map((b) => {
-        let y = Y(0);
-        return (
-          <g key={b.t}>
-            {PK.map(([k, , col]) => {
-              const h = Y(0) - Y(b[k] ?? 0);
-              if (!h) return null;
-              y -= h;
-              return (
-                <rect key={k} x={X(b.t)} y={y} width={bw} height={h} fill={col}>
-                  <title>{`${fmtHm(b.t)} · ${EVKlabel(k)} ${b[k]}`}</title>
-                </rect>
-              );
-            })}
-          </g>
-        );
-      })}
-      {line ? <path d={line} className="kb-prevline" /> : null}
-    </svg>
-  );
-}
-const EVKlabel = (k: string) => PK.find(([kk]) => kk === k)?.[1] ?? k;
 
 /** 이벤트 한 줄의 말. 옛 화면 evText 와 같은 문면이다. */
 function evText(e: Ev) {
@@ -269,7 +199,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
           <div className="kb-ch">
             <Text as="span" font="label2">시장 맥박</Text>
             <Text as="span" font="legal" color="fgMuted">
-              {p.bin / 60}분 단위 · 회색선 = 어제
+              {p.bin / 60}분 단위
               {p.t0 != null ? ` · ${fmtHm(p.t0)}~${fmtHm(p.t1 ?? p.t0)}` : ''}
             </Text>
             {onTtl ? (

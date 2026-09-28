@@ -215,53 +215,34 @@
 }
 .kb-pill.on { color: inherit; font-weight: 600; border-color: currentColor; background: var(--sr-control); }
 
-.kb-curve, .kb-pulse { display: block; width: 100%; height: auto; padding: 8px 4px 0; }
-/* ★격자·축은 «실선» 헤어라인이다. 점선 격자는 «추정치·문턱» 으로 읽혀서, 그냥
- *   눈금인 것에 없는 뜻을 붙인다. 한 단 뒤로 물러나 있어야 점이 앞에 선다. */
-.kb-grid { stroke: var(--color-bgLine); stroke-width: 1; }
-.kb-grid.v { opacity: .55; }
-.kb-axis { fill: var(--color-fgMuted); font-size: 10px; font-variant-numeric: tabular-nums; }
+/* 캔버스 차트가 서는 상자 — 높이는 컴포넌트가 정하고 여기서는 자리만 준다. */
+.sr-plot { position: relative; width: 100%; padding: 0 4px 4px; }
+.sr-plot:focus-within { outline: none; }
+.kb-curve { display: block; }
+/* 축 글자 — 캔버스 차트의 `layout.fontSize: 11` · `textColor: fgMuted` 와 같은 값.
+   두 기술(캔버스·SVG)이 한 화면에 서므로 글자가 같아야 한 문법으로 읽힌다. */
+.kb-ax { fill: var(--color-fgMuted); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* 세로 십자선 — 라이브러리의 `crosshair.vertLine` 과 같은 굵기·같은 색. */
+.kb-xh { stroke: var(--color-bgLine); stroke-width: 1; }
+/* 축 칩 — 라이브러리가 축에 그리는 그 라벨. 잉크 바탕에 카드색 글자. */
+.kb-xl rect { fill: var(--color-fg); }
+.kb-xl text { fill: var(--sr-card); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* ★격자가 없다 [2026-09-28, v2 `canonOptions.grid`] — 눈금이 곧 자이고, 격자는
+ *   그 자를 그림 위에 복사해 둔 것이다. 축 글자는 `.kb-ax` 가 진다(위). */
 
 /* ═══ 커브(잔존×YTM) 상호작용 [OWNER 2026-09-23 「인터렉션도 없고」] ═══ */
 .kb-curvewrap { position: relative; }
 .kb-curve:focus-visible { outline: 2px solid var(--color-bgPrimary, #1652f0); outline-offset: -2px; }
-/* 십자선 — 집힌 점의 자리를 축까지 잇는다. 격자보다 진하되 점보다는 옅다. */
-.kb-xhair line { stroke: var(--color-fgMuted); stroke-width: 1; opacity: .45; }
 /* 집힌 점은 «들린다» — 커지고, 면색 고리를 둘러 겹친 점들 사이에서 떠오른다.
    ★고리는 테두리가 아니라 «바탕색» 이다: 마크를 가르는 데는 선이 아니라 틈을 쓴다. */
 .kb-pt.on { stroke: var(--sr-card); stroke-width: 2; opacity: 1; }
 
-/* 범례 — 2계열 이상이면 늘 선다(색만으로 말하지 않기). 차트 «위» 한 줄. */
-.kb-legend {
-  display: flex; flex-wrap: wrap; gap: 4px 12px;
-  padding: 6px 12px 0; font-size: 10.5px; color: var(--color-fgMuted);
-}
-.kb-legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.kb-legend .sw { display: inline-block; flex: none; }
-.kb-legend .sw.line { width: 12px; height: 0; border-top: 2px solid var(--color-fgMuted); }
-.kb-legend .sw.line.gr { border-top-style: dashed; border-top-color: var(--sr-up); }
-.kb-legend .sw.dot { width: 6px; height: 6px; border-radius: 50%; }
-.kb-legend .sw.dot.up { background: var(--sr-up); }
-.kb-legend .sw.dot.dn { background: var(--sr-down); }
-
-/* 말풍선 — ★값이 앞, 이름이 뒤. 읽는 사람은 종목을 알고 «수» 를 원한다.
-   포인터를 따라다니지만 점을 가리지 않게 좌우로 비켜선다(컴포넌트가 정한다). */
-.kb-tip {
-  position: absolute; z-index: 4; pointer-events: none;
-  min-width: 108px; padding: 5px 8px; border-radius: 6px;
-  background: var(--sr-card); border: 1px solid var(--color-bgLine);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 14%);
-  font-size: 11px; line-height: 1.5; color: var(--color-fgMuted);
-}
-.kb-tip b {
-  display: block; font-size: 15px; font-weight: 700; color: var(--color-fg);
-  font-variant-numeric: tabular-nums;
-}
-.kb-tip em { display: block; font-style: normal; color: var(--color-fg); }
-.kb-tip .up { color: var(--sr-up); }
-.kb-tip .dn { color: var(--sr-down); }
-.kb-tip .ttm { font-variant-numeric: tabular-nums; }
-.kb-mpline, .kb-prevline { fill: none; stroke: var(--color-fgMuted); stroke-width: 1.5; opacity: .55; }
+/* 말풍선(`.kb-tip`)은 걷었다 [2026-09-28, v2 §8.5b] — 떠 있는 카드는 그림을
+   가리고 커서를 피해 다니느라 «읽는 동안 글자가 움직인다». 그 자리는 그림 밖
+   고정 한 줄(`ui/ChartReadoutStrip`)이 진다. */
+/* 민평선 — 참조선은 «한 단 뒤» 다. 캔버스 차트의 `dim(fgMuted, 90)` 과 같은 뜻이고,
+   같은 화면에 두 기술이 서므로 두께·잉크가 같아야 한 문법으로 읽힌다. */
+.kb-mpline { fill: none; stroke: var(--color-fgMuted); stroke-width: 1; opacity: .9; }
 .kb-pt { fill: var(--color-fgMuted); opacity: .75; }
 .kb-pt.up { fill: var(--sr-up); }
 .kb-pt.dn { fill: var(--sr-down); }
@@ -314,14 +295,7 @@
  * 배치에 영향이 없다. 커스텀 속성과 `color` 는 그래도 상속된다. */
 .kb-scheme-root { display: contents; }
 
-/* 시세 · 메시지 테이프 */
-.kb-px { display: block; width: 100%; height: auto; padding: 6px 4px 0; }
-.kb-mpref { stroke: var(--color-fgMuted); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
-.kb-axis.mp { fill: var(--color-fgMuted); font-weight: 600; }
-.kb-actbar { fill: var(--color-fgMuted); opacity: .3; }
-.kb-pxmid { fill: none; stroke: var(--color-fg); stroke-width: 1.6; }
-.kb-pxask { fill: none; stroke: var(--sr-down); stroke-width: 1; opacity: .65; }
-.kb-pxbid { fill: none; stroke: var(--sr-up); stroke-width: 1; opacity: .65; }
+/* 메시지 테이프 */
 .kb-tp {
   display: grid; grid-template-columns: 56px 30px minmax(0, 1fr) 130px;
   gap: 6px; align-items: baseline; padding: 4px 10px; font-size: 12px;
@@ -331,11 +305,11 @@
 .kb-tp > :last-child { text-align: right; }
 .kb-tpr { color: var(--color-fg); }
 
-/* 히트맵 · 등급 커브 */
-.kb-heat td, .kb-heat th { padding: 4px 8px; font-size: 11px; }
-.kb-heat td.num { font-variant-numeric: tabular-nums; }
-.kb-heat tbody tr:hover { background: transparent; }
-.kb-gradeline { fill: none; stroke: var(--sr-up); stroke-width: 1.5; stroke-dasharray: 4 3; opacity: .8; }
+/* 등급 커브 */
+/* 등급커브 — **방향색이 아니다** [2026-09-28]. `--sr-up` 은 이 앱에서 «오름·매수» 라,
+   참조선에 쓰면 커브가 «오르는 것» 이라 말하는 셈이 된다. 점선인 것은 이것이
+   호가가 아니라 «추정된 선» 이라서고, 그 뜻은 그대로 둔다. */
+.kb-gradeline { fill: none; stroke: var(--color-fgMuted); stroke-width: 1; stroke-dasharray: 4 3; opacity: .9; }
 
 /* ══ 옛 화면(ibond) 문법 맞추기 ═══════════════════════════════════════════
  * [OWNER 2026-09-04 「원래 ibond 랑 유사하게」]

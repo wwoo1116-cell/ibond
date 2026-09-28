@@ -41,7 +41,8 @@ import {
   sameShape,
   useStable,
 } from './stable';
-import { CROSSHAIR_LABEL_MIN_W, useLwChart } from './useLwChart';
+import { CROSSHAIR_LABEL_MIN_W } from './metrics';
+import { useLwChart } from './useLwChart';
 
 export type TimeLine = {
   id: string;

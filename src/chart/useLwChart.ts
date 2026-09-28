@@ -45,6 +45,7 @@ import {
 import type { DeepPartial, IChartApiBase, ChartOptions } from 'lightweight-charts';
 
 import { fmtHm } from '@/lib/format';
+import { AXIS_FONT_PX, CROSSHAIR_LABEL_MIN_W, TICK_DENSITY } from './metrics';
 import { pixelColorParser, useLwPalette, type LwPalette } from './palette';
 import { LabelledHorzScale } from './horzScale';
 
@@ -107,30 +108,11 @@ function clockTick(time: unknown): string {
   return Number.isFinite(s) ? fmtHm(s) : String(time);
 }
 
-/**
- * 값 축이 **크로스헤어 라벨을 담기 위해** 최소한 가져야 하는 폭.
- *
- * `canonOptions` 의 `horzLine` 주석에 적은 라이브러리 성질(라벨은 그리면서 폭은
- * 안 잡는다)의 대가다. 손으로 고른 수가 아니라 라이브러리 자신의 산술을
- * 글자크기 11 로 푼 값이다(번들 실측, 5.2.1):
- *
- *   borderSize      1      `RendererConstants.BorderSize`        :289
- *   tickLength      5      `RendererConstants.TickLength`        :290
- *   paddingInner    4.583  `fontSize/12 * tickLength`            :314
- *   paddingOuter    4.583  같은 식                                :315
- *   LabelOffset     5      `_optimalWidth` 의 상수                :9171
- *   ─────────────────────
- *   크롬 합계      20.17
- *   글자 «3.2450»  40.5    6자 × 6.76px (등폭 14px=8.60px 실측의 11/14)
- *   ─────────────────────
- *   ceil          → 61
- *
- * 이 수가 **바닥이라는 것**이 중요하다(`Math.max(optimalWidth, minimumWidth)`,
- * 번들 :11020). 돈 축처럼 자기 눈금이 이미 이보다 넓은 차트에서는 아무 일도
- * 안 한다. 실제로 무는 자리는 눈금 글자가 여섯 자보다 짧은 차트뿐이고
- * (bp 축의 «−12.5» ≈ 54), 거기서 7px 를 더 가져간다.
- */
-export const CROSSHAIR_LABEL_MIN_W = 61;
+/* 축 폭 상수는 `chart/metrics.ts` 로 나갔다 [2026-09-28] — 옆에 서는 SVG 차트가
+   같은 수를 써야 하는데, 이 파일에서 가져가면 `lightweight-charts` 가 통째로 그
+   번들에 딸려 온다(실측: 메인 첫 화면 JS 787KB → 964KB). 여기서는 다시 내보내기만
+   한다 — 부르던 자리가 안 바뀌게. */
+export { CROSSHAIR_LABEL_MIN_W } from './metrics';
 
 export function canonOptions(p: LwPalette): DeepPartial<ChartOptions> {
   return {
@@ -140,7 +122,7 @@ export function canonOptions(p: LwPalette): DeepPartial<ChartOptions> {
       background: { type: ColorType.Solid, color: 'transparent' },
       textColor: p.fgMuted,
       fontFamily: p.fontFamily,
-      fontSize: 11,
+      fontSize: AXIS_FONT_PX,
       /* 라이브러리 로고 — 이 제품의 화면 문법에 없는 것이다. */
       attributionLogo: false,
     },
@@ -164,7 +146,7 @@ export function canonOptions(p: LwPalette): DeepPartial<ChartOptions> {
        * [OWNER 2026-08-26 — "좀 개판된거 같은데"]. 축이 그림보다 눈에 띄면
        * 읽는 사람이 선이 아니라 눈금을 읽는다.
        */
-      tickMarkDensity: 4,
+      tickMarkDensity: TICK_DENSITY,
     },
     leftPriceScale: { visible: false },
     timeScale: {
