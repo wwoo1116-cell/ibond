@@ -161,3 +161,22 @@ def test_규약이_원본과_같다():
     assert 'now - STATE["built"] >= PUBLISH_MIN_S' in src
     assert "def publish(force=False):" in src
     assert 'STATE["publish"] = publish' in src
+    # ★[2026-09-28] 전체 JSON 은 publish 가 아니라 raw_full 이 굽는다
+    assert "def raw_full()" in src
+    assert '            STATE["raw"] = raw\n' not in src
+
+
+def test_전체_JSON_은_달라는_곳에서만_굽는다():
+    """★[2026-09-28 경량화] publish 는 raw_lite 만 굽고, 전체(raw)는 raw_full() 이 부를 때
+    굽는다. 같은 판이면 돌려쓰고, 판이 바뀌면 다시 굽는다."""
+    keep = {k: KL.STATE[k] for k in ("ver", "raw", "raw_ver", "book")}
+    try:
+        KL.STATE.update(ver=7, raw=b"{}", raw_ver=-1, book={"n": 7})
+        assert KL.STATE["raw_ver"] != KL.STATE["ver"]            # 아직 안 구웠다
+        a = KL.raw_full()
+        assert a == b'{"n": 7}' and KL.STATE["raw_ver"] == 7
+        assert KL.raw_full() is a                                # 같은 판이면 돌려쓴다
+        KL.STATE.update(ver=8, book={"n": 8})
+        assert KL.raw_full() == b'{"n": 8}' and KL.STATE["raw_ver"] == 8
+    finally:
+        KL.STATE.update(keep)

@@ -52,16 +52,25 @@ class Spec:
 
 
 # ─────────────────────────────────────────────────────────── 값매김
-def coupon_dates(maturity: date, settle: date, m: int) -> tuple[list[date], date]:
-    """결제일 이후의 이표일들(오름차순)과 «직전» 이표일.
-
-    ★만기일에서 역산한다. 발행일에서 앞으로 세면 마지막 토막이 어긋난다.
-    """
+@lru_cache(maxsize=8192)
+def _coupon_dates(maturity: date, settle: date, m: int) -> tuple[tuple[date, ...], date]:
     out, d = [], maturity
     while d > settle:
         out.append(d)
         d -= relativedelta(months=12 // m)
-    return sorted(out), d
+    return tuple(sorted(out)), d
+
+
+def coupon_dates(maturity: date, settle: date, m: int) -> tuple[list[date], date]:
+    """결제일 이후의 이표일들(오름차순)과 «직전» 이표일.
+
+    ★만기일에서 역산한다. 발행일에서 앞으로 세면 마지막 토막이 어긋난다.
+    ★[2026-09-28 경량화] (만기·결제일·주기) 로 메모한다 — 같은 종목을 하루에 수천 번
+      값매기는데 이표일은 그날 안 바뀐다. 09-23 되감기 실측: 기동 49.9초 중 14.5초가
+      이 함수의 relativedelta 되감기(392k회)였다. 값은 같고 삯만 준다(test_price 32행).
+    """
+    cfs, prev = _coupon_dates(maturity, settle, m)
+    return list(cfs), prev
 
 
 def price_coupon(coupon: float, maturity: date, ytm: float,

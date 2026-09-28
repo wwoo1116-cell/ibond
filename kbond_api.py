@@ -150,7 +150,7 @@ def _snapshot():
         except Exception as e:                               # noqa: BLE001
             KL.log(f"[publish 오류] {type(e).__name__}: {e}")
     with KL.STATE["lock"]:
-        return KL.STATE["book"], KL.STATE["raw"], KL.STATE["ver"]
+        return KL.STATE["book"], KL.STATE["ver"]
 
 
 @app.get("/health")
@@ -160,12 +160,15 @@ def health(t: str | None = None):
     with KL.STATE["lock"]:
         ver, last = KL.STATE["ver"], KL.STATE["last_evt"]
         clients, dirty = KL.STATE["clients"], KL.STATE["dirty"]
+        raw_ver = KL.STATE["raw_ver"]
     return {"ok": True, "uptime_s": round(time.time() - KL.STATE["t0"]), "ver": ver,
             "last_event_age_s": round(time.time() - last, 1) if last else None,
             "masked": KL.MASK, "masked_tel": KL.MASK_TEL, "engine": "fastapi",
             # ★절전판이 실제로 아끼고 있는지 밖에서 볼 수 있게 [2026-09-23].
             #   clients=0 인데 ver 이 계속 오르면 절약이 안 되고 있다는 뜻이다.
             "clients": clients, "dirty": dirty,
+            # ★raw_ver < ver 이면 전체 JSON 을 아무도 안 달라고 했다는 뜻 [2026-09-28].
+            "raw_ver": raw_ver,
             # ★단가 계산의 «가정» 을 밖에서 읽을 수 있게 [2026-09-23]. 화면이 이걸
             #   보고 알림 줄을 띄운다 — 가정을 안 적으면 읽는 사람은 시장 값인 줄 안다.
             "px_settle": KL.SETTLE_MODE,
@@ -178,7 +181,8 @@ def book_json(t: str | None = None):
     d = _deny_if_no_token(t)
     if d:
         return d
-    _, raw, _ = _snapshot()
+    _snapshot()
+    raw = KL.raw_full()          # 전체 JSON 은 여기서만 굽는다 [2026-09-28]
     return Response(raw, media_type="application/json; charset=utf-8",
                     headers={"Cache-Control": "no-store"})
 
@@ -218,7 +222,7 @@ def api_view(t: str | None = None, lane: str = "ktb", ttl: str = "def",
     deny = _deny_if_no_token(t)
     if deny:
         return deny
-    snap, _, ver = _snapshot()
+    snap, ver = _snapshot()
     if not snap:
         return JSONResponse({"error": "책이 아직 안 섰습니다"}, status_code=503)
     out = KV.view(snap, lane=lane, T=T, mode=ttl, cls=cls, rt=rt,
@@ -252,8 +256,10 @@ async def events(request: Request, t: str | None = None, lite: int = 0):
                     return
                 with KL.STATE["lock"]:
                     ver = KL.STATE["ver"]
-                    raw = KL.STATE["raw_lite"] if lite else KL.STATE["raw"]
+                    raw = KL.STATE["raw_lite"] if lite else None
                 if ver != sent:
+                    if raw is None:         # 옛 화면만 전체를 받는다 — 그때만 굽는다 [2026-09-28]
+                        raw = await asyncio.to_thread(KL.raw_full)   # 40ms 직렬화로 루프를 안 막는다
                     sent = ver
                     yield b"data: " + raw + b"\n\n"
                 else:

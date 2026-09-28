@@ -159,7 +159,7 @@ def log(msg):
 STATE = {"lock": threading.Lock(), "book": {}, "raw": b"{}", "ver": 0,
          "t0": time.time(), "last_evt": 0.0, "stream": [],
          "clients": 0, "dirty": False, "built": 0.0, "publish": None,
-         "raw_lite": b"{}"}
+         "raw_lite": b"{}", "raw_ver": -1}
 COND = threading.Condition()
 # ★★★책을 만지는 스레드는 «한 번에 하나» 다 [2026-09-23].
 #   2026-09-23 절전판 전에는 book 을 만지는 곳이 폴 스레드 하나뿐이라 자물쇠가
@@ -168,6 +168,33 @@ COND = threading.Condition()
 #   ⚠STATE["lock"] 과 «다른» 자물쇠다 — 저건 스냅샷 «결과» 를 지키고,
 #     이건 책 «자체» 를 지킨다. 둘을 하나로 합치면 굽는 동안 /health 가 막힌다.
 ENGINE_LOCK = threading.RLock()
+
+
+def raw_full() -> bytes:
+    """전체 스냅샷 JSON — «달라는 곳에서만» 굽는다 [2026-09-28 경량화].
+
+    2026-09-23 절전판은 굽는 «횟수» 를 줄였다. 이건 굽는 «양» 을 줄인다.
+    publish 는 매초 책 전체(장 마감 무렵 1.45MB)를 직렬화했는데, 그것을 읽는 곳은
+    옛 화면(/) 의 SSE 와 /book.json 뿐이고 새 화면은 raw_lite(25KB)만 읽는다.
+    실측(09-23 되감기): snapshot 5.9ms · dumps(전체) 38.7ms · dumps(lite) 0.4ms —
+    굽는 삯의 87% 가 아무도 안 읽는 직렬화였다.
+
+    그래서 전체 JSON 은 STATE["book"] 에서 «부를 때» 만든다. 같은 판(ver)이면 한 번만
+    만들고 돌려쓴다(raw_ver). 옛 화면이 붙어 있으면 전과 똑같이 매초 한 번 굽는다 —
+    한쪽을 가볍게 하며 다른 쪽을 조용히 깨뜨리지 않는다.
+    ⚠직렬화는 ENGINE_LOCK 안에서 한다 — 스냅샷의 항목 dict 는 책의 것을 가리키므로
+      먹이는 중에 돌면 «dictionary changed size» 가 날 수 있다(전에는 잠그지 않았다).
+    """
+    with STATE["lock"]:
+        if STATE["raw_ver"] == STATE["ver"]:
+            return STATE["raw"]
+        snap, ver = STATE["book"], STATE["ver"]
+    with ENGINE_LOCK:
+        raw = json.dumps(snap, ensure_ascii=False).encode("utf-8")
+    with STATE["lock"]:
+        if ver >= STATE["raw_ver"]:
+            STATE["raw"], STATE["raw_ver"] = raw, ver
+    return raw
 
 # ─────────────────────────────── 단가 [OWNER 2026-09-23 「주문표에 단가도 같이」]
 #   금리를 «원» 으로 바꾼다. 규약과 정답지는 `kbond_price.py` 와 `test_price.py`.
@@ -1624,8 +1651,7 @@ class Book:
             y = None
             y = set_mid(d["QuoteRawLo"], d["QuoteRawHi"], mpv)   # ★세트 중간값 먼저
             if y is None and d["QuoteRaw"] is not None and mpv is not None:
-                arr, _ = restore(pd.Series([d["QuoteRaw"]]), pd.Series([mpv]))
-                y = None if np.isnan(arr[0]) else round(float(arr[0]), 3)
+                y = _restore_memo(d["QuoteRaw"], mpv)      # [2026-09-28] 메모를 거친다
             if y is None and d["AbsYield"] is not None:
                 y = round(float(d["AbsYield"]), 3)
             _atmp = False
@@ -1695,8 +1721,7 @@ class Book:
             mp = self.mp.get(d["BondCode"])
             y = set_mid(d["QuoteRawLo"], d["QuoteRawHi"], mp)    # ★세트 중간값 먼저
             if y is None and d["QuoteRaw"] is not None and mp is not None:
-                arr, _ = restore(pd.Series([d["QuoteRaw"]]), pd.Series([mp]))
-                y = None if np.isnan(arr[0]) else round(float(arr[0]), 3)
+                y = _restore_memo(d["QuoteRaw"], mp)       # [2026-09-28] 메모를 거친다
             if y is None and d["AbsYield"] is not None:
                 y = round(float(d["AbsYield"]), 3)
             # ★[OWNER 2026-09-03] 「레벨이 없으면 민평에 팔겠다는 얘기」
@@ -2661,9 +2686,9 @@ class Handler(BaseHTTPRequestHandler):
                         if STATE["ver"] == sent:
                             COND.wait(timeout=5)
                     with STATE["lock"]:
-                        ver, raw = STATE["ver"], STATE["raw"]
+                        ver = STATE["ver"]
                     if ver != sent:
-                        self.wfile.write(b"data: " + raw + b"\n\n")
+                        self.wfile.write(b"data: " + raw_full() + b"\n\n")
                         sent = ver
                     else:
                         # ★v2: «: ping» 주석은 EventSource.onmessage 에 안 잡혀
@@ -2696,8 +2721,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif self.path.startswith("/book.json"):
-            with STATE["lock"]:
-                body = STATE["raw"]
+            body = raw_full()
             self._send(body, "application/json; charset=utf-8")
         elif self.path.startswith("/feed.json"):
             # [OWNER 2026-09-03] 「새로고침할 때마다 메인 메시지 수가 준다」 —
@@ -2875,7 +2899,8 @@ def start_engine(at=None, seed_prev_day=True):
             STATE["dirty"] = False
         with ENGINE_LOCK:                      # 먹이기와 겹치지 않게
             snap = book.snapshot()
-        raw = json.dumps(snap, ensure_ascii=False).encode("utf-8")
+        # ★[2026-09-28 경량화] 전체 JSON 은 여기서 안 굽는다 — raw_full() 이 «달라는 곳에서»
+        #   굽는다(옛 화면 SSE · /book.json). 새 화면이 읽는 raw_lite 만 매초 굽는다.
         # ★★★가벼운 프레임 [OWNER 2026-09-23 「렉이 미친듯이 걸림」].
         #   책이 1.2MB 인데 SSE 가 그걸 매초 통째로 밀고 있었다. 그런데 새 화면이
         #   그 프레임에서 «실제로 읽는 것» 은 feed 와 n_msg 둘뿐이다(page.tsx).
@@ -2893,7 +2918,6 @@ def start_engine(at=None, seed_prev_day=True):
         }, ensure_ascii=False).encode("utf-8")
         with STATE["lock"]:
             STATE["book"] = snap
-            STATE["raw"] = raw
             STATE["raw_lite"] = lite
             STATE["stream"] = book.stream
             STATE["ver"] += 1
