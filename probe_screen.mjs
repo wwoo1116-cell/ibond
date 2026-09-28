@@ -33,7 +33,15 @@ const API = process.argv[3] || 'http://127.0.0.1:8302';
 const TABS = process.argv.slice(4).length ? process.argv.slice(4) : ['메인', '동향', '국고', '크레딧'];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** 재는 자리 — [이름, 선택자, 최소 대비]. 3.0 은 그래픽(글자 아닌 표식)이다. */
+/**
+ * 재는 자리 — [이름, 선택자, 최소 대비, 'fill'?].
+ *
+ * ★넷째 칸이 'fill' 이면 **채움색**을 잰다(글자색이 아니라). 상태 점·막대처럼
+ *   글자가 없는 표식은 «제 배경 대 부모 배경» 이 읽히느냐가 전부고, 글자색을 재면
+ *   상속된 색을 제 배경에 대고 재는 셈이라 뜻 없는 수가 나온다(2026-09-28 실측:
+ *   점이 1.86:1 로 나왔는데 그건 잉크 대 청록이었다). WCAG 1.4.11 은 그래픽에
+ *   3:1 을 요구하고, 그 «그래픽» 이 이 채움이다.
+ */
 const SPOTS = [
   ['부호 ↑', '.sr-up', 4.5],
   ['부호 ↓', '.sr-down', 4.5],
@@ -43,7 +51,7 @@ const SPOTS = [
   ['이벤트 크로스', '.kb-evk.cross', 4.5],
   ['이벤트 체결', '.kb-evk.fill', 4.5],
   ['관심 별', '.kb-star.on', 4.5],
-  ['상태 점', '.kb-dot.on', 3.0],
+  ['상태 점', '.kb-dot.on', 3.0, 'fill'],
   ['표 머리', '.kb-tbl th', 4.5],
   ['뮤트 글', '.kb-n', 4.5],
   ['피드 칸', '.kb-c', 4.5],
@@ -120,7 +128,7 @@ const MEASURE = `
   };
   const spots = __SPOTS__;
   const out = [];
-  for (const [name, sel, min] of spots) {
+  for (const [name, sel, min, kind] of spots) {
     let els = [];
     try { els = [...document.querySelectorAll(sel)]; } catch { continue; }
     els = els.filter((e) => e.offsetParent !== null && (e.textContent || '').trim() !== '' || (e.offsetWidth && e.offsetHeight && !(e.textContent || '').trim()));
@@ -128,17 +136,37 @@ const MEASURE = `
     let worst = null;
     for (const e of els.slice(0, 40)) {
       const cs = getComputedStyle(e);
-      const fgp = parse(cs.color);
+      /* 그래픽이면 «제 채움 대 부모 배경», 글자면 «제 글자색 대 제 배경». */
+      const fgp = parse(kind === 'fill' ? cs.backgroundColor : cs.color);
       if (!fgp) continue;
-      const fg = fgp.a >= 0.999 ? fgp.rgb : (() => { const b = bgOf(e); return fgp.rgb.map((v, i) => fgp.a * v + (1 - fgp.a) * b[i]); })();
-      const r = ratio(fg, bgOf(e));
-      if (!worst || r < worst.r) worst = { r, txt: (e.textContent || '').trim().slice(0, 14) };
+      const bg = kind === 'fill' ? bgOf(e.parentElement || e) : bgOf(e);
+      const fg = fgp.a >= 0.999 ? fgp.rgb : fgp.rgb.map((v, i) => fgp.a * v + (1 - fgp.a) * bg[i]);
+      const r = ratio(fg, bg);
+      if (!worst || r < worst.r) {
+        /* 어느 «면» 위에서 떨어지는지까지 적는다 — 색 이름만으로는 고칠 자리를
+           못 찾는다(실측: 같은 뮤트 글자가 카드 위 5.87, 컨트롤 면 위 4.47). */
+        let where = '';
+        for (let c = e; c && !where; c = c.parentElement) {
+          const b = parse(getComputedStyle(c).backgroundColor);
+          if (b && b.a > 0) where = String(c.className || c.tagName).trim().split(/\s+/).slice(0, 2).join('.');
+        }
+        worst = { r, txt: (e.textContent || '').trim().slice(0, 14), where, bg: 'rgb(' + bg.map(Math.round).join(',') + ')' };
+      }
     }
-    if (worst) out.push({ name, n: els.length, r: Math.round(worst.r * 100) / 100, min, txt: worst.txt, ok: worst.r >= min });
+    if (worst) out.push({ name, n: els.length, r: Math.round(worst.r * 100) / 100, min, txt: worst.txt, where: worst.where, bg: worst.bg, ok: worst.r >= min });
   }
-  /* 넘침 */
+  /* 넘침 — ★찾는 것은 «조용한 잘림» 이다.
+     «…» 로 잘렸다는 사실을 보이고 마우스를 올리면 전체가 뜨는 칸은 규칙을 지킨
+     것이다(v2 「말줄임 절대 금지」가 금지하는 것은 소리 없이 사라지는 글자다).
+     그래서 text-overflow: ellipsis 와 title 을 **둘 다** 가진 칸은 세지 않는다 —
+     둘 중 하나만 있으면 잡는다(잘렸는데 전체를 볼 길이 없거나, 그냥 사라지거나). */
+  const excused = (e) => {
+    if (getComputedStyle(e).textOverflow !== 'ellipsis') return false;
+    for (let c = e; c; c = c.parentElement) if (c.getAttribute && c.getAttribute('title')) return true;
+    return false;
+  };
   const ov = [...document.querySelectorAll(__OVER__)]
-    .filter((e) => e.offsetParent !== null && e.scrollWidth > e.clientWidth + 1)
+    .filter((e) => e.offsetParent !== null && e.scrollWidth > e.clientWidth + 1 && !excused(e))
     .map((e) => ({ cls: e.className || e.tagName, w: e.clientWidth, s: e.scrollWidth, txt: (e.textContent || '').trim().slice(0, 18) }));
   /* CH_PX — 숫자 칸에서 '0' 한 글자의 실제 폭 */
   let ch = null;
@@ -175,7 +203,10 @@ for (const scheme of ['light', 'dark']) {
     fails += bad.length + r.overflow.length;
     console.log(`\n── ${scheme} · ${tab} ${clicked === 'no-tab' ? '(탭 없음)' : ''} · CH_PX ${r.ch ?? '—'}`);
     for (const s of r.spots) {
-      console.log(`   ${s.ok ? ' ' : '✗'} ${s.name.padEnd(12)} ${String(s.r).padStart(6)} : 1  (필요 ${s.min}, n=${s.n}, "${s.txt}")`);
+      console.log(
+        `   ${s.ok ? ' ' : '✗'} ${s.name.padEnd(12)} ${String(s.r).padStart(6)} : 1  (필요 ${s.min}, n=${s.n}` +
+          `, "${s.txt}"${s.ok ? '' : ` · ${s.where} ${s.bg}`})`,
+      );
     }
     if (r.overflow.length) {
       /* 같은 칸이 수십 줄에서 같은 이유로 넘치므로 «칸 종류» 로 접어 센다 —
