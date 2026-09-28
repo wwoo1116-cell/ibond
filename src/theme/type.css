@@ -121,6 +121,151 @@ body,
   overflow: hidden;
 }
 
+/* ── 그림 위의 리드아웃 줄 (`ui/ChartReadoutStrip.tsx`) ──────────────────────
+ *
+ * 떠 있는 카드가 그림을 가린다는 보고를 받고 **그림 밖으로 내보낸 판**이다
+ * [OWNER 2026-09-21]. 그래서 이 블록의 규칙은 전부 «안 움직인다» 한 가지를
+ * 말한다 — 자리도 높이도 칸 폭도 고정이고, 커서를 따라 바뀌는 것은 글자뿐이다.
+ *
+ * 아래 카드 블록(`.sr-readout`)은 **남는다** — 시뮬·rv·MR·Lab 의 열네 카드가
+ * 아직 그 문법을 쓴다. 이번에 바뀐 것은 종목 차트 세 표면과 백테스트뿐이다. */
+.sr-readout-strip {
+  /* 칸이 넘치면 줄바꿈이 아니라 **잘린다**. 줄바꿈은 높이를 바꾸고, 높이가
+     바뀌면 그림이 흔들린다(이 줄이 존재하는 이유의 정반대). */
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+/* 계열 칸들이 사는 **가운데 영역 — 줄어드는 곳은 여기뿐이다.**
+ *
+ * 실측 [2026-09-21 브라우저]: MA 를 다섯 다 켜면 칸이 열이 되고, 그때
+ * `당일 변화` 가 오른쪽 끝으로 밀려 잘렸다. 켤 수 있는 계열 수가 변수라
+ * 분기점을 아무리 촘촘히 잡아도 어떤 조합에서는 넘친다 — 그래서 «날짜·레벨·
+ * 당일 변화는 항상 보인다» 를 분기점이 아니라 **구조**로 만든다: 바깥의 셋은
+ * 줄어들지 않는 자리에 있고, 줄어드는 것은 이 상자뿐이다.
+ *
+ * `container-type: inline-size` 도 여기다 — 사다리가 봐야 하는 폭은 창도 줄
+ * 전체도 아니고 **계열 칸들에게 실제로 남은 폭**이다. */
+.sr-strip-series {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  container-type: inline-size;
+  /* ── 넘치면 **옆으로 민다** [실측 2026-09-21 브라우저] ─────────────────────
+   * MA 다섯을 다 켜면 계열 칸이 여덟이다. 값을 사다리대로 다 내려놓아도
+   * 이름과 견본은 남으므로(오너 결정: 칸을 떨구면 좁은 창에서 켤 길이 없어진다)
+   * 여덟 개의 **이름**만으로 이미 한 줄을 넘는다. 실측에서 그게 `MA1…` 처럼
+   * 글자 중간에서 잘려 고장난 것처럼 보였다.
+   *
+   * 줄바꿈은 안 된다(높이가 바뀌면 그림이 흔들린다). 칸을 떨구는 것도 안 된다
+   * (손잡이가 사라진다). 남는 답은 미는 것이고, 미는 것은 **아무것도 잃지
+   * 않는다** — 모든 칸에 손이 닿는다.
+   *
+   * 스크롤 막대는 숨긴다. 22px 짜리 줄에 막대가 서면 그만큼 높이를 먹고, 높이
+   * 고정이 이 줄의 전부다. `scrollbar-width` 가 있으면 크롬은
+   * `::-webkit-scrollbar` 를 무시하므로 한 줄로 끝낸다. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  /* 오른쪽 끝을 흐리게 — «여기서 끝이 아니다» 를 말한다. 안 넘칠 때는 마지막
+     칸 뒤의 빈자리가 그 구간에 들어가므로 글자가 흐려지지 않는다.
+
+     `currentColor` 인 이유는 색이 아니라 **규율**이다: 마스크는 알파만 쓰므로
+     어떤 색이든 결과가 같고, 이 파일에 색 리터럴을 적으면
+     `guards/color-source.test.ts` 가 잡는다(색은 `direction.css` 한 곳이다). */
+  mask-image: linear-gradient(to right, currentColor calc(100% - 16px), transparent);
+  padding-right: 16px;
+}
+
+.sr-strip-slot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  /* 누를 수 있는 칸은 `Pressable`(= `button`)이라 UA 기본이 붙는다. 이 줄의
+     칸들은 서로 같은 모양이어야 하므로 그것부터 지운다. */
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+/* 값이 들어갈 자리는 **미리 비워 둔다**. `--sr-strip-ch` 는 호출부가 보이는
+   구간의 고·저를 같은 서식에 통과시켜 잰 글자 수다(`slotChars`). 오른쪽
+   정렬이라 짧은 값은 앞이 비고, 그래서 옆 칸이 절대 안 밀린다. */
+.sr-strip-v {
+  min-width: var(--sr-strip-ch, auto);
+  text-align: right;
+}
+
+/* 누를 수 있는 칸임을 손이 알게 한다. 색은 안 바꾼다 — 이 줄에서 색을 가지는
+   것은 견본과 변화 하나뿐이라는 규칙 그대로다. */
+.sr-readout-strip button.sr-strip-slot {
+  cursor: pointer;
+}
+
+/* ── 좁아지면 **값만** 내려놓는다 ───────────────────────────────────────────
+ *
+ * 칸을 통째로 떨구지 않는 이유는 이 줄이 범례이기도 해서다 — 칸이 사라지면
+ * 좁은 창에서 그 계열을 켜고 끌 길이 없어진다 [OWNER 2026-09-21]. 남는 것은
+ * 견본과 이름이고, 잊는 것은 숫자뿐이며, 창을 키우면 돌아온다.
+ *
+ * 순서는 꼬리부터다: 기준금리(6) → CD91(5) → 긴 MA 부터(4·3·2) → 짧은 MA(1).
+ * 긴 창이 먼저 내려가는 이유는 **읽는 순서**다: 커서 옆에서 먼저 보는 것은
+ * 가까운 평균이다.
+ *
+ * 레벨은 `data-drop` 이 없어 어느 폭에서도 값이 남고, **날짜와 당일 변화는 이
+ * 영역 밖이라 아예 줄어들지 않는다**(`.sr-strip-series` 주석). */
+@container (max-width: 640px) {
+  .sr-strip-slot[data-drop='6'] .sr-strip-v {
+    display: none;
+  }
+}
+
+@container (max-width: 560px) {
+  .sr-strip-slot[data-drop='5'] .sr-strip-v {
+    display: none;
+  }
+}
+
+@container (max-width: 480px) {
+  .sr-strip-slot[data-drop='4'] .sr-strip-v {
+    display: none;
+  }
+}
+
+@container (max-width: 400px) {
+  .sr-strip-slot[data-drop='3'] .sr-strip-v {
+    display: none;
+  }
+}
+
+@container (max-width: 330px) {
+  .sr-strip-slot[data-drop='2'] .sr-strip-v {
+    display: none;
+  }
+}
+
+@container (max-width: 260px) {
+  .sr-strip-slot[data-drop='1'] .sr-strip-v {
+    display: none;
+  }
+}
+
+/* 변화는 위 칸들의 또 다른 통계가 아니라 **다른 양**이다 — 카드 시절의
+   `.sr-readout-change` 가 위쪽 여백으로 말하던 것을, 한 줄에서는 왼쪽 여백이
+   말한다. */
+.sr-strip-change {
+  /* 가운데 영역이 `flex: 1` 이라 이 칸은 자연히 오른쪽 끝이다 — `margin-left:
+     auto` 가 하던 일을 구조가 한다. 그리고 줄어들지 않는다. */
+  flex-shrink: 0;
+  padding-left: 8px;
+}
+
 /* ── 커서 리드아웃 카드 (`ui/ReadoutCard.tsx`) ───────────────────────────────
  *
  * 차트 위에 떠서 커서 아래의 값을 읽는 카드다. 카드 **위에** 뜨는 것이라 바탕은

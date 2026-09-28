@@ -11,12 +11,14 @@
  */
 import { Fragment, useCallback, useEffect, useState } from 'react';
 
+import dynamic from 'next/dynamic';
+
 import { Text } from '@coinbase/cds-web/typography';
 
 import { getView } from '@/lib/api';
 import type { FeedRow, Lane, TtlMode, View } from '@/lib/api';
 import {
-  EMDASH, fmtAge, fmtBpLevel, fmtBpUnit, fmtHm, fmtHms, fmtLot, fmtYield,
+  EMDASH, fmtAge, fmtBpLevel, fmtBpUnit, fmtHms, fmtLot, fmtYield,
 } from '@/lib/format';
 import { Delta } from '@/ui/Delta';
 
@@ -182,71 +184,13 @@ function Dealers({ d, T }: { d: NonNullable<View['dealers']>; T: number }) {
   );
 }
 
-/** 시세 — 서버가 준 표본과 세로 범위를 좌표로만 옮긴다.
- *  ★[OWNER] 전일 민평이 정중앙을 지난다. 그 대칭 범위는 `px_series` 가 낸 lo/hi 다. */
-function PxChart({ px }: { px: NonNullable<View['px']> }) {
-  const W = 900;
-  const H = 260;
-  const AB = (px.act ?? []).length ? 22 : 0;
-  const pad = { l: 4, r: 52, t: 10, b: 18 + AB };
-  const pts = px.pts ?? [];
-  if (px.note || pts.length < 2 || px.lo == null || px.hi == null) {
-    return <div className="kb-empty">{px.note ?? '표본이 모자랍니다'}</div>;
-  }
-  const t0 = px.t0 ?? pts[0].t;
-  const t1 = px.t1 ?? pts[pts.length - 1].t;
-  const X = (t: number) => pad.l + ((W - pad.l - pad.r) * (t - t0)) / (t1 - t0 || 1);
-  const Y = (v: number) => pad.t + (H - pad.t - pad.b) * (1 - (v - px.lo!) / (px.hi! - px.lo! || 1));
-  const path = (key: 'mid' | 'a' | 'b') => {
-    let d = '';
-    let pen = false;
-    for (const p of pts) {
-      const v = p[key];
-      if (v == null) { pen = false; continue; }
-      d += `${pen ? 'L' : 'M'}${X(p.t).toFixed(1)},${Y(v).toFixed(1)}`;
-      pen = true;
-    }
-    return d;
-  };
-  const ticks = [0, 1, 2, 3].map((i) => px.lo! + ((px.hi! - px.lo!) * i) / 3);
-  const hours: number[] = [];
-  for (let s = Math.ceil(t0 / 3600) * 3600; s <= t1; s += 3600) hours.push(s);
-  const mxA = Math.max(1, ...(px.act ?? []).map((a) => a.tot));
-  const bw = Math.max(2, X(t0 + (px.bin || 600)) - X(t0) - 1);
-
-  return (
-    <svg className="kb-px" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="시세">
-      {ticks.map((v) => (
-        <g key={v}>
-          <line x1={pad.l} x2={W - pad.r} y1={Y(v)} y2={Y(v)} className="kb-grid" />
-          <text x={W - pad.r + 5} y={Y(v) + 3} className="kb-axis">{v.toFixed(3)}</text>
-        </g>
-      ))}
-      {hours.map((s) => (
-        <text key={s} x={Math.max(pad.l, X(s))} y={H - 4} className="kb-axis">
-          {fmtHm(s)}
-        </text>
-      ))}
-      {px.mp != null ? (
-        <>
-          <line x1={pad.l} x2={W - pad.r} y1={Y(px.mp)} y2={Y(px.mp)} className="kb-mpref" />
-          <text x={W - pad.r + 5} y={Y(px.mp) + 3} className="kb-axis mp">민평</text>
-        </>
-      ) : null}
-      {(px.act ?? []).map((a) => {
-        const h = ((AB - 4) * a.n) / mxA;
-        return h <= 0 ? null : (
-          <rect key={a.t} x={X(a.t)} y={H - 18 - h} width={bw} height={h} className="kb-actbar">
-            <title>{`${fmtHm(a.t)} · ${a.n}건`}</title>
-          </rect>
-        );
-      })}
-      <path d={path('a')} className="kb-pxask" />
-      <path d={path('b')} className="kb-pxbid" />
-      <path d={path('mid')} className="kb-pxmid" />
-    </svg>
-  );
-}
+/* 시세 차트는 `components/PxChart.tsx` 로 나갔다 [2026-09-28] — 손 SVG 를 걷고
+   v2 차트 캐논(lightweight-charts)으로 다시 그렸다. 여기서 지연 로드하는 이유는
+   무게다: 라이브러리가 207KB 라, 메인 탭만 보는 사람이 그걸 받을 이유가 없다. */
+const PxChart = dynamic(() => import('./PxChart').then((m) => m.PxChart), {
+  ssr: false,
+  loading: () => <div className="kb-empty">시세를 그리는 중…</div>,
+});
 
 export function Bonds({ lane, ttl, onTtl, feed = [] }: {
   lane: Lane;

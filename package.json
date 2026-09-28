@@ -16,6 +16,7 @@
     "@coinbase/cds-common": "9.22.0",
     "@coinbase/cds-icons": "5.22.0",
     "@coinbase/cds-web": "9.22.0",
+    "lightweight-charts": "^5.2.1",
     "next": "15.4.8",
     "react": "19.1.2",
     "react-dom": "19.1.2"
