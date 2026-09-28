@@ -61,6 +61,10 @@ class CreditQuote(BaseModel):
     bp: float | None = Field(None, description="민평 대비 bp (bp 표기 행)")
     dbp: float | None = Field(None, description="민평 대비 bp (원 표기 행 — 끝전 환산 또는 문면 Δ)")
     bpe: float | None = Field(None, description="하류가 하나로 쓰는 민평 대비 bp")
+    bpc: float | None = Field(
+        None, description="커브 반영 민평대비 = bpe − 같은 잔존 국고 커브의 오늘 이동. "
+                          "닻이 둘 미만이면 None 이다(0 이 아니다)")
+    cmv: float | None = Field(None, description="그 잔존에서 «뺀 양»(bp) — 화면이 되짚게 한다")
     won: float | None = Field(None, description="문면 원 스프레드")
     ytm: float | None = None
     y: float | None = Field(None, description="ytm 과 같다(피드 호환)")
@@ -267,6 +271,8 @@ class CreditBucket(BaseModel):
     nat: int = Field(0, description="그중 «민평에» 오퍼 수 — 중앙값에서는 뺀다 [OWNER 2026-09-07]")
     mb: int = 0
     bp_med: float | None = None
+    bpc_med: float | None = Field(
+        None, description="커브 반영 민평대비 중앙값. 뺄 수 있었던 오퍼가 절반이 안 되면 None")
     ytm_med: float | None = None
     ttm_lo: float | None = None
     ttm_hi: float | None = None
@@ -294,9 +300,41 @@ class CurveOffer(BaseModel):
     ttm: float | None = None
     ytm: float | None = None
     bpe: float | None = None
+    bpc: float | None = Field(None, description="커브 반영 민평대비")
     a: float | None = None
     mb: int = 0
     lvl: LevelKind | None = None
+
+
+class CurveAnchor(BaseModel):
+    """커브 이동의 닻 한 칸 — 그 만기 칸 국고 종목들의 «오늘 mid − 전일 민평» 중앙값.
+
+    칸은 민평 기준선과 같다(2년 미만 0.25년 · 그 위 0.5년). 한 칸에 여럿이고 그중
+    10분 안쪽이 있으면 **그것들만** 쓴다 — 두 시간 묵은 닻이 커브를 붙잡지 않게.
+    """
+    ttm: float = Field(description="칸 중심(년)")
+    bp: float = Field(description="그 칸의 이동(bp)")
+    n: int = Field(description="이 칸을 세운 종목 수")
+    age: int | None = Field(
+        None, description="가장 신선한 닻의 나이(초). 0 = 지금 양면이 서 있다")
+    cs: list[str] = Field(description="이 칸을 세운 종목(회차) — 손으로 되짚으라고 싣는다")
+
+
+class CurveMove(BaseModel):
+    """오늘 국고 커브가 잔존별로 얼마나 움직였나 [OWNER 2026-09-28].
+
+    크레딧의 «민평대비» 에서 이것을 빼면 «시장이 움직인 만큼» 이 아니라
+    «이 종목이 싸졌다» 만 남는다. 통과 계수 β 0.823 · R² 0.643(원장 138,032 종목일).
+    β 를 곱하지 않고 통째로 뺀다 — 남는 오차가 0.57 대 0.55bp 로 사실상 같고,
+    통째로 뺀 값은 오너가 닻을 보고 손으로 되짚을 수 있다.
+    """
+    pts: list[CurveAnchor]
+    n: int
+    ok: bool = Field(description="닻이 둘 이상인가. False 면 화면은 이 칸을 비운다")
+    lo: float | None = None
+    hi: float | None = None
+    med: float | None = Field(None, description="닻 칸들의 중앙 이동(bp) — 머리줄에 적는 수")
+    age_max: int | None = Field(None, description="가장 낡은 닻의 나이(초)")
 
 
 class Curve(BaseModel):
@@ -534,6 +572,8 @@ class View(BaseModel):
     buckets: list[CreditBucket] | None = Field(
         None, description="lane 이 cr 일 때. 국고·통안을 고르면 만기 버킷으로 접힌다")
     curve: Curve | None = None
+    curve_move: CurveMove | None = Field(
+        None, description="lane 이 cr 이고 국고·통안이 아닐 때. 국고 화면에는 없다 — 닻이 자기 자신이라 순환이다")
     mtx_group: str | None = Field(None, description="credit_matrix 의 bond_type(등급 커브)")
     # 종목 하나를 고른 상태에서만 실린다. 화면이 다시 계산하지 않게 하려는 것이다.
     ob: ObLadder | None = Field(None, description="고른 종목의 호가 사다리")

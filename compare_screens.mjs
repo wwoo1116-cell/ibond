@@ -168,13 +168,20 @@ const asYears = (s) => {
   return y < 0 ? -Infinity : y;
 };
 
-function diffRows(a, b, key) {
+/**
+ * 두 화면의 같은 줄을 맞댄다.
+ *
+ * `keyB` 를 따로 주면 **양쪽 칸 차례가 달라도** 견줄 수 있다 — 새 화면에만
+ * 있는 칸(파생값)을 빼고 «둘 다 가진 것» 만 맞대라는 뜻이다. 없는 칸을 억지로
+ * 맞추려고 새 화면에서 값을 빼지 않는다: 자가 그림을 바꾸면 자가 아니다.
+ */
+function diffRows(a, b, key, keyB = key) {
   const out = [];
   const n = Math.max(a.length, b.length);
   for (let i = 0; i < n; i++) {
     const x = nums(key(a[i]));
-    const y = nums(key(b[i]));
-    if (x !== y) out.push({ i, 옛: key(a[i]) ?? '(없음)', 새: key(b[i]) ?? '(없음)' });
+    const y = nums(keyB(b[i]));
+    if (x !== y) out.push({ i, 옛: key(a[i]) ?? '(없음)', 새: keyB(b[i]) ?? '(없음)' });
   }
   return out;
 }
@@ -225,10 +232,13 @@ const crB = await Bt.ev(NEW_CRLIST);
 report.차이.크레딧분류 = diffRows(crA, crB, (r) => (r ? `${r.nm} ${r.sub} ${r.v} ${r.d}` : null));
 const obA = await A.ev(OLD_OB);
 const obB = await Bt.ev(NEW_OB);
-/* 칸 차례는 [종목, 잔존, 민평대비, YTM, 수량]. ★잔존만 따로 재는 이유는 단위가
-   달라서다 — 옛 화면은 `8M`, 새 화면은 `243일`(09-23 오너 규칙). 숫자로 맞대면
-   8 대 243 이라 언제나 어긋나므로, 그 칸은 «년» 으로 환산해 견준다. */
-report.차이.크레딧오퍼 = diffRows(obA, obB, (r) => (r ? [0, 2, 3, 4].map((i) => r[i]).join(' ') : null));
+/* 칸 차례 — 옛 [종목, 잔존, 민평대비, YTM, 수량] · **새 [종목, 잔존, 민평대비,
+   커브반영, YTM, 수량]**(2026-09-28 에 «커브반영» 이 셋째 뒤로 들어왔다).
+   ★새 칸은 옛 화면에 없는 값이라 맞댈 짝이 없다 — 견주는 것은 **둘 다 가진 넷**뿐이다.
+   ★잔존만 따로 재는 이유는 단위가 달라서다 — 옛 화면은 `8M`, 새 화면은 `243일`
+   (09-23 오너 규칙). 숫자로 맞대면 8 대 243 이라 언제나 어긋난다. */
+const pick = (ix) => (r) => (r ? ix.map((i) => r[i]).join(' ') : null);
+report.차이.크레딧오퍼 = diffRows(obA, obB, pick([0, 2, 3, 4]), pick([0, 2, 4, 5]));
 report.차이.크레딧잔존 = diffTtm(obA, obB, (r) => (r ? r[1] : null));
 
 /* 5. 국고 */

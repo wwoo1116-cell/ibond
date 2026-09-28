@@ -192,16 +192,20 @@ def bkey(e):
     return f"{e.get('cls') or '회사채'}|{e.get('rt') or '미상'}"
 
 
-def cr_buckets(snap, T, mode="def"):
-    """종별×등급 버킷. 화면 crBuckets 와 같은 정렬(CLSORD, RTORD)."""
+def cr_buckets(snap, T, mode="def", cv=None):
+    """종별×등급 버킷. 화면 crBuckets 와 같은 정렬(CLSORD, RTORD).
+
+    `cv` 를 주면 «커브 반영» 중앙값(`bpc_med`)을 같이 낸다 — 같은 오퍼 집합을
+    커브 이동만큼 민 것이라, 두 수의 차가 곧 그 버킷 잔존의 커브 이동이다.
+    """
     m = {}
     for e in cr_alive(snap, T, mode):
         k = bkey(e)
         b = m.setdefault(k, {"k": k, "cls": e.get("cls") or "회사채",
                              "rt": e.get("rt") or "미상",
                              "est": e.get("rt_src") == "집계",
-                             "n": 0, "nat": 0, "bps": [], "ytms": [], "ttms": [],
-                             "mb": 0})
+                             "n": 0, "nat": 0, "bps": [], "bpcs": [], "ytms": [],
+                             "ttms": [], "mb": 0})
         b["n"] += 1
         # ★[OWNER 2026-09-07] «민평에 팔자» 를 0bp 로 받으면(맞다) 버킷의 절반~8할이
         #   0 이 되어 중앙값이 통째로 0 으로 눌린다(실측 버킷마다 민평 52~83%).
@@ -211,6 +215,9 @@ def cr_buckets(snap, T, mode="def"):
             b["nat"] += 1
         elif e.get("bpe") is not None:
             b["bps"].append(e["bpe"])
+            _c, _ = curve_adj(cv, e)
+            if _c is not None:
+                b["bpcs"].append(_c)
         if e.get("ytm") is not None:
             b["ytms"].append(e["ytm"])
         if e.get("ttm") is not None:
@@ -221,9 +228,14 @@ def cr_buckets(snap, T, mode="def"):
                                 RTORD.index(b["rt"]) if b["rt"] in RTORD else 99))
     for b in out:                      # 화면이 쓰는 것은 중앙값이다 — 여기서 접는다
         b["bp_med"], b["ytm_med"] = med(b["bps"]), med(b["ytms"])
+        # ★뺄 수 있었던 오퍼가 절반도 안 되면 중앙값을 내지 않는다 — 반만 민
+        #   집합의 중앙값은 커브 반영도 아니고 원래 값도 아니다.
+        b["bpc_med"] = (med(b["bpcs"])
+                        if len(b["bpcs"]) * 2 >= len(b["bps"]) and b["bpcs"]
+                        else None)
         b["ttm_lo"] = min(b["ttms"]) if b["ttms"] else None
         b["ttm_hi"] = max(b["ttms"]) if b["ttms"] else None
-        del b["bps"], b["ytms"], b["ttms"]
+        del b["bps"], b["bpcs"], b["ytms"], b["ttms"]
     return out
 
 
@@ -319,14 +331,129 @@ def _mp_line(mp_pts):
     return sorted(([b, med(v), len(v)] for b, v in bins.items()), key=lambda x: x[0])
 
 
-def curve_points(snap, T, mode="def"):
+# ── 커브 반영 민평대비 [OWNER 2026-09-28] ──────────────────────────────────
+# 크레딧의 «민평대비» 는 (오퍼 금리 − 전일 민평) 이라 두 가지가 섞여 있다 —
+# «이 종목이 싸졌다» 와 «오늘 시장 전체가 움직였다». 트레이더가 보는 것은 앞이다.
+# 그래서 뒤를 뺀다: 같은 잔존의 **국고 커브가 오늘 움직인 만큼**.
+#
+# ★재서 넣었다 (원장 138,032 종목일 · 545 영업일, 2026-09-28):
+#   크레딧 민평 하루 변화 ~ β·(같은 잔존 국고 커브 이동) 에서 **β 0.823 · R² 0.643**.
+#   잔존별 β  0~1년 0.59 · 1~2년 0.79 · 2~3년 0.89 · 3~5년 0.90 · 5~10년 0.89 · 10년+ 0.95.
+#   남는 오차 중앙  아무것도 안 함 1.00bp → 통째로 뺌 0.57bp → 추정 β 로 뺌 0.55bp.
+#   ▎그래서 **β 를 쓰지 않고 통째로 뺀다** — 0.02bp 벌자고 손으로 검산 못 하는 수를
+#     만들지 않는다. 화면이 뺀 양과 닻을 같이 보여 주므로 그 자리에서 되짚을 수 있다.
+#   ⚠이 β 는 **하루 어긋남을 고친 뒤**의 값이다. 문면의 민평은 «전영업일» 것이라
+#     문면 차분은 (D−1, D_prev−1) 을 잰다 — 커브도 그 두 날 사이로 맞춰야 한다.
+#     안 맞추고 재면 β 가 −0.014 / R² 0.000 으로 나와 «이 기능은 죽었다» 가 된다.
+#
+# ★언제 아무 말도 안 하나 — 닻이 둘 미만이면 값을 내지 않는다. 원장으로 셌더니
+#   양면 국고 종목 수 중앙은 10시 8 · 11시 14 · 13시 16 · 15시 23 · 15:30 24 이고
+#   «둘 이상» 인 날이 10시에도 99.6% 다. 그래도 장 초반 얇은 날은 있고, 그날은 빈칸이다.
+#
+# ★국고 화면에는 이 칸을 달지 않는다 — 닻이 국고 자신이라 순환이다.
+CURVE_MIN_PTS = 2
+CURVE_FRESH = 600      # 이보다 어린 닻이 한 칸에 있으면 그것만 쓴다(초)
+
+
+def _cbin(y):
+    """닻을 묶는 만기 칸 — 민평 기준선(`_mp_line`)과 같은 칸을 쓴다.
+    한 화면이 «2년» 을 두 가지로 쪼개면 안 된다."""
+    w = 0.25 if y < 2 else 0.5
+    return round(round(y / w) * w, 2)
+
+
+def curve_move(snap, T, mode="def"):
+    """오늘 국고 커브가 «얼마나» 움직였나 — 만기 칸별 (mid − 전일 민평) bp.
+
+    닻은 국고 레인에서 mid 가 선 종목이다. `bond_rows` 의 mid 는 양면이 다 살아
+    있으면 그 mid, 아니면 **오늘 마지막으로 양면이 섰던 순간의 mid** 다(`hist`).
+
+    ★한 칸에 여럿이면 **신선한 것만** 쓴다(10분 안쪽이 있으면 그것들의 중앙값).
+      되감기에서 같은 2.02년에 26-7 이 −17.5(지금), 23-6 이 −7.5(2시간 전)로
+      10bp 어긋났다 — 낡은 쪽이 커브를 두 시간 전 자리에 붙잡는다.
+    ★나이 문턱으로 «거르지» 는 않는다. 원장으로 셌더니 13시에 30분 안쪽 닻이
+      둘 이상인 날이 18%뿐이다(점심). 거르면 점심마다 기능이 꺼진다.
+    ★통안은 닻에 넣지 않는다 — 원장 351영업일에서 양면이 서는 통안이 0 이라
+      짧은 쪽을 한 점도 못 메웠다(넣어도 «국고만» 과 수가 같았다).
+    """
+    hist = snap.get("hist") or {}
+    raw = []
+    for r in bond_rows(snap, "ktb", T, mode):
+        y = _years_to(snap, r.get("mat"))
+        if y is None or y <= 0 or r.get("mid") is None or r.get("mp") is None:
+            continue
+        h = hist.get(r["c"]) or []
+        age = 0 if (r.get("fa") and r.get("fb")) else (max(0, T - h[-1][0]) if h else None)
+        raw.append({"c": r["c"], "y": y, "bp": round((r["mid"] - r["mp"]) * 100, 2),
+                    "age": age})
+    bins = {}
+    for a in raw:
+        bins.setdefault(_cbin(a["y"]), []).append(a)
+    pts = []
+    for b in sorted(bins):
+        g = bins[b]
+        fresh = [a for a in g if a["age"] is not None and a["age"] <= CURVE_FRESH]
+        use = fresh or g
+        ages = [a["age"] for a in use if a["age"] is not None]
+        pts.append({"ttm": b, "bp": med([a["bp"] for a in use]), "n": len(use),
+                    "age": min(ages) if ages else None,
+                    "cs": [a["c"] for a in use]})
+    ages = [p["age"] for p in pts if p["age"] is not None]
+    return {"pts": pts, "n": len(pts), "ok": len(pts) >= CURVE_MIN_PTS,
+            "lo": pts[0]["ttm"] if pts else None,
+            "hi": pts[-1]["ttm"] if pts else None,
+            "med": med([p["bp"] for p in pts]) if pts else None,
+            "age_max": max(ages) if ages else None}
+
+
+def curve_move_at(cv, ttm):
+    """그 잔존에서 커브가 움직인 양(bp).
+
+    닻 사이는 직선. 닻보다 **길면 평평**(맨 끝 닻이 보통 30년이라 밖이 거의 없다).
+    닻보다 **짧으면 0 으로 기울여 내린다** — 최단 닻의 이동 × (잔존 / 최단 닻 잔존).
+
+    ★왜 짧은 쪽을 평평하게 두지 않나: 국고 책의 최단 잔존 중앙이 **1.3~1.8년**인데
+      (원장 351영업일) 크레딧 잔존 중앙은 1년 미만이다. 1.8년 이동을 0.02년 종목에
+      그대로 밀면 없는 움직임을 뺀다. 실측 하루 |Δ| 사다리가 0.25년 0.44 · 1년 0.88 ·
+      2년 1.99bp 로 **잔존에 거의 비례**해서, 0 으로 내리는 직선이 그 모양에 가깝다
+      (0.25년에서 평평 1.00배 · 비례 0.13배 대 실측 0.22배 — 비례 쪽이 훨씬 가깝다).
+    ★그래도 근사다. 화면이 «뺀 양»(`cmv`)을 같이 보여 주므로 되짚을 수 있다.
+    """
+    if not cv or not cv.get("ok") or ttm is None or ttm <= 0:
+        return None
+    pts = cv["pts"]
+    if ttm >= pts[-1]["ttm"]:
+        return pts[-1]["bp"]
+    if ttm <= pts[0]["ttm"]:
+        lo = pts[0]
+        return round(lo["bp"] * (ttm / lo["ttm"]), 2) if lo["ttm"] > 0 else lo["bp"]
+    for a, b in zip(pts, pts[1:]):
+        if a["ttm"] <= ttm <= b["ttm"]:
+            span = b["ttm"] - a["ttm"]
+            if span <= 0:
+                return a["bp"]
+            return round(a["bp"] + (b["bp"] - a["bp"]) * ((ttm - a["ttm"]) / span), 2)
+    return None
+
+
+def curve_adj(cv, e):
+    """한 오퍼의 «커브 반영 민평대비». 뺄 수 없으면 둘 다 None 이다(0 이 아니다)."""
+    mv = curve_move_at(cv, e.get("ttm"))
+    bpe = e.get("bpe")
+    if mv is None or bpe is None:
+        return None, mv
+    return round(bpe - mv, 2), mv
+
+
+def curve_points(snap, T, mode="def", cv=None):
     """크레딧 커브의 점과 기준선. 화면 drawCurve 가 하던 계산."""
     off = [e for e in cr_alive(snap, T, mode)
            if e.get("ttm") is not None and e.get("ytm") is not None]
     mp_pts = [(e["ttm"], e["mp"]) for e in cr_alive(snap, T, mode)
               if e.get("ttm") is not None and e.get("mp") is not None]
     return {"offers": [{"n": e["n"], "ttm": e["ttm"], "ytm": e["ytm"],
-                        "bpe": e.get("bpe"), "a": e.get("a"), "mb": e.get("mb") or 0,
+                        "bpe": e.get("bpe"), "bpc": curve_adj(cv, e)[0],
+                        "a": e.get("a"), "mb": e.get("mb") or 0,
                         "lvl": e.get("lvl")} for e in off],
             "mp_line": _mp_line(mp_pts), "mp_n": len(mp_pts)}
 
@@ -472,12 +599,16 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
             out["offers"] = gov_sel(snap, cls, T, mode, rt)
             out["needs"] = []
         else:
-            out["buckets"] = cr_buckets(snap, T, mode)
-            out["curve"] = curve_points(snap, T, mode)
+            # 커브 이동은 **한 번만** 세운다 — 버킷·커브·오퍼 셋이 같은 닻을 써야
+            # 한 화면이 두 수를 말하지 않는다.
+            cv = curve_move(snap, T, mode)
+            out["curve_move"] = cv
+            out["buckets"] = cr_buckets(snap, T, mode, cv)
+            out["curve"] = curve_points(snap, T, mode, cv)
             out["mtx_group"] = mtx_group(cls, rt)
             out["grade_curve"] = grade_curve(snap, cls, rt)
             # 고른 종별·등급의 오퍼와 매수 니즈. 화면이 다시 거르지 않게 서버가 낸다.
-            out["offers"] = cr_sel(snap, T, mode, cls, rt)
+            out["offers"] = cr_sel(snap, T, mode, cls, rt, cv)
             out["needs"] = cr_needs(snap, T, mode, cls, rt)
     elif lane == "dyn":
         out["pulse"] = pulse_stats(snap, T)
@@ -685,7 +816,7 @@ def _idx(seq, x):
         return -1
 
 
-def cr_sel(snap, T, mode="def", cls=None, rt=None):
+def cr_sel(snap, T, mode="def", cls=None, rt=None, cv=None):
     """고른 버킷(cls|rt) 또는 종별의 살아 있는 오퍼. 화면 crSel 그대로.
 
     ★결과금리가 없는 원 호가는 정렬할 금리가 없다 — 걸러내지 않고 그대로 실어
@@ -697,7 +828,16 @@ def cr_sel(snap, T, mode="def", cls=None, rt=None):
         rows = [e for e in rows if bkey(e) == key]
     elif cls:
         rows = [e for e in rows if (e.get("cls") or "회사채") == cls]
-    return sorted(rows, key=lambda e: e["ttm"] if e.get("ttm") is not None else 99)
+    rows = sorted(rows, key=lambda e: e["ttm"] if e.get("ttm") is not None else 99)
+    if cv is None:
+        return rows
+    # ★얕은 복사다 — `cr_alive` 가 내주는 것은 책 그 자체라 여기서 고치면
+    #   스냅샷이 오염된다(다음 폴에서 «이미 반영된» 값을 또 민다).
+    out = []
+    for e in rows:
+        bpc, mv = curve_adj(cv, e)
+        out.append({**e, "bpc": bpc, "cmv": mv})
+    return out
 
 
 def cr_needs(snap, T, mode="def", cls=None, rt=None):
