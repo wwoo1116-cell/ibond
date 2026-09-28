@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 
-import '@coinbase/cds-icons/fonts/web/icon-font.css';
+/* ★[2026-09-28 경량화] 아이콘 글꼴(273KB)은 뺐다 — 이 앱은 CDS 아이콘을 한 곳도 안 쓴다
+ * (src 전체에 Icon 컴포넌트 0). 쓰게 되면 `@coinbase/cds-icons/fonts/web/icon-font.css` 를 되살린다. */
 import '@coinbase/cds-web/defaultFontStyles';
 import '@coinbase/cds-web/globalStyles';
 
 import '@/theme/direction.css';
 import '@/theme/motion.css';
+import '@/theme/pretendard-dyn.css';
 import '@/theme/type.css';
 import '@/theme/kbond.css';
 
