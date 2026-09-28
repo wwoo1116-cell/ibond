@@ -15,19 +15,18 @@ import { Text } from '@coinbase/cds-web/typography';
 
 import { getView } from '@/lib/api';
 import type { FeedRow, Lane, TtlMode, View } from '@/lib/api';
+import {
+  EMDASH, fmtAge, fmtBpLevel, fmtBpUnit, fmtHm, fmtHms, fmtLot, fmtYield,
+} from '@/lib/format';
+import { Delta } from '@/ui/Delta';
 
 type ObLadder = NonNullable<View['ob']>;
 type ObLevel = NonNullable<ObLadder['levels']>[number];
 type ObSide = NonNullable<ObLevel['S']>;
 type BondRow = NonNullable<View['rows']>[number];
 
-const n3 = (v?: number | null) => (v == null ? '—' : v.toFixed(3));
-const p2 = (n: number) => String(n).padStart(2, '0');
-const hms = (t: number) =>
-  `${p2(Math.floor(t / 3600))}:${p2(Math.floor((t % 3600) / 60))}:${p2(t % 60)}`;
-/** 수량 기본단위 100억 [OWNER] */
-const lot = (a?: number | null) => (a == null || !a ? '—' : `${Math.round(a * 10) / 10}억`);
-const sbp = (v?: number | null) => (v == null ? '' : `${v > 0 ? '+' : ''}${v.toFixed(1)}bp`);
+/* 서식은 `lib/format` 한 곳이다 [2026-09-28] — 여기 있던 여섯 벌 중 `sbp` 는
+   `bp` 를 문자열에 구워, 아래 교체 패널이 `+1.5bpbp` 를 내고 있었다. */
 
 /** 나이 → 바램 단계. ★문턱은 서버가 준다(`view.age_steps`) — 여기서 정하지 않는다.
  *  09-11 에 화면과 서버가 판정을 따로 들고 있다가 나흘 만에 들킨 전례가 있다.
@@ -37,8 +36,6 @@ function ageCls(sec: number, steps?: number[] | null): '' | 'ag1' | 'ag2' {
   if (sec <= s0) return '';
   return sec <= s1 ? 'ag1' : 'ag2';
 }
-const ageTxt = (sec: number) =>
-  sec < 60 ? `${Math.round(sec)}초` : sec < 3600 ? `${Math.round(sec / 60)}분` : `${(sec / 3600).toFixed(1)}시간`;
 
 /** 사다리 한 칸의 한 면. 폭은 서버가 준 잣대(basis·mx)로만 정한다. */
 function Cell({ sd, side, basis, mx, T }: {
@@ -54,7 +51,7 @@ function Cell({ sd, side, basis, mx, T }: {
   const age = T - sd.fresh;
   const allDflt = sd.amt > 0 && sd.dflt === sd.n;
   const tail = sd.odd ? ' +자투리' : sd.unk ? ' +?' : '';
-  const txt = sd.amt ? lot(sd.amt) + tail : sd.odd ? '자투리' : '?';
+  const txt = sd.amt ? fmtLot(sd.amt) + tail : sd.odd ? '자투리' : '?';
   const who = (sd.who ?? []).filter(Boolean).join(', ');
   // v12 체결 귀속 — 이 칸에서 실제로 붙은 호가. 표시만 하고 지우지 않는다.
   const hit = sd.hit ?? 0;
@@ -62,8 +59,8 @@ function Cell({ sd, side, basis, mx, T }: {
   return (
     <div
       className={`kb-q ${side === 'S' ? 'l' : 'r'}`}
-      title={`${who} · ${ageTxt(age)} 전${allDflt ? ' · 표기 없음 → 기본단위 100억' : ''}${
-        hit ? ` · 이 레벨 체결 ${hit}건 (${ageTxt(hitAge)} 전)` : ''}`}
+      title={`${who} · ${fmtAge(age)} 전${allDflt ? ' · 표기 없음 → 기본단위 100억' : ''}${
+        hit ? ` · 이 레벨 체결 ${hit}건 (${fmtAge(hitAge)} 전)` : ''}`}
     >
       <i style={{ width: `${w}%` }} />
       <span className={allDflt ? 'od' : undefined}>{txt}</span>
@@ -92,9 +89,9 @@ function Ladder({ ob, T, steps }: { ob: ObLadder; T: number; steps?: number[] | 
     /* ★락 — 같은 레벨에 오퍼와 비드가 함께 서 있다. «스프레드 0.0bp» 라고 말하면 «좁다» 로
        읽히는데, 실제로는 «여기서 거래가 난다» 는 뜻이다(귀속 체결의 23.5%). [OWNER 09-15] */
     best.lock
-      ? `락 ${n3(best.mid)} · 같은 레벨에 양면`
+      ? `락 ${fmtYield(best.mid)} · 같은 레벨에 양면`
       : best.spread_bp != null
-      ? `스프레드 ${best.spread_bp.toFixed(1)}bp · mid ${n3(best.mid)}`
+      ? `스프레드 ${fmtBpLevel(best.spread_bp)}bp · mid ${fmtYield(best.mid)}`
       : (ob.sum?.na ?? 0)
         ? '매도 호가만 있습니다'
         : (ob.sum?.nb ?? 0)
@@ -117,7 +114,7 @@ function Ladder({ ob, T, steps }: { ob: ObLadder; T: number; steps?: number[] | 
           <div className="kb-q l" />
         )}
         <div className={`kb-p${L.S || L.B ? '' : ' mut'}`}>
-          {L.y.toFixed(3)}
+          {fmtYield(L.y)}
           {L.atmp ? <span className="kb-badge">민평</span> : null}
           {lock ? <span className="kb-badge">락</span> : null}
         </div>
@@ -141,11 +138,11 @@ function Ladder({ ob, T, steps }: { ob: ObLadder; T: number; steps?: number[] | 
       {bids.map((L) => row(L, 'b'))}
       <div className="kb-obt">
         <span>
-          매도 합 <b>{lot(ob.sum?.a)}</b> <span className="kb-n">{ob.sum?.na}건</span>
+          매도 합 <b>{fmtLot(ob.sum?.a)}</b> <span className="kb-n">{ob.sum?.na}건</span>
         </span>
         <span className="kb-n">막대 = {ob.basis === 'amt' ? '수량' : '호가 건수'}</span>
         <span>
-          매수 합 <b>{lot(ob.sum?.b)}</b> <span className="kb-n">{ob.sum?.nb}건</span>
+          매수 합 <b>{fmtLot(ob.sum?.b)}</b> <span className="kb-n">{ob.sum?.nb}건</span>
         </span>
       </div>
     </div>
@@ -171,12 +168,12 @@ function Dealers({ d, T }: { d: NonNullable<View['dealers']>; T: number }) {
           <tr key={r.k ?? r.d ?? ''} title={r.d ?? ''}>
             <td className="l">{r.d}</td>
             <td className={`num${r.S?.y != null && r.S.y === d.fa_y ? ' best' : ''}`}>
-              {r.S ? (r.S.y != null ? n3(r.S.y) : r.S.atmp ? '민평' : '—') : '·'}
+              {r.S ? (r.S.y != null ? fmtYield(r.S.y) : r.S.atmp ? '민평' : EMDASH) : '·'}
             </td>
             <td className={`num${r.B?.y != null && r.B.y === d.fb_y ? ' best' : ''}`}>
-              {r.B ? (r.B.y != null ? n3(r.B.y) : r.B.atmp ? '민평' : '—') : '·'}
+              {r.B ? (r.B.y != null ? fmtYield(r.B.y) : r.B.atmp ? '민평' : EMDASH) : '·'}
             </td>
-            <td className="num kb-n">{ageTxt(T - r.fresh)}</td>
+            <td className="num kb-n">{fmtAge(T - r.fresh)}</td>
             <td className="num kb-n">{r.n || ''}</td>
           </tr>
         ))}
@@ -227,7 +224,7 @@ function PxChart({ px }: { px: NonNullable<View['px']> }) {
       ))}
       {hours.map((s) => (
         <text key={s} x={Math.max(pad.l, X(s))} y={H - 4} className="kb-axis">
-          {`${p2(Math.floor(s / 3600))}:${p2(Math.floor((s % 3600) / 60))}`}
+          {fmtHm(s)}
         </text>
       ))}
       {px.mp != null ? (
@@ -240,7 +237,7 @@ function PxChart({ px }: { px: NonNullable<View['px']> }) {
         const h = ((AB - 4) * a.n) / mxA;
         return h <= 0 ? null : (
           <rect key={a.t} x={X(a.t)} y={H - 18 - h} width={bw} height={h} className="kb-actbar">
-            <title>{`${p2(Math.floor(a.t / 3600))}:${p2(Math.floor((a.t % 3600) / 60))} · ${a.n}건`}</title>
+            <title>{`${fmtHm(a.t)} · ${a.n}건`}</title>
           </rect>
         );
       })}
@@ -368,15 +365,15 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
                   </b>
                 ) : null}
               </span>
-              <span className="v">{n3(val)}</span>
+              <span className="v">{fmtYield(val)}</span>
               <span className="sub">
                 {r.ten}
                 {r.mat ? ` · ${r.mat}` : ''}
                 {r.today && r.n ? ` · ${r.n}건` : ''}
                 {!r.today && pv.n ? ` · 어제 ${pv.n}건` : ''}
               </span>
-              <span className={`d ${r.today ? (dbp != null && dbp < 0 ? 'sr-down' : 'sr-up') : ''}`}>
-                {dbp != null ? sbp(dbp) : ''}
+              <span className="d">
+                <Delta v={dbp} unit="bp" ink={!r.today} />
               </span>
             </button>
             );
@@ -395,21 +392,21 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               {sel?.full && sel.full !== sel.nm ? sel.full : (sel?.ten ?? '')}
             </Text>
           </div>
-          <div className="kb-big">{n3(sel?.mid)}</div>
+          <div className="kb-big">{fmtYield(sel?.mid)}</div>
           <div className="kb-sub">
             {sel?.mid != null && sel?.mp != null
-              ? `민평 ${n3(sel.mp)} 대비 ${sbp((sel.mid - sel.mp) * 100)}`
+              ? `민평 ${fmtYield(sel.mp)} 대비 ${fmtBpUnit((sel.mid - sel.mp) * 100)}`
               : '민평 대비를 낼 수 없습니다'}
           </div>
           {/* 옛 화면과 같은 네 칸 — 오퍼·비드·스프레드·당일 체결 */}
           <div className="kb-quad">
             <div>
               <span className="kb-n">매도 (오퍼)</span>
-              <b className="sr-down">{n3(sel?.fa?.y)}</b>
+              <b className="sr-down">{fmtYield(sel?.fa?.y)}</b>
             </div>
             <div>
               <span className="kb-n">매수 (비드)</span>
-              <b className="sr-up">{n3(sel?.fb?.y)}</b>
+              <b className="sr-up">{fmtYield(sel?.fb?.y)}</b>
             </div>
             <div>
               <span className="kb-n">{v.ob?.best?.lock ? '락' : '스프레드'}</span>
@@ -417,16 +414,16 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
                 {v.ob?.best?.lock
                   ? '양면'
                   : v.ob?.best?.spread_bp != null
-                    ? `${v.ob.best.spread_bp.toFixed(1)}bp`
-                    : '—'}
+                    ? `${fmtBpLevel(v.ob.best.spread_bp)}bp`
+                    : EMDASH}
               </b>
             </div>
             <div>
               <span className="kb-n">당일 체결</span>
               <b>
-                {sel?.fill ? n3((sel.fill as { y?: number }).y) : '—'}
+                {sel?.fill ? fmtYield((sel.fill as { y?: number }).y) : EMDASH}
                 {sel?.fill ? (
-                  <span className="kb-n"> {hms((sel.fill as { t?: number }).t ?? 0)}</span>
+                  <span className="kb-n"> {fmtHms((sel.fill as { t?: number }).t ?? 0)}</span>
                 ) : null}
               </b>
             </div>
@@ -441,7 +438,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           <div className="kb-ch">
             <Text as="span" font="label2">시세</Text>
             <Text as="span" font="legal" color="fgMuted">
-              {v.px?.mp != null ? `민평 ${n3(v.px.mp)} 중앙` : 'mid 이력'}
+              {v.px?.mp != null ? `민평 ${fmtYield(v.px.mp)} 중앙` : 'mid 이력'}
             </Text>
           </div>
           {v.px ? <PxChart px={v.px} /> : <div className="kb-empty">종목을 고르세요</div>}
@@ -456,7 +453,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
             <div className="kb-scroll">
               {tape.map((e) => (
                 <div className="kb-tp" key={e.i}>
-                  <span className="kb-n">{hms(e.t)}</span>
+                  <span className="kb-n">{fmtHms(e.t)}</span>
                   <span className={e.s === 'S' ? 'sr-down' : e.s === 'B' ? 'sr-up' : undefined}>
                     {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
                   </span>
@@ -482,8 +479,8 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               /* 레벨은 신형−구형 bp 다. 아웃라이트처럼 ×100 하지 않는다. */
               const leg = (e: Record<string, unknown>, side: 'a' | 'b', i: number) => {
                 const who = `${(e.d as string) ?? ''}${e.kind === 'AXE' ? ' · 관심' : ''}`;
-                const amt = lot(e.a as number | null);
-                const y = e.y == null ? '—' : `${sbp(e.y as number)}bp`;
+                const amt = fmtLot(e.a as number | null);
+                const y = fmtBpUnit(e.y as number | null);
                 return (
                   <div key={`${side}${i}`} className={`kb-swr ${side}`}>
                     <span className="w">{side === 'a' ? `${amt} ${who}` : ''}</span>
@@ -501,7 +498,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
                   </div>
                   {(p.asks ?? []).map((e, i) => leg(e as Record<string, unknown>, 'a', i))}
                   {p.spread_bp != null ? (
-                    <div className="kb-obsp">스프레드 {p.spread_bp.toFixed(1)}bp</div>
+                    <div className="kb-obsp">스프레드 {fmtBpLevel(p.spread_bp)}bp</div>
                   ) : null}
                   {(p.bids ?? []).map((e, i) => leg(e as Record<string, unknown>, 'b', i))}
                 </div>
@@ -565,14 +562,14 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
             </div>
             <div className="kb-axl">
               {ax.slice(0, 24).map((e, i2) => (
-                <div className="kb-li ax" key={i2} title={`${e.d ?? ''} · ${ageTxt(T - e.t)} 전`}>
+                <div className="kb-li ax" key={i2} title={`${e.d ?? ''} · ${fmtAge(T - e.t)} 전`}>
                   <span className="nm">{e.n}</span>
                   {/* ★방향색은 데스크 관례 — 매수 빨강(sr-up) · 매도 파랑(sr-down) */}
                   <span className={`num ${e.s === 'B' ? 'sr-up' : 'sr-down'}`}>
                     {e.s === 'B' ? '사자' : '팔자'}
                   </span>
                   <span className="num kb-n">{e.a ? `${e.a}억` : ''}</span>
-                  <span className="num kb-n">{ageTxt(T - e.t)}</span>
+                  <span className="num kb-n">{fmtAge(T - e.t)}</span>
                 </div>
               ))}
             </div>

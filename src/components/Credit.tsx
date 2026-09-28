@@ -11,7 +11,7 @@
  *   (`gov_buckets`·`gov_sel`·`gov_curve`). 화면은 단위(종/건)와 없는 축(니즈·등급
  *   커브)만 달리 말하고, 표는 그대로 쓴다.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Text } from '@coinbase/cds-web/typography';
 
@@ -19,22 +19,15 @@ import { getView } from '@/lib/api';
 import { Curve } from '@/components/Curve';
 import { Heat } from '@/components/Heat';
 import type { FeedRow, TtlMode, View } from '@/lib/api';
+import {
+  EMDASH, fmtBpUnit, fmtCount, fmtHms, fmtLot, fmtTtm, fmtTtmRange, fmtYield,
+} from '@/lib/format';
+import { Delta } from '@/ui/Delta';
 
 type Bucket = NonNullable<View['buckets']>[number];
 type Offer = NonNullable<View['offers']>[number];
 type Need = NonNullable<View['needs']>[number];
 
-const n3 = (v?: number | null) => (v == null ? '—' : v.toFixed(3));
-const sbp = (v?: number | null) => (v == null ? '' : `${v > 0 ? '+' : ''}${v.toFixed(1)}`);
-const lot = (a?: number | null) => (a == null || !a ? '—' : `${Math.round(a * 10) / 10}억`);
-const ttmTxt = (t?: number | null) =>
-  t == null ? '' : t < 1 ? `${Math.round(t * 12)}M` : `${t.toFixed(1)}년`;
-/** 장중 초 → 시:분:초. `Bonds` 와 같은 셈이다. */
-const hms = (s?: number | null) => {
-  if (s == null) return '';
-  const p2 = (n: number) => String(n).padStart(2, '0');
-  return `${p2(Math.floor(s / 3600) % 24)}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`;
-};
 
 export function Credit({ ttl, onTtl, feed = [] }: {
   ttl: TtlMode;
@@ -92,9 +85,12 @@ export function Credit({ ttl, onTtl, feed = [] }: {
         <div className="kb-ch">
           <Text as="span" font="label2">분류</Text>
           <Text as="span" font="legal" color="fgMuted">
+            {/* ★단위는 열 머리가 «한 번» 말한다 [v2 `unitSuffix` 규칙] — 서른 줄이 각자
+                `bp` 를 달면 그만큼 숫자가 벌어지고, 숫자를 세로로 견주라고 만든 열에서
+                그건 가장 하면 안 되는 일이다. 칸에서 뗀 자리가 종목명으로 간다. */}
             {govSel
-              ? `${cls} · ${buckets.reduce((a, b) => a + (b.n ?? 0), 0)}종`
-              : `${v.counts?.cr ?? 0}건`}
+              ? `${cls} · ${buckets.reduce((a, b) => a + (b.n ?? 0), 0)}종 · YTM · 민평대비 bp`
+              : `${v.counts?.cr ?? 0}건 · YTM · 민평대비 bp`}
           </Text>
         </div>
         <div className="kb-pills">
@@ -148,9 +144,9 @@ export function Credit({ ttl, onTtl, feed = [] }: {
                 {b.n}{b.gov ? '종' : '건'}
                 {b.mb ? <span className="kb-mb">수요 {b.mb}</span> : null}
               </span>
-              <span className="num">{n3(b.ytm_med)}</span>
-              <span className={`num ${b.bp_med == null ? '' : b.bp_med < 0 ? 'sr-down' : 'sr-up'}`}>
-                {b.bp_med == null ? '' : `${sbp(b.bp_med)}bp`}
+              <span className="num">{fmtYield(b.ytm_med)}</span>
+              <span className="num">
+                <Delta v={b.bp_med} />
               </span>
             </button>
           ))}
@@ -219,12 +215,12 @@ export function Credit({ ttl, onTtl, feed = [] }: {
                       {b.rt ? ` ${b.rt}` : ''}
                     </td>
                     <td className="num kb-n">
-                      {b.lo != null && b.hi != null ? `${b.lo}~${b.hi}년` : ''}
+                      {b.lo != null && b.hi != null ? fmtTtmRange(b.lo, b.hi) : ''}
                     </td>
-                    <td className="num">{lot(b.a)}</td>
+                    <td className="num">{fmtLot(b.a)}</td>
                     <td className="num kb-n">
                       {b.bo
-                        ? `${(b.bo as { n?: string }).n ?? ''} ${sbp((b.bo as { bp?: number }).bp)}bp`
+                        ? `${(b.bo as { n?: string }).n ?? ''} ${fmtBpUnit((b.bo as { bp?: number }).bp)}`
                         : ''}
                     </td>
                   </tr>
@@ -242,14 +238,14 @@ export function Credit({ ttl, onTtl, feed = [] }: {
           <div className="kb-ch">
             <Text as="span" font="label2">메시지</Text>
             <Text as="span" font="legal" color="fgMuted">
-              {govSel ? cls : '크레딧'} 전체 {tape.length.toLocaleString()}건
+              {govSel ? cls : '크레딧'} 전체 {fmtCount(tape.length)}건
             </Text>
           </div>
           {tape.length ? (
             <div className="kb-scroll">
               {tape.map((e) => (
                 <div className="kb-tp" key={e.i}>
-                  <span className="kb-n">{hms(e.t)}</span>
+                  <span className="kb-n">{fmtHms(e.t)}</span>
                   <span className={e.s === 'S' ? 'sr-down' : e.s === 'B' ? 'sr-up' : undefined}>
                     {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
                   </span>
@@ -299,19 +295,27 @@ export function Credit({ ttl, onTtl, feed = [] }: {
                 {lvl.slice(0, 60).map((e, i) => (
                   <tr key={i} title={`${e.d ?? ''}`}>
                     <td className="l">{e.n}</td>
-                    <td className="num kb-n">{ttmTxt(e.ttm)}</td>
+                    <td className="num kb-n">{fmtTtm(e.ttm)}</td>
                     {/* «민평에 팔자» 는 +0.0bp 가 아니라 «민평» 으로 읽어야 한다 —
                         0.0 으로 쓰면 딜러가 정확히 0 을 부른 것처럼 보인다 [OWNER 2026-09-07] */}
-                    <td className={`num ${e.atmp ? 'kb-n' : e.bpe == null ? '' : e.bpe < 0 ? 'sr-down' : 'sr-up'}`}>
-                      {e.atmp ? '민평' : e.bpe != null ? `${sbp(e.bpe)}bp` : e.won != null ? `${sbp(e.won)}원` : ''}
+                    <td className={`num${e.atmp ? ' kb-n' : ''}`}>
+                      {e.atmp ? (
+                        '민평'
+                      ) : e.bpe != null ? (
+                        <Delta v={e.bpe} unit="bp" />
+                      ) : e.won != null ? (
+                        <Delta v={e.won} unit="원" />
+                      ) : (
+                        ''
+                      )}
                     </td>
                     <td className={`num${e.lvl === 'est' ? ' kb-n' : ''}`}>
-                      {n3(e.ytm)}
+                      {fmtYield(e.ytm)}
                       {e.lvl && e.lvl !== 'quoted' ? (
                         <b className="kb-badge">{e.lvl === 'conv' ? '환산' : '추정'}</b>
                       ) : null}
                     </td>
-                    <td className="num">{lot(e.a)}</td>
+                    <td className="num">{fmtLot(e.a)}</td>
                   </tr>
                 ))}
                 {noLvl.length ? (
@@ -324,10 +328,10 @@ export function Credit({ ttl, onTtl, feed = [] }: {
                 {noLvl.slice(0, 30).map((e, i) => (
                   <tr key={`x${i}`} className="mut">
                     <td className="l">{e.n}</td>
-                    <td className="num kb-n">{ttmTxt(e.ttm)}</td>
-                    <td className="num kb-n">{e.won != null ? `${sbp(e.won)}원` : ''}</td>
-                    <td className="num kb-n">—</td>
-                    <td className="num kb-n">{lot(e.a)}</td>
+                    <td className="num kb-n">{fmtTtm(e.ttm)}</td>
+                    <td className="num kb-n">{e.won != null ? <Delta v={e.won} unit="원" ink /> : ''}</td>
+                    <td className="num kb-n">{EMDASH}</td>
+                    <td className="num kb-n">{fmtLot(e.a)}</td>
                   </tr>
                 ))}
               </tbody>

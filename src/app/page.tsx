@@ -20,6 +20,7 @@ import { Button } from '@coinbase/cds-web/buttons';
 import { DEFAULT_API, apiBase, getFeed, getHealth, getView, setApi, url } from '@/lib/api';
 import type { FeedRow, TtlMode, View } from '@/lib/api';
 import { useWatch, watchKey } from '@/lib/watch';
+import { fmtCount, fmtHms } from '@/lib/format';
 import { Feed } from '@/components/Feed';
 import { Bonds } from '@/components/Bonds';
 import { Credit } from '@/components/Credit';
@@ -40,7 +41,6 @@ const TABS: [Tab, string, string][] = [
   ['cr', '크레딧', 'cr'],
 ];
 
-const p2 = (n: number) => String(n).padStart(2, '0');
 
 /** 피드 필터 — 옛 화면의 둘째 줄. 세는 것은 «고르기» 라 화면 몫이다(접지 않는다).
  *
@@ -153,7 +153,7 @@ export default function Page() {
       const a = anchor.current;
       if (!a) return;
       const s = a.s + Math.floor((Date.now() - a.at) / 1000);
-      setClock(`${p2(Math.floor(s / 3600) % 24)}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`);
+      setClock(fmtHms(s));
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -264,13 +264,13 @@ export default function Page() {
           {TABS.map(([k, label, ck]) => (
             <button key={k} className={tab === k ? 'on' : undefined} onClick={() => setTab(k)}>
               {label}
-              {counts[ck] ? <span className="c">{counts[ck].toLocaleString()}</span> : null}
+              {counts[ck] ? <span className="c">{fmtCount(counts[ck])}</span> : null}
             </button>
           ))}
         </div>
         <Box flexGrow={1} />
         <Text as="span" font="legal" color="fgMuted">
-          {nMsg ? `오늘 ${nMsg.toLocaleString()}건` : ''}
+          {nMsg ? `오늘 ${fmtCount(nMsg)}건` : ''}
         </Text>
         <button
           className={`kb-bell${alarm ? ' on' : ''}`}
@@ -310,7 +310,7 @@ export default function Page() {
                 블커본드 · 막무가내 통합
               </Text>
               <Text as="span" font="legal" color="fgMuted">
-                {shown.length.toLocaleString()}건 (최근 {rows.length.toLocaleString()}줄)
+                {fmtCount(shown.length)}건 (최근 {fmtCount(rows.length)}줄)
               </Text>
             </div>
             <div className="kb-filt">
@@ -321,7 +321,7 @@ export default function Page() {
                   onClick={() => setFilt(k)}
                 >
                   {label}
-                  <span className="c">{rows.filter((e) => ok(e.k)).length.toLocaleString()}</span>
+                  <span className="c">{fmtCount(rows.filter((e) => ok(e.k)).length)}</span>
                 </button>
               ))}
             </div>

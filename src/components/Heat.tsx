@@ -23,8 +23,8 @@
 import { useState } from 'react';
 
 import type { View } from '@/lib/api';
+import { Delta } from '@/ui/Delta';
 
-const sbp = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`;
 
 type Cell = { med?: number | null; n?: number; est?: number };
 
@@ -108,7 +108,7 @@ export function Heat({ heat, title }: { heat: NonNullable<View['heat']>; title?:
                       }}
                       title={`${cls} ${rt == null ? '' : all ? '전체' : rt} · 잔존 ${b} · ${c.n}건${c.est ? ` · 추정 ${c.est}` : ''}${rowStale ? ' · 민평이 그날 것이 아님' : ''}`}
                     >
-                      {sbp(c.med)}
+                      <Delta v={c.med} ink />
                       {c.n ? <span className="c">{c.n}</span> : null}
                     </td>
                   );

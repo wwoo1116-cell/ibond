@@ -31,15 +31,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { View } from '@/lib/api';
+import { fmtAxis, fmtTtm, fmtTtmTick, fmtYield } from '@/lib/format';
+import { Delta } from '@/ui/Delta';
 
-const n3 = (v?: number | null) => (v == null ? '—' : v.toFixed(3));
-const sbp = (v?: number | null) => (v == null ? '' : `${v > 0 ? '+' : ''}${v.toFixed(1)}`);
-const ttmTxt = (t?: number | null) =>
-  t == null ? '' : t < 1 ? `${Math.round(t * 12)}M` : `${t.toFixed(1)}년`;
-/** 축 눈금용 — ★«2.0년» 이 아니라 «2년». 눈금에 뜻 없는 소수는 잡음이고,
- *  자에 8.8 이 적혀 있으면 자가 아니듯 2.0 도 읽는 눈을 한 번 더 세운다. */
-const tickTxt = (t: number) =>
-  t === 0 ? '0' : t < 1 ? `${Math.round(t * 12)}M` : `${Number.isInteger(t) ? t : t.toFixed(1)}년`;
 
 /** ★눈금은 데이터가 아니라 «격자» 에서 나온다 — 1·2·2.5·5 ×10^k 중 하나를 고른다.
  *  차트가 읽히느냐 마느냐가 대부분 여기서 갈린다. */
@@ -195,7 +189,7 @@ export function Curve({ curve, grade, range }: {
           <g key={`y${y}`}>
             <line x1={pad.l} x2={W - pad.r} y1={py(y)} y2={py(y)} className="kb-grid" />
             <text x={pad.l - 7} y={py(y) + 3} className="kb-axis" textAnchor="end">
-              {y.toFixed(2)}
+              {fmtAxis(y)}
             </text>
           </g>
         ))}
@@ -203,7 +197,7 @@ export function Curve({ curve, grade, range }: {
           <g key={`x${x}`}>
             <line x1={px(x)} x2={px(x)} y1={pad.t} y2={H - pad.b} className="kb-grid v" />
             <text x={px(x)} y={H - 8} className="kb-axis" textAnchor="middle">
-              {tickTxt(x)}
+              {fmtTtmTick(x)}
             </text>
           </g>
         ))}
@@ -241,12 +235,10 @@ export function Curve({ curve, grade, range }: {
             transform: hx > W * 0.6 ? 'translate(-108%, -50%)' : 'translate(8%, -50%)',
           }}
         >
-          <b>{n3(p.ytm)}</b>
-          <span className={p.bpe == null ? '' : p.bpe < 0 ? 'dn' : 'up'}>
-            {p.bpe == null ? '' : `민평 ${sbp(p.bpe)}bp`}
-          </span>
+          <b>{fmtYield(p.ytm)}</b>
+          <span>{p.bpe == null ? '' : <>민평 <Delta v={p.bpe} unit="bp" /></>}</span>
           <em>{p.n ?? ''}</em>
-          <span className="ttm">잔존 {ttmTxt(p.ttm)}</span>
+          <span className="ttm">잔존 {fmtTtm(p.ttm)}</span>
         </div>
       ) : null}
     </div>

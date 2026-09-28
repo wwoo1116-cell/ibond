@@ -23,6 +23,7 @@ import { memo, useEffect, useRef } from 'react';
 import { Text } from '@coinbase/cds-web/typography';
 
 import type { FeedRow } from '@/lib/api';
+import { fmtHms, fmtLotBlank, fmtMatShort, fmtPx, fmtQuoteYield, fmtTtm } from '@/lib/format';
 import { useWatch, watchKey } from '@/lib/watch';
 
 const KIND: Record<string, [string, string]> = {
@@ -38,29 +39,6 @@ const KIND: Record<string, [string, string]> = {
   STATE: ['상태', ''],
 };
 
-const p2 = (n: number) => String(n).padStart(2, '0');
-const hms = (t: number) =>
-  `${p2(Math.floor(t / 3600))}:${p2(Math.floor((t % 3600) / 60))}:${p2(t % 60)}`;
-/** 금리 표기 [2026-09-23] — ★0.25bp 자리는 넷째 자리까지 적는다.
- *  세트호가(두 다리의 중간값)가 서는 자리라 셋째 자리로 뭉개면 «세트라는 사실»
- *  자체가 화면에서 사라진다: 3.9975 -> 3.998 은 그냥 다른 호가로 읽힌다.
- *  0.5bp 격자 값은 지금처럼 세 자리다(3.405). */
-const n3 = (v?: number | null) => {
-  if (v == null) return '';
-  const q = Math.round(v * 10000);
-  return q % 10 === 0 ? v.toFixed(3) : v.toFixed(4);
-};
-/** 수량 기본단위 100억 [OWNER] — «1계약» 이 아니라 «100억» 으로 적어야 합산이 된다. */
-const lot = (a?: number | null) => (a == null || !a ? '' : `${Math.round(a * 10) / 10}억`);
-
-/** 잔존 [2026-09-23] — ★1년 안쪽은 «일» 로 적는다.
- *  0.2년 이라고 적으면 만기가 코앞인 것이 안 보인다. 그 구간은 하루가 곧 값이다
- *  (잔존 78일이면 1원이 4.7bp 다 — 같은 1원이 30년물에선 0.06bp). */
-const ttmTxt = (t?: number | null) => {
-  if (t == null) return '';
-  if (t < 0) return '만기';
-  return t < 1 ? `${Math.round(t * 365)}일` : `${t.toFixed(1)}년`;
-};
 
 /** 머리글 — 행(`.kb-row`)과 같은 격자를 쓴다. 둘째 칸(☆)은 이름이 없다. */
 function Head() {
@@ -96,7 +74,7 @@ const Row = memo(function Row({ e, on, onStar }: {
   const wk = watchKey(e);
   return (
     <div className="kb-row">
-      <span className="kb-c t">{hms(e.t)}</span>
+      <span className="kb-c t">{fmtHms(e.t)}</span>
       {/* 관심 종목 — 옛 화면의 ☆ 자리. 종목이 없는 행에는 별을 달지 않는다. */}
       {wk ? (
         <button
@@ -117,10 +95,10 @@ const Row = memo(function Row({ e, on, onStar }: {
           값(할인조정)이 없는 행에도 선다 — AXE·문의에서도 「뭐가 언제 만기인지」는
           알 수 있어야 한다. 앞 넷(연도)은 잘라 적는다: 2031-03-10 → 31-03-10. */}
       <span className="kb-c num mat" title={e.mat ?? undefined}>
-        {e.mat ? e.mat.slice(2) : ''}
+        {fmtMatShort(e.mat)}
       </span>
       <span className="kb-c num ttm" title={e.mat ? `${e.ttm}년` : undefined}>
-        {ttmTxt(e.ttm)}
+        {fmtTtm(e.ttm)}
       </span>
       <span className={`kb-c s${e.s === 'S' ? ' sr-down' : e.s === 'B' ? ' sr-up' : ''}`}>
         {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
@@ -137,12 +115,12 @@ const Row = memo(function Row({ e, on, onStar }: {
       <span className="kb-c h" title={e.h ? `${e.d ?? ''} · ${e.h}` : (e.d ?? undefined)}>
         {e.d ?? ''}
       </span>
-      <span className="kb-c num">{n3(e.mp)}</span>
+      <span className="kb-c num">{fmtQuoteYield(e.mp)}</span>
       {/* 할인조정가격 = 민평에 오바/언더·원 호가를 얹어 복원한 값(서버가 낸다).
           ★`atmp` 는 «문면에 레벨이 없고 민평 그 자리» 라는 뜻이라 민평과 값이 같다.
             표식이 없으면 같은 숫자 둘이 배관 오류처럼 보인다. */}
       <span className="kb-c num y">
-        {n3(e.y)}
+        {fmtQuoteYield(e.y)}
         {e.y != null && e.atmp ? (
           <i className="kb-atmp" title="문면에 레벨이 없다 — 민평 그 자리">
             민
@@ -165,9 +143,9 @@ const Row = memo(function Row({ e, on, onStar }: {
               }`
         }
       >
-        {e.px == null ? '' : e.px.toFixed(2)}
+        {fmtPx(e.px)}
       </span>
-      <span className="kb-c num a">{lot(e.a)}</span>
+      <span className="kb-c num a">{fmtLotBlank(e.a)}</span>
       {/* 원문 — 남는 폭을 전부 먹는다 [OWNER 2026-09-22 오후].
           ★`title` 은 여기서 장식이 아니다. 이 칸이 잘리면 칸값을 검산할 길이 없어지고,
             검산이 이 화면의 요점이다(값이 안 붙은 행을 숨기지 않는 것과 같은 이유). */}

@@ -117,7 +117,13 @@
 .kb-li > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-li .ten, .kb-li .num { text-align: right; font-variant-numeric: tabular-nums; }
 .kb-li .nm { font-weight: 600; }
-.kb-li.cr { grid-template-columns: minmax(0, 1fr) 30px 46px 66px; }
+/* ★넷째 칸은 «서식 최대치» 로 잡는다 [2026-09-28] — 66px 은 옛 `-25.2bp` 에 맞춘
+   폭이었고, 화살표 문법(D4.1)으로 옮기자 `↘ 25.2bp` 가 69px 이 되어 두 줄이 잘렸다.
+   단위 `bp` 는 칸에서 떼어 패널 머리로 올렸다(v2 규칙: 단위는 열 머리가 한 번) —
+   서른 줄이 각자 달면 그만큼 숫자가 벌어진다. 그래서 이 칸의 최대치는 `↘ 999.9`
+   = 61.5px(실측, 이 칸의 글꼴로 잰 값)이고, 62px 면 문법이 낼 수 있는 어떤 값도 안 잘린다.
+   오늘 자료가 아니라 «문법» 으로 잡아야 값이 커져도 칸이 안 움직인다. */
+.kb-li.cr { grid-template-columns: minmax(0, 1fr) 30px 46px 62px; }
 /* 레벨 없는 «관심» [OWNER 2026-09-07] — 책이 아니라는 게 눈에 보여야 한다.
    그래서 값 열이 없고, 방향 낱말과 나이만 있다. */
 .kb-li.ax { grid-template-columns: minmax(0, 1fr) 40px 52px 44px; }

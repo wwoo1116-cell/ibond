@@ -8,22 +8,22 @@
  *   여기서는 칸 값을 막대 높이로 옮길 뿐이다.
  */
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import type React from 'react';
 
 import { Text } from '@coinbase/cds-web/typography';
 
 import { getView } from '@/lib/api';
 import type { TtlMode, View } from '@/lib/api';
+import {
+  EMDASH, fmtBpLevel, fmtCount, fmtHm, fmtHms, fmtLotBlank, fmtMin, fmtPct, fmtRatio, fmtSigned,
+  fmtYield,
+} from '@/lib/format';
+import { Delta } from '@/ui/Delta';
 
 type Pulse = NonNullable<View['pulse']>;
 type Ev = NonNullable<View['events']>[number];
 type Leader = NonNullable<View['leaderboard']>;
 
-const n3 = (v?: number | null) => (v == null ? '—' : v.toFixed(3));
-const sbp = (v?: number | null) => (v == null ? '' : `${v > 0 ? '+' : ''}${v.toFixed(1)}`);
-const lot = (a?: number | null) => (a == null || !a ? '' : `${Math.round(a * 10) / 10}억`);
-const p2 = (n: number) => String(n).padStart(2, '0');
-const hm = (t: number) => `${p2(Math.floor(t / 3600))}:${p2(Math.floor((t % 3600) / 60))}`;
-const hms = (t: number) => `${hm(t)}:${p2(t % 60)}`;
 
 /** 맥박 색 — 옛 화면과 같은 순서·같은 뜻(호가 파랑 · 관심 하늘 · 체결 초록 · 문의 회색). */
 const PK: [keyof Pick<Pulse['bins'][number], 'q' | 'a' | 'c' | 'i' | 'o'>, string, string][] = [
@@ -88,7 +88,7 @@ function PulseChart({ p }: { p: Pulse }) {
       ))}
       {hours.map((s) => (
         <text key={s} x={Math.max(pad.l, X(s))} y={H - 4} className="kb-axis">
-          {hm(s)}
+          {fmtHm(s)}
         </text>
       ))}
       {bins.map((b) => {
@@ -101,7 +101,7 @@ function PulseChart({ p }: { p: Pulse }) {
               y -= h;
               return (
                 <rect key={k} x={X(b.t)} y={y} width={bw} height={h} fill={col}>
-                  <title>{`${hm(b.t)} · ${EVKlabel(k)} ${b[k]}`}</title>
+                  <title>{`${fmtHm(b.t)} · ${EVKlabel(k)} ${b[k]}`}</title>
                 </rect>
               );
             })}
@@ -118,12 +118,12 @@ const EVKlabel = (k: string) => PK.find(([kk]) => kk === k)?.[1] ?? k;
 function evText(e: Ev) {
   const x = (e.x ?? {}) as { prev?: number; vs?: number; vd?: string; csrc?: string };
   const nm = e.n ?? e.code ?? '';
-  const y = e.y != null ? n3(e.y) : '';
-  const a = lot(e.a);
-  if (e.k === 'best') return `${nm} 최우선 ${y} (이전 ${n3(x.prev)})`;
+  const y = e.y != null ? fmtYield(e.y) : '';
+  const a = fmtLotBlank(e.a);
+  if (e.k === 'best') return `${nm} 최우선 ${y} (이전 ${fmtYield(x.prev)})`;
   if (e.k === 'cross') {
     const gap = x.vs != null && e.y != null ? Math.abs(e.y - x.vs) * 100 : null;
-    return `${nm} ${y} 가 ${x.vd ?? ''} 의 ${n3(x.vs)} 을 ${gap != null ? `${gap.toFixed(1)}bp ` : ''}뚫음${a ? ` · ${a}` : ''}`;
+    return `${nm} ${y} 가 ${x.vd ?? ''} 의 ${fmtYield(x.vs)} 을 ${gap != null ? `${fmtBpLevel(gap)}bp ` : ''}뚫음${a ? ` · ${a}` : ''}`;
   }
   if (e.k === 'fill') return `${nm} ${y} ${a}`;
   if (e.k === 'size') return `${nm} ${y} ${a}`;
@@ -170,7 +170,7 @@ function Leaderboard({ lb, lane, onLane }: {
               <Fragment key={`${d.k}${i}`}>
               <tr
                 className={`dl${open ? ' on' : ''}`}
-                title={`${d.d ?? ''} · 첫 ${hms(d.first ?? 0)} 마지막 ${hms(d.last ?? 0)}`}
+                title={`${d.d ?? ''} · 첫 ${fmtHms(d.first ?? 0)} 마지막 ${fmtHms(d.last ?? 0)}`}
                 onClick={() => setSel(open ? null : `${d.k}${i}`)}
               >
                 <td className="l">{d.d}</td>
@@ -182,14 +182,14 @@ function Leaderboard({ lb, lane, onLane }: {
                 </td>
                 <td className="num kb-n">{d.c || ''}</td>
                 <td className="num">{d.f || ''}</td>
-                <td className="num kb-n">{d.ab ? `${Math.round(d.ab / 60)}분` : ''}</td>
+                <td className="num kb-n">{d.ab ? fmtMin(d.ab) : ''}</td>
               </tr>
               {open ? (
                 <tr className="dld">
                   <td colSpan={6}>
                     <div className="kb-dld">
                       <span className="kb-n">
-                        첫 {hms(d.first ?? 0)} · 마지막 {hms(d.last ?? 0)}
+                        첫 {fmtHms(d.first ?? 0)} · 마지막 {fmtHms(d.last ?? 0)}
                         {d.lane
                           ? ` · ${Object.entries(d.lane)
                               .sort((x, y) => y[1] - x[1])
@@ -253,7 +253,9 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
   const ct = v.curve_today ?? {};
   const LANE_NM: Record<string, string> = { ktb: '국고', msb: '통안' };
 
-  const kv = (label: string, value: string, cls = '') => (
+  /* 값은 글자일 수도, 원소일 수도 있다 — 변화는 «네 부품 한 벌»(`ui/Delta`)이라
+     글자로 못 담는다. 색은 그 부품이 스스로 지므로 `cls` 는 레벨용으로만 남는다. */
+  const kv = (label: string, value: React.ReactNode, cls = '') => (
     <div className="kb-kvc" key={label}>
       <span className="kb-n">{label}</span>
       <b className={cls}>{value}</b>
@@ -268,7 +270,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
             <Text as="span" font="label2">시장 맥박</Text>
             <Text as="span" font="legal" color="fgMuted">
               {p.bin / 60}분 단위 · 회색선 = 어제
-              {p.t0 != null ? ` · ${hm(p.t0)}~${hm(p.t1 ?? p.t0)}` : ''}
+              {p.t0 != null ? ` · ${fmtHm(p.t0)}~${fmtHm(p.t1 ?? p.t0)}` : ''}
             </Text>
             {onTtl ? (
               <select
@@ -284,27 +286,23 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
             ) : null}
           </div>
           <div className="kb-kvgrid">
-            {kv('호가 · 관심', `${p.nq.toLocaleString()} · ${p.na.toLocaleString()}`)}
+            {kv('호가 · 관심', `${fmtCount(p.nq)} · ${fmtCount(p.na)}`)}
             {/* v12 체결 귀속의 부산물 — 오퍼가 맞았으면 사 간 것, 비드면 판 것.
                 장외 대화록에 없던 축이다. 서버가 세고 화면은 읽기만 한다.
                 ★합계가 체결 응답 수보다 작다: 내용 없는 «ㅎㅈ» 은 책에 못 붙는다. */}
             {kv(
               '체결 응답 — 사 감 · 팜',
-              `${p.nc.toLocaleString()} — ${v.aggr?.B ?? 0} · ${v.aggr?.S ?? 0}`,
+              `${fmtCount(p.nc)} ${EMDASH} ${v.aggr?.B ?? 0} · ${v.aggr?.S ?? 0}`,
             )}
-            {kv('호가/체결', p.nc ? (p.nq / p.nc).toFixed(1) : '—')}
-            {kv(
-              '어제 같은 시각 대비',
-              p.vs_prev_pct == null ? '—' : `${sbp(p.vs_prev_pct)}%`,
-              p.vs_prev_pct == null ? '' : p.vs_prev_pct < 0 ? 'sr-down' : 'sr-up',
-            )}
+            {kv('호가/체결', p.nc ? fmtRatio(p.nq / p.nc, 1) : EMDASH)}
+            {kv('어제 같은 시각 대비', <Delta v={p.vs_prev_pct} unit="%" />)}
             {kv('국고 · 통안 · 크레딧', `${p.ktb} · ${p.msb} · ${p.cr}`)}
-            {kv('문의', p.ni.toLocaleString())}
+            {kv('문의', fmtCount(p.ni))}
             {kv(
               '딜러(데스크)',
               `${p.n_dealer}${p.prev_n_dealer ? ` / 어제 ${p.prev_n_dealer}` : ''}`,
             )}
-            {kv('이벤트', p.n_event.toLocaleString())}
+            {kv('이벤트', fmtCount(p.n_event))}
           </div>
           {/* +++ 책이 말하는 것 — 귀속 체결(국고·통안)에서 엔진이 «체결 순간» 에 재 둔 값.
               국고 전 이력 실측(RESULT_book_dynamics_2026-09-15.md):
@@ -317,11 +315,11 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
                 '유효 반스프레드 · 호가 (bp)',
                 bi.eff_med == null
                   ? '—'
-                  : `${bi.eff_med.toFixed(2)} · ${bi.qs_half_med == null ? '—' : bi.qs_half_med.toFixed(2)}`,
+                  : `${fmtBpLevel(bi.eff_med, 2)} · ${fmtBpLevel(bi.qs_half_med, 2)}`,
               )}
               {kv(
                 '최우선 레벨에서 난 체결',
-                bi.at_best_pct == null ? '—' : `${bi.at_best_pct.toFixed(0)}% / ${bi.n_ab}건`,
+                bi.at_best_pct == null ? EMDASH : `${fmtPct(bi.at_best_pct)} / ${bi.n_ab}건`,
               )}
               {kv(
                 '직전 불균형 → 사 감 % (오퍼·균형·비드)',
@@ -329,7 +327,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
                   ? ['오퍼 우세', '균형', '비드 우세']
                       .map((k) => {
                         const c = bi.p_b_by_imb?.[k];
-                        return c && c.pB != null ? `${c.pB.toFixed(0)}%(${c.n})` : '—';
+                        return c && c.pB != null ? `${fmtPct(c.pB)}(${c.n})` : EMDASH;
                       })
                       .join(' · ')
                   : '—',
@@ -364,7 +362,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
           <div className="kb-scroll">
             {evs.slice(0, 300).map((e, i) => (
               <div className="kb-ev" key={i}>
-                <span className="kb-n">{hms(e.t ?? 0)}</span>
+                <span className="kb-n">{fmtHms(e.t ?? 0)}</span>
                 <span className={`kb-evk ${e.k}`}>{EVK[e.k ?? ''] ?? e.k}</span>
                 <span className={e.s === 'S' ? 'sr-down' : e.s === 'B' ? 'sr-up' : undefined}>
                   {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
@@ -411,14 +409,14 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
                           {r.bench ? <b className="kb-badge">지표</b> : null}
                           {r.next ? <b className="kb-badge">차기</b> : null}
                         </td>
-                        <td className="num kb-n">{n3(r.mp)}</td>
-                        <td className="num">{n3(r.mid)}</td>
-                        <td className={`num ${r.dbp == null ? '' : r.dbp < 0 ? 'sr-down' : 'sr-up'}`}>
-                          {sbp(r.dbp)}
+                        <td className="num kb-n">{fmtYield(r.mp)}</td>
+                        <td className="num">{fmtYield(r.mid)}</td>
+                        <td className="num">
+                          <Delta v={r.dbp} />
                         </td>
                         <td
                           className="num kb-n"
-                          title={r.imb == null ? '' : `지금 불균형 (비드−오퍼)/합 ${r.imb > 0 ? '+' : ''}${r.imb.toFixed(2)}`}
+                          title={r.imb == null ? '' : `지금 불균형 (비드−오퍼)/합 ${fmtSigned(r.imb, 2)}`}
                         >
                           {r.nd}
                           {r.imb == null ? '' : r.imb > 0.15 ? ' ▲' : r.imb < -0.15 ? ' ▼' : ''}
