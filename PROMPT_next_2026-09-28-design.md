@@ -110,8 +110,10 @@ cd ..\kbond-web && pnpm test                                                    
   payload 에서 뺄지는 백엔드 몫.
 - **옛 화면(`/`)** — 토스 문법 그대로다. 이 레인은 새 화면(`/app`)만 건드렸다.
 - **`.kb-ch-ctl`** — 정의만 있고 아직 쓰는 카드가 없다(머리에 컨트롤이 붙는 카드가 생기면 쓴다).
-- **Vercel 배포는 오너 몫** — `cd Projects/apps/kbond-web && npx vercel deploy --prod --yes`.
-  Funnel(`/kbond/app`)은 백엔드가 `out-kbond` 를 그대로 서빙해 이미 새 판이다.
+- ~~Vercel 배포~~ **닫힘** — 오너가 09-28 직접 배포(`dpl_2H3BkjP8…` · `kbond-web.vercel.app` 별칭).
+  라이브에서 확인: 첫 화면 청크 열 중 **lightweight-charts 를 문 것 0개**(지연 로드가 프로덕션
+  에서도 먹었다) · 스트립 CSS 있음 · dyn 조각 200 · 옛 통짜 글꼴 404.
+  세션 안에서는 배포 명령이 차단되므로 앞으로도 오너 몫이다.
 
 ## §7. 손댄 파일
 
