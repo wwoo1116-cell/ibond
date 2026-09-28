@@ -244,6 +244,11 @@
 .kb-tbl th:first-child, .kb-tbl td:first-child { padding-left: 16px; }
 .kb-tbl th:last-child, .kb-tbl td:last-child { padding-right: 16px; }
 .kb-tbl th.l, .kb-tbl td.l { text-align: left; }
+/* ★이름 칸 [2026-09-28] — 발행체 이름은 서식이 아니라 «자료» 라 어떤 폭도
+   모자랄 수 있다(실측 최장 「엔에이치농협캐피탈222-4」 143px). 셋을 함께
+   갖춰야 «조용한 잘림» 이 아니다: 남는 폭을 다 먹고 · «…» 로 잘림을 보이고 ·
+   `title` 이 전체를 준다. `.kb-li .nm` 과 같은 판단이다. */
+.kb-tbl td.nm { overflow: hidden; text-overflow: ellipsis; }
 .kb-tbl td.best { font-weight: 600; }
 .kb-tbl tbody tr:hover { background: var(--sr-control); }
 .kb-tbl tr.mut td { opacity: .55; }

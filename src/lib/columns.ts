@@ -45,6 +45,9 @@ export function px(sample: string, pad = CELL_PAD * 2): number {
 export const WIDEST = {
   yield: '0.000',
   deltaBp: '↘ 999.9',
+  /** 변화 칸이 단위까지 지는 자리(크레딧 오퍼 표) — 열 머리가 «민평대비» 라고만
+   *  해서 행마다 `bp` 를 단다. 그래서 `deltaBp` 보다 두 글자 넓다. */
+  deltaBpUnit: '↘ 999.9bp',
   age: '12.3시간',
   count4: '9,999',
   count3: '999',
@@ -78,7 +81,19 @@ export const TABLES: Record<string, ColSpec> = {
   /** 크레딧 매수 니즈 — `Credit.tsx` */
   needs: [null, w(WIDEST.kind), w(WIDEST.ttmRange), w(WIDEST.lot), edge(WIDEST.basis)],
   /** 크레딧 오퍼 — `Credit.tsx`. YTM 칸은 «환산·추정» 배지를 품는다. */
-  offers: [null, w(WIDEST.ttm), w(WIDEST.deltaBp), w(WIDEST.yield) + 30, edge(WIDEST.lot)],
+  /** ★[2026-09-28] «커브반영» 한 칸이 늘었다 — 민평대비에서 그날 국고 커브가
+   *  움직인 만큼을 뺀 수다. 두 칸을 나란히 두는 것이 뜻이다: 왼쪽이 든 값,
+   *  오른쪽이 «시장을 걷어낸» 값, 차가 곧 커브 이동이다. */
+  offers: [
+    null,
+    w(WIDEST.ttm),
+    /* 민평대비는 행마다 단위를 진다 — 같은 칸에 `bp` 와 `원` 이 섞여서다. */
+    w(WIDEST.deltaBpUnit),
+    /* 커브반영은 늘 bp 라 단위를 안 단다(열 머리가 한 번 말한다) — 그만큼 좁다. */
+    w(WIDEST.deltaBp),
+    w(WIDEST.yield) + 30,
+    edge(WIDEST.lot),
+  ],
   /** 동향 딜러 리더보드 — `Trends.tsx` */
   leaderboard: [
     null,

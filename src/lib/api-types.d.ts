@@ -91,6 +91,12 @@ export interface paths {
         /**
          * Events
          * @description SSE. 책이 바뀔 때만 민다. 15초 조용하면 하트비트(끊김 오인 방지).
+         *
+         *     ★`lite=1` 이면 «화면이 실제로 읽는 것» 만 민다 — now·n_msg·n_seq·feed.
+         *       [OWNER 2026-09-23 「렉이 미친듯이 걸림」] 책이 1.2MB 인데 매초 통째로
+         *       밀고 있었고, 새 화면이 그 프레임에서 쓰는 건 feed 와 n_msg 둘뿐이었다.
+         *       나머지를 매초 JSON.parse 하고 버리던 것이 렉이었다.
+         *       ⚠기본(lite=0)은 그대로 둔다 — 옛 화면(/)은 프레임 전체를 읽는다.
          */
         get: operations["events_events_get"];
         put?: never;
@@ -408,6 +414,11 @@ export interface components {
             mb: number;
             /** Bp Med */
             bp_med?: number | null;
+            /**
+             * Bpc Med
+             * @description 커브 반영 민평대비 중앙값. 뺄 수 있었던 오퍼가 절반이 안 되면 None
+             */
+            bpc_med?: number | null;
             /** Ytm Med */
             ytm_med?: number | null;
             /** Ttm Lo */
@@ -454,6 +465,16 @@ export interface components {
              * @description 하류가 하나로 쓰는 민평 대비 bp
              */
             bpe?: number | null;
+            /**
+             * Bpc
+             * @description 커브 반영 민평대비 = bpe − 같은 잔존 국고 커브의 오늘 이동. 닻이 둘 미만이면 None 이다(0 이 아니다)
+             */
+            bpc?: number | null;
+            /**
+             * Cmv
+             * @description 그 잔존에서 «뺀 양»(bp) — 화면이 되짚게 한다
+             */
+            cmv?: number | null;
             /**
              * Won
              * @description 문면 원 스프레드
@@ -546,6 +567,74 @@ export interface components {
              */
             mp_n: number;
         };
+        /**
+         * CurveAnchor
+         * @description 커브 이동의 닻 한 칸 — 그 만기 칸 국고 종목들의 «오늘 mid − 전일 민평» 중앙값.
+         *
+         *     칸은 민평 기준선과 같다(2년 미만 0.25년 · 그 위 0.5년). 한 칸에 여럿이고 그중
+         *     10분 안쪽이 있으면 **그것들만** 쓴다 — 두 시간 묵은 닻이 커브를 붙잡지 않게.
+         */
+        CurveAnchor: {
+            /**
+             * Ttm
+             * @description 칸 중심(년)
+             */
+            ttm: number;
+            /**
+             * Bp
+             * @description 그 칸의 이동(bp)
+             */
+            bp: number;
+            /**
+             * N
+             * @description 이 칸을 세운 종목 수
+             */
+            n: number;
+            /**
+             * Age
+             * @description 가장 신선한 닻의 나이(초). 0 = 지금 양면이 서 있다
+             */
+            age?: number | null;
+            /**
+             * Cs
+             * @description 이 칸을 세운 종목(회차) — 손으로 되짚으라고 싣는다
+             */
+            cs: string[];
+        };
+        /**
+         * CurveMove
+         * @description 오늘 국고 커브가 잔존별로 얼마나 움직였나 [OWNER 2026-09-28].
+         *
+         *     크레딧의 «민평대비» 에서 이것을 빼면 «시장이 움직인 만큼» 이 아니라
+         *     «이 종목이 싸졌다» 만 남는다. 통과 계수 β 0.823 · R² 0.643(원장 138,032 종목일).
+         *     β 를 곱하지 않고 통째로 뺀다 — 남는 오차가 0.57 대 0.55bp 로 사실상 같고,
+         *     통째로 뺀 값은 오너가 닻을 보고 손으로 되짚을 수 있다.
+         */
+        CurveMove: {
+            /** Pts */
+            pts: components["schemas"]["CurveAnchor"][];
+            /** N */
+            n: number;
+            /**
+             * Ok
+             * @description 닻이 둘 이상인가. False 면 화면은 이 칸을 비운다
+             */
+            ok: boolean;
+            /** Lo */
+            lo?: number | null;
+            /** Hi */
+            hi?: number | null;
+            /**
+             * Med
+             * @description 닻 칸들의 중앙 이동(bp) — 머리줄에 적는 수
+             */
+            med?: number | null;
+            /**
+             * Age Max
+             * @description 가장 낡은 닻의 나이(초)
+             */
+            age_max?: number | null;
+        };
         /** CurveOffer */
         CurveOffer: {
             /** N */
@@ -556,6 +645,11 @@ export interface components {
             ytm?: number | null;
             /** Bpe */
             bpe?: number | null;
+            /**
+             * Bpc
+             * @description 커브 반영 민평대비
+             */
+            bpc?: number | null;
             /** A */
             a?: number | null;
             /**
@@ -1558,6 +1652,8 @@ export interface components {
              */
             buckets?: components["schemas"]["CreditBucket"][] | null;
             curve?: components["schemas"]["Curve"] | null;
+            /** @description lane 이 cr 이고 국고·통안이 아닐 때. 국고 화면에는 없다 — 닻이 자기 자신이라 순환이다 */
+            curve_move?: components["schemas"]["CurveMove"] | null;
             /**
              * Mtx Group
              * @description credit_matrix 의 bond_type(등급 커브)
@@ -1754,6 +1850,7 @@ export interface operations {
         parameters: {
             query?: {
                 t?: string | null;
+                lite?: number;
             };
             header?: never;
             path?: never;

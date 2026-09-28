@@ -20,7 +20,8 @@ import { Curve } from '@/components/Curve';
 import { Heat } from '@/components/Heat';
 import type { FeedRow, TtlMode, View } from '@/lib/api';
 import {
-  EMDASH, fmtBpUnit, fmtCount, fmtHms, fmtLot, fmtTtm, fmtTtmRange, fmtYield,
+  EMDASH, fmtBp, fmtBpUnit, fmtCount, fmtHms, fmtLot, fmtMin, fmtTtm, fmtTtmRange,
+  fmtYield,
 } from '@/lib/format';
 import { Delta } from '@/ui/Delta';
 import { ColGroup } from '@/ui/ColGroup';
@@ -80,6 +81,24 @@ export function Credit({ ttl, onTtl, feed = [] }: {
   const tape = feed.filter((e) => e.sec === tapeSec).slice(-200).reverse();
   const lvl = offers.filter((o) => o.ytm != null);
   const noLvl = offers.filter((o) => o.ytm == null);
+  /* ★커브 반영 민평대비 [OWNER 2026-09-28].
+     «민평대비» 에는 두 가지가 섞여 있다 — «이 종목이 싸졌다» 와 «오늘 시장이
+     움직였다». 서버가 같은 잔존의 국고 커브 이동을 빼서 앞만 남긴 값을 같이 보낸다
+     (`kbond_view.curve_move`). 화면은 그 수와 **닻** 을 나란히 적기만 한다 —
+     파생된 수는 무엇에서 나왔는지 같이 보여야 믿을 수 있다. */
+  const cm = v.curve_move ?? null;
+  const cmOn = !!cm?.ok;
+  const cmTitle = cmOn
+    ? [
+        `오늘 국고 커브가 잔존별로 움직인 만큼을 «민평대비» 에서 뺀 값입니다.`,
+        `닻 ${cm!.n}칸 (국고 종목의 지금 mid − 전일 민평):`,
+        ...(cm!.pts ?? []).map(
+          (a) => `  ${fmtTtm(a.ttm)}  ${fmtBpUnit(a.bp)}  ${a.cs.join(',')}`
+            + (a.age ? ` (${fmtMin(a.age)} 전)` : ''),
+        ),
+        `닻보다 짧은 종목은 0 으로 기울여 내립니다 — 국고 책에는 짧은 종목이 없습니다.`,
+      ].join('\n')
+    : '닻(국고 종목의 지금 mid)이 둘 미만이라 뺄 수 없습니다.';
 
   return (
     <div className="kb-credit">
@@ -122,6 +141,9 @@ export function Credit({ ttl, onTtl, feed = [] }: {
                     ? `${b.n}건 중 ${b.nat}건이 «민평에» — 중앙 bp 는 값을 부른 ${b.n - b.nat}건으로 잽니다`
                     : '',
                   b.mb ? `매수 니즈에 맞는 오퍼 ${b.mb}건` : '',
+                  /* ★칸을 늘리지 않는다 — `compare_screens` 가 `.kb-li.cr` 의
+                     **자식 넷**을 차례로 읽는다(지문 계약). 그래서 툴팁이 진다. */
+                  b.bpc_med != null ? `커브 반영 ${fmtBpUnit(b.bpc_med)}` : '',
                 ]
                   .filter(Boolean)
                   .join(' · ') || undefined
@@ -267,8 +289,20 @@ export function Credit({ ttl, onTtl, feed = [] }: {
         <div className="kb-card">
           <div className="kb-ch">
             <Text as="span" font="label2">오퍼</Text>
-            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
-              잔존 순{noLvl.length ? ` · 레벨 미상 ${noLvl.length}` : ''}
+            {/* ★파생된 수는 «무엇에서 나왔는지» 를 같이 적는다 — 커브 이동·닻 수·
+                닻이 덮는 잔존 폭. 이것이 없으면 커브반영 칸은 검산할 수 없는 수다. */}
+            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta" title={cmTitle}>
+              {/* ★한 줄을 넘기면 안 된다 — 카드 머리가 두 줄이 되면 나란히 선
+                  카드들의 첫 줄이 계단이 진다(v2 얼라인 5). 닻의 «자세한 것»은
+                  `title` 이 지고, 보이는 줄은 믿을지 말지 정할 만큼만 적는다:
+                  얼마나 뺐나(커브) · 무엇으로 뺐나(닻 수).
+                  단위 `bp` 는 옆 칸(민평대비)이 행마다 달고 있어 겹쳐 적지 않는다. */}
+              잔존 순{noLvl.length ? ` · 미상 ${noLvl.length}` : ''}
+              {cmOn
+                ? ` · 커브 ${fmtBpUnit(cm!.med)} · 닻 ${cm!.n}`
+                : govSel
+                  ? ''
+                  : ' · 커브 반영 불가'}
             </Text>
             {onTtl ? (
               <select
@@ -291,6 +325,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
                   <th className="l">종목</th>
                   <th>잔존</th>
                   <th>민평대비</th>
+                  <th title={cmTitle}>커브반영</th>
                   <th>YTM</th>
                   <th>수량</th>
                 </tr>
@@ -298,20 +333,38 @@ export function Credit({ ttl, onTtl, feed = [] }: {
               <tbody>
                 {lvl.slice(0, 60).map((e, i) => (
                   <tr key={i} title={`${e.d ?? ''}`}>
-                    <td className="l">{e.n}</td>
+                    <td className="l nm" title={e.n ?? undefined}>{e.n}</td>
                     <td className="num kb-n">{fmtTtm(e.ttm)}</td>
                     {/* «민평에 팔자» 는 +0.0bp 가 아니라 «민평» 으로 읽어야 한다 —
                         0.0 으로 쓰면 딜러가 정확히 0 을 부른 것처럼 보인다 [OWNER 2026-09-07] */}
+                    {/* ★방향색은 **한 칸에만** 준다 [2026-09-28].
+                        두 칸이 나란히 붉고 푸르면 눈이 둘 다 읽어야 하고, 그러면
+                        어느 쪽이 «읽는 수» 인지 화면이 말하지 않는 셈이 된다.
+                        왼쪽은 문면에서 든 값이라 잉크, 오른쪽이 판단할 값이다. */}
                     <td className={`num${e.atmp ? ' kb-n' : ''}`}>
                       {e.atmp ? (
                         '민평'
                       ) : e.bpe != null ? (
-                        <Delta v={e.bpe} unit="bp" />
+                        <Delta v={e.bpe} unit="bp" ink />
                       ) : e.won != null ? (
-                        <Delta v={e.won} unit="원" />
+                        <Delta v={e.won} unit="원" ink />
                       ) : (
                         ''
                       )}
+                    </td>
+                    {/* 뺄 수 없으면 «—» 다(0 이 아니다) — 닻 밖이거나 닻이 모자란다.
+                        `title` 이 그 줄에서 실제로 뺀 양을 말한다. */}
+                    <td
+                      className="num"
+                      title={
+                        e.bpc != null && e.cmv != null
+                          ? `${fmtBp(e.bpe)} − (커브 ${fmtBp(e.cmv)}) = ${fmtBp(e.bpc)}bp`
+                          : cmOn
+                            ? '닻이 덮는 잔존 밖입니다'
+                            : undefined
+                      }
+                    >
+                      {e.bpc != null ? <Delta v={e.bpc} /> : EMDASH}
                     </td>
                     <td className={`num${e.lvl === 'est' ? ' kb-n' : ''}`}>
                       {fmtYield(e.ytm)}
@@ -324,16 +377,17 @@ export function Credit({ ttl, onTtl, feed = [] }: {
                 ))}
                 {noLvl.length ? (
                   <tr>
-                    <td colSpan={5} className="l kb-n" style={{ paddingTop: 8 }}>
+                    <td colSpan={6} className="l kb-n" style={{ paddingTop: 8 }}>
                       ── 레벨 미상 (결과금리 없음) ──
                     </td>
                   </tr>
                 ) : null}
                 {noLvl.slice(0, 30).map((e, i) => (
                   <tr key={`x${i}`} className="mut">
-                    <td className="l">{e.n}</td>
+                    <td className="l nm" title={e.n ?? undefined}>{e.n}</td>
                     <td className="num kb-n">{fmtTtm(e.ttm)}</td>
                     <td className="num kb-n">{e.won != null ? <Delta v={e.won} unit="원" ink /> : ''}</td>
+                    <td className="num kb-n">{EMDASH}</td>
                     <td className="num kb-n">{EMDASH}</td>
                     <td className="num kb-n">{fmtLot(e.a)}</td>
                   </tr>

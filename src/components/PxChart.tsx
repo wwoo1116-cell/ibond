@@ -29,7 +29,7 @@ import { useMemo, useState } from 'react';
 
 import { TimeChart } from '@/chart/TimeChart';
 import type { View } from '@/lib/api';
-import { EMDASH, fmtAxis, fmtBpUnit, fmtHms, fmtYield } from '@/lib/format';
+import { EMDASH, fmtAxis, fmtBpLevel, fmtBpUnit, fmtHms, fmtPct, fmtYield } from '@/lib/format';
 import { ChartReadoutStrip, slotChars, type StripSlot } from '@/ui/ChartReadoutStrip';
 
 /** 그림 높이. 활동 띠를 안에 품는다. */
@@ -177,14 +177,82 @@ export function PxChart({ px }: { px: NonNullable<View['px']> }) {
   })();
 
   const chars = slotChars(fmtYield, yRange.min, yRange.max);
-  const slots: StripSlot[] = [
-    { key: 'mid', label: 'mid', value: fmtYield(grid.mid[at]), color: 'var(--color-fg)', chars },
-    { key: 'ask', label: '매도', value: fmtYield(grid.ask[at]), color: 'var(--sr-down)', opacity: 0.65, chars, drop: 2 },
-    { key: 'bid', label: '매수', value: fmtYield(grid.bid[at]), color: 'var(--sr-up)', opacity: 0.65, chars, drop: 1 },
-  ];
-  if (px.mp != null) {
+
+  /* ── 유휴면 «오늘 폭 · 지금 자리» [OWNER 2026-09-28] ─────────────────────
+   *
+   * ★캐논 이탈 ④ — v2 §8.5b 는 «커서가 없으면 마지막 표본을 읽는다» 로 두어
+   *   빈 상태를 없앤다. 여기서는 유휴일 때 **다른 것**을 읽는다.
+   *
+   *   왜: 마지막 표본을 읽으면 `mid 4.338 · 매도 4.335 · 매수 4.335 · 민평 4.197`
+   *   인데, 이 넷이 전부 카드 머리와 시세 축에 이미 있는 수다. [OWNER] 「이 부분이
+   *   너무 눈에 안 들어와」 — 안 들어오는 이유가 «작아서» 가 아니라 **아무것도
+   *   새로 말하지 않아서** 였다. 유휴는 화면에서 가장 오래 서 있는 상태이므로
+   *   그 자리에 그림이 말하지 않는 것을 놓는다: 오늘 어디까지 갔고(폭), 지금
+   *   그 안 어디에 서 있나(자리).
+   *
+   * ★빈 상태는 여전히 없다(줄 높이 고정 유지) — 바뀌는 것은 칸의 «내용» 이지
+   *   칸이 생겼다 사라지는 것이 아니다. 커서를 움직이는 동안에는 캐논대로
+   *   글자만 바뀐다(유휴↔짚음 전환에서만 칸이 갈린다).
+   */
+  const today = (() => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const i of grid.sample) {
+      const m = grid.mid[i];
+      if (m == null) continue;
+      if (m < lo) lo = m;
+      if (m > hi) hi = m;
+    }
+    if (!Number.isFinite(lo)) return null;
+    const now = grid.mid[grid.sample[grid.sample.length - 1] ?? 0] ?? null;
+    return {
+      lo, hi,
+      /** 폭은 «크기» 라 부호가 없다 — `fmtBpLevel`. */
+      w: (hi - lo) * 100,
+      now,
+      /** 저점에서 몇 %. 폭이 0 이면 자리가 없다(하루 종일 한 값). */
+      pos: now != null && hi > lo ? ((now - lo) / (hi - lo)) * 100 : null,
+    };
+  })();
+
+  const idle = hover == null && today != null;
+  const slots: StripSlot[] = idle
+    ? [
+        /* ★이름표는 「지금」이 아니라 「mid」다 [2026-09-28 실측].
+           이 값은 **마지막 5초 격자 표본**이라 카드 머리의 살아 있는 mid 와
+           최대 한 칸 어긋난다(실측: 머리 3.790 · 여기 3.792, 15:29:55 대 15:30:00).
+           「지금」이라 부르면 화면이 한 양을 두 수로 말하는 셈이 된다 — 왼쪽
+           시각이 «언제 것인가» 를 이미 말하고 있으므로 이름표는 짚을 때와
+           **같은 말**로 둔다. */
+        { key: 'mid', label: 'mid', value: fmtYield(today!.now), color: 'var(--color-fg)', chars },
+        {
+          key: 'band',
+          label: '오늘',
+          value: `${fmtYield(today!.lo)}~${fmtYield(today!.hi)}`,
+          /* 두 레벨 + 물결 하나 — 짚는 순간 오른쪽이 밀리지 않게 미리 비워 둔다. */
+          chars: chars * 2 + 1,
+          drop: 2,
+        },
+        { key: 'wid', label: '폭', value: `${fmtBpLevel(today!.w)}bp`, chars: 6, drop: 1 },
+        {
+          key: 'pos',
+          label: '자리',
+          value: today!.pos == null ? EMDASH : `저점 ${fmtPct(today!.pos)}`,
+          chars: 7,
+          drop: 3,
+        },
+      ]
+    : [
+        { key: 'mid', label: 'mid', value: fmtYield(grid.mid[at]), color: 'var(--color-fg)', chars },
+        { key: 'ask', label: '매도', value: fmtYield(grid.ask[at]), color: 'var(--sr-down)', opacity: 0.65, chars, drop: 2 },
+        { key: 'bid', label: '매수', value: fmtYield(grid.bid[at]), color: 'var(--sr-up)', opacity: 0.65, chars, drop: 1 },
+      ];
+  if (!idle && px.mp != null) {
     slots.push({ key: 'mp', label: '민평', value: fmtYield(px.mp), color: 'var(--color-fgMuted)', opacity: 0.9, chars, drop: 3 });
   }
+  /* 「민평 대비」는 두 상태에 다 남는다 — 이 줄에서 색이 붙는 유일한 칸이다.
+     ⚠이 값은 **그림이 든 마지막 표본** 기준이라 카드 머리의 살아 있는 대비와
+       한 칸(≤5초) 어긋날 수 있다. 줄 왼쪽의 시각이 그 어긋남을 설명한다. */
   const dbp = grid.mid[at] != null && px.mp != null ? (grid.mid[at]! - px.mp) * 100 : null;
 
   return (

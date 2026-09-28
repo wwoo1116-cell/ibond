@@ -158,7 +158,7 @@ describe('말줄임 — 조용한 잘림만 금지', () => {
    * 실측 최대치까지 넓히고 · «…» 로 잘렸음을 보이고 · `title` 이 전체를 준다.
    */
   const NAME_CELLS = ['.kb-c.n', '.kb-c.who', '.kb-c.h', '.kb-c.raw', '.kb-c.mat',
-    '.kb-li .nm', '.kb-tp > .kb-tpr', '.kb-evt'];
+    '.kb-li .nm', '.kb-tp > .kb-tpr', '.kb-evt', '.kb-tbl td.nm'];
 
   it('말줄임은 이름 칸에만 있다', () => {
     const css = stripComments(read(path.relative(ROOT, KBOND_CSS)));
@@ -172,7 +172,7 @@ describe('말줄임 — 조용한 잘림만 금지', () => {
 
   it('잘리는 칸은 title 로 전체를 준다', () => {
     const all = tsxAll();
-    for (const cls of ['kb-c n', 'kb-c who', 'kb-c h', 'kb-c raw']) {
+    for (const cls of ['kb-c n', 'kb-c who', 'kb-c h', 'kb-c raw', 'l nm']) {
       const re = new RegExp(`className="${cls}"[^>]*title=`);
       expect(re.test(all), `${cls} 에 title 이 없다 — 잘리면 전체를 볼 길이 없다`).toBe(true);
     }
