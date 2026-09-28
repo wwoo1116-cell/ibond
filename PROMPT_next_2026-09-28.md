@@ -27,9 +27,8 @@ K-Bond 레인. 2026-09-15 [OWNER] 「락만 고치고 얼린다」로 얼렸다.
   [E] won_to_bp 표가 테너 평균(짧은 쪽 24% 어긋남 · bp_per_won 이 답)   [F] 크레딧 단가 — 쿠폰 출처
   [G] 결제일 T+1 — 휴일표 없음   [H] 통안 민평 수집 결손 넷(지금은 계열 커브로 메움)
   [I] kbond_test.py test1/2/3 이 pytest 에 잡혀 늘 3 errors
-  [J] ★Vercel 프로덕션(kbond-web.vercel.app)이 09-28 빌드보다 뒤졌다 — 세션에서 배포 명령이 차단됐다.
-      Funnel(/kbond/app)은 백엔드가 out-kbond 를 그대로 서빙하므로 이미 새 판이다.
-      오너가 직접:  cd Projects\apps\kbond-web && npx vercel deploy --prod --yes
+  ~~[J] Vercel 배포~~ 닫힘 — 오너가 09-28 직접 배포(kbond-web.vercel.app 별칭 · 라이브에서 dyn 조각 200 확인).
+      세션 안에서는 배포 명령이 차단되므로 앞으로도 오너 몫:  npx vercel deploy --prod --yes  (`!` 는 bash · 경로는 슬래시)
 ```
 
 ## §1. 지금 서 있는 것 (배관 한 눈에)
