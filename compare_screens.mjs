@@ -155,10 +155,17 @@ function nums(x) {
  *  [OWNER 2026-09-23] 1년 안쪽은 «일» 로 적는다(0.2년이라 쓰면 만기가 코앞인 게
  *  안 보인다). 옛 화면은 `M`, 새 화면은 «일» 이라 글자로는 절대 안 맞는다. */
 const asYears = (s) => {
-  const m = /(\d+(?:\.\d+)?)\s*(M|일|년)/.exec(String(s ?? ''));
+  const txt = String(s ?? '');
+  /* ★「만기」는 음수 잔존과 **같은 사실**이다 [2026-09-28].
+     옛 화면은 만기가 지난 종목에 `-30M` 을 적는다 — «음수 30개월» 은 잔존이 아니라
+     읽는 사람이 부호를 해석해야 하는 수다. 새 화면은 그 자리에 «만기» 를 적는다
+     (09-23 규칙의 `t < 0` 갈래). 둘은 같은 것을 말하므로 같게 본다. */
+  if (/만기/.test(txt)) return -Infinity;
+  const m = /(-?\d+(?:\.\d+)?)\s*(M|일|년)/.exec(txt);
   if (!m) return null;
   const v = Number(m[1]);
-  return m[2] === 'M' ? v / 12 : m[2] === '일' ? v / 365 : v;
+  const y = m[2] === 'M' ? v / 12 : m[2] === '일' ? v / 365 : v;
+  return y < 0 ? -Infinity : y;
 };
 
 function diffRows(a, b, key) {
@@ -179,7 +186,10 @@ function diffTtm(a, b, at) {
   for (let i = 0; i < n; i++) {
     const x = asYears(at(a[i]));
     const y = asYears(at(b[i]));
-    const same = (x == null && y == null) || (x != null && y != null && Math.abs(x - y) <= 1 / 20);
+    const same =
+      (x == null && y == null) ||
+      (x === -Infinity && y === -Infinity) ||
+      (x != null && y != null && Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) <= 1 / 20);
     if (!same) out.push({ i, 옛: at(a[i]) ?? '(없음)', 새: at(b[i]) ?? '(없음)' });
   }
   return out;

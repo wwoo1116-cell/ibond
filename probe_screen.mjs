@@ -178,8 +178,20 @@ for (const scheme of ['light', 'dark']) {
       console.log(`   ${s.ok ? ' ' : '✗'} ${s.name.padEnd(12)} ${String(s.r).padStart(6)} : 1  (필요 ${s.min}, n=${s.n}, "${s.txt}")`);
     }
     if (r.overflow.length) {
-      console.log(`   ✗ 넘침 ${r.overflow.length}칸`);
-      for (const o of r.overflow.slice(0, 8)) console.log(`       ${o.cls} ${o.w}<${o.s} "${o.txt}"`);
+      /* 같은 칸이 수십 줄에서 같은 이유로 넘치므로 «칸 종류» 로 접어 센다 —
+         여든 줄을 늘어놓으면 종류가 몇인지가 안 보인다. */
+      const by = new Map();
+      for (const o of r.overflow) {
+        const k = o.cls;
+        const e = by.get(k) || { n: 0, worst: o };
+        e.n++;
+        if (o.s - o.w > e.worst.s - e.worst.w) e.worst = o;
+        by.set(k, e);
+      }
+      console.log(`   ✗ 넘침 ${r.overflow.length}칸 · 종류 ${by.size}`);
+      for (const [k, e] of [...by.entries()].sort((a, b) => b[1].n - a[1].n)) {
+        console.log(`       ${String(e.n).padStart(3)}줄  ${k}  ${e.worst.w}<${e.worst.s}  "${e.worst.txt}"`);
+      }
     } else {
       console.log('     넘침 0');
     }
