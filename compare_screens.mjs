@@ -129,9 +129,37 @@ const NEW_BONDS = `[...document.querySelectorAll('.kb-li2')].slice(0,15).map(e=>
           v:t[1]||'', d:t[3]||''};
 })`;
 
+/**
+ * ★부호는 «글자» 가 바뀌어도 같은 부호다 [2026-09-28].
+ *
+ * 새 화면이 v2 문법(D4.1)으로 옮겨가면서 변화값의 부호가 세 가지로 적힌다 —
+ * 화살표 `↘ 1.5`(부호 없는 숫자) · 진짜 마이너스 `−1.5`(U+2212) · 옛 ASCII `-1.5`.
+ * 아래 `nums` 의 정규식은 ASCII 하이픈만 읽으므로, 정규화를 안 하면 **부호가 있는
+ * 모든 칸이 차이로 뜬다**(값은 하나도 안 바뀌었는데).
+ *
+ * 그래서 세 표기를 ASCII 부호로 되돌린 «뒤에» 숫자를 뽑는다. 부호 자체는 여전히
+ * 대조된다 — 바뀐 것은 부호의 철자뿐이고, 이 함수는 옛 화면 글자에는 아무 일도
+ * 하지 않는다(멱등). 그래서 고치기 «전» 에 먼저 넣어 0건을 확인할 수 있다.
+ */
+const signNorm = (s) =>
+  String(s ?? '')
+    .replace(/−/g, '-')       // U+2212 MINUS SIGN → ASCII
+    .replace(/↘\s*/g, '-')         // D4.1: 화살표가 곧 부호다
+    .replace(/↗\s*/g, '+');
+
 function nums(x) {
-  return (String(x ?? '').match(/-?\d+(?:\.\d+)?/g) || []).join(' ');
+  return (signNorm(x).match(/-?\d+(?:\.\d+)?/g) || []).join(' ');
 }
+
+/** 잔존을 «년» 으로 환산한다 — `8M` 과 `243일` 은 같은 값의 다른 표기다.
+ *  [OWNER 2026-09-23] 1년 안쪽은 «일» 로 적는다(0.2년이라 쓰면 만기가 코앞인 게
+ *  안 보인다). 옛 화면은 `M`, 새 화면은 «일» 이라 글자로는 절대 안 맞는다. */
+const asYears = (s) => {
+  const m = /(\d+(?:\.\d+)?)\s*(M|일|년)/.exec(String(s ?? ''));
+  if (!m) return null;
+  const v = Number(m[1]);
+  return m[2] === 'M' ? v / 12 : m[2] === '일' ? v / 365 : v;
+};
 
 function diffRows(a, b, key) {
   const out = [];
@@ -140,6 +168,19 @@ function diffRows(a, b, key) {
     const x = nums(key(a[i]));
     const y = nums(key(b[i]));
     if (x !== y) out.push({ i, 옛: key(a[i]) ?? '(없음)', 새: key(b[i]) ?? '(없음)' });
+  }
+  return out;
+}
+
+/** 두 표기가 같은 잔존을 말하는가 — 반올림 자리가 달라 ±1/20년(18일)까지 같게 본다. */
+function diffTtm(a, b, at) {
+  const out = [];
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    const x = asYears(at(a[i]));
+    const y = asYears(at(b[i]));
+    const same = (x == null && y == null) || (x != null && y != null && Math.abs(x - y) <= 1 / 20);
+    if (!same) out.push({ i, 옛: at(a[i]) ?? '(없음)', 새: at(b[i]) ?? '(없음)' });
   }
   return out;
 }
@@ -174,7 +215,11 @@ const crB = await Bt.ev(NEW_CRLIST);
 report.차이.크레딧분류 = diffRows(crA, crB, (r) => (r ? `${r.nm} ${r.sub} ${r.v} ${r.d}` : null));
 const obA = await A.ev(OLD_OB);
 const obB = await Bt.ev(NEW_OB);
-report.차이.크레딧오퍼 = diffRows(obA, obB, (r) => (r ? r.join(' ') : null));
+/* 칸 차례는 [종목, 잔존, 민평대비, YTM, 수량]. ★잔존만 따로 재는 이유는 단위가
+   달라서다 — 옛 화면은 `8M`, 새 화면은 `243일`(09-23 오너 규칙). 숫자로 맞대면
+   8 대 243 이라 언제나 어긋나므로, 그 칸은 «년» 으로 환산해 견준다. */
+report.차이.크레딧오퍼 = diffRows(obA, obB, (r) => (r ? [0, 2, 3, 4].map((i) => r[i]).join(' ') : null));
+report.차이.크레딧잔존 = diffTtm(obA, obB, (r) => (r ? r[1] : null));
 
 /* 5. 국고 */
 await clickOld('국고');
