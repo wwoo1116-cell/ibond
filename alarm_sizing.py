@@ -5,6 +5,7 @@ r"""알람 교정·사이징 — 「문턱 N bp 로 하루 몇 번 울리나」�
     python alarm_sizing.py --watch 2300 out.jsonl   1등 교체를 세고 도착/만료를 가른다
     python alarm_sizing.py --sample 3600 s.jsonl    ★여러 시각을 모은다(하루 내내 돌린다)
     python alarm_sizing.py --pool s.jsonl [s2 ...]  ★모은 것을 «직접 센 하루 건수» 로
+    ... --port 8303                                 리플레이 서버를 보게 한다(검증용)
 
 ## 왜 이 파일이 있나 [2026-09-30]
 
@@ -77,6 +78,14 @@ from enrich_kbond_quotes import BP_PER_WON, TTM_GRID
 
 BASE = "http://127.0.0.1:8301"
 VIEW = BASE + "/api/view?lane=cr"
+
+
+def use_port(port: int) -> None:
+    """다른 포트를 보게 한다 — **검증은 리플레이 서버를 따로 띄워** 한다는 레인 규율용
+    (`set KBOND_REPLAY=… && uvicorn kbond_api:app --port 8303`). 프로덕션 :8301 을 안 건드린다."""
+    global BASE, VIEW
+    BASE = f"http://127.0.0.1:{port}"
+    VIEW = BASE + "/api/view?lane=cr"
 
 #: 원장 역사에서 잰 「값 부른 오퍼」 하루 도착 중앙(2024-02~2026-09 · 541영업일).
 #: 재려면 `kbond_legs.parquet` 에서 이름+민평+값+SELL 을 하루로 접는다.
@@ -377,6 +386,8 @@ def pool(paths: list, max_age: int = MAX_AGE) -> int:
 
 
 def main(argv: list) -> int:
+    if "--port" in argv:
+        use_port(int(argv[argv.index("--port") + 1]))
     if "--calibrate" in argv:
         return calibrate()
     if "--watch" in argv:
