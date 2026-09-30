@@ -31,8 +31,14 @@ import { TimeChart } from '@/chart/TimeChart';
 import type { View } from '@/lib/api';
 import { EMDASH, fmtAxis, fmtBpLevel, fmtBpUnit, fmtHms, fmtPct, fmtYield } from '@/lib/format';
 import { ChartReadoutStrip, slotChars, type StripSlot } from '@/ui/ChartReadoutStrip';
+import { useMeasure } from '@/ui/useMeasure';
 
 /** 그림 높이. 활동 띠를 안에 품는다. */
+/* 그림 높이는 **카드가 준다** [2026-09-29 「한 화면」]. 종전에는 상수였고, 그러면
+ * 카드가 커져도 그림은 그대로이고 카드가 작아지면 그림이 카드를 밀어냈다.
+ * 이제 `.sr-plot` 이 남는 높이를 먹고(`kbond.css` 의 `.kb-plotwrap`), 그림은 그
+ * 칸을 재서 그린다. 상수는 **첫 프레임의 기본값**으로만 남는다 — 재기 전 한 번은
+ * 0 이고, 0 으로 그리면 라이브러리가 캔버스를 안 만든다. */
 const PX_H = 236;
 /** 바닥 활동 띠의 높이 — 옛 화면의 `AB` 와 같은 22px. */
 const ACT_BAND = 22;
@@ -65,6 +71,8 @@ type Pt = { t: number; mid?: number | null; a?: number | null; b?: number | null
 export function PxChart({ px }: { px: NonNullable<View['px']> }) {
   const pts = useMemo(() => (px.pts ?? []) as Pt[], [px]);
   const [hover, setHover] = useState<number | null>(null);
+  const [plotRef, , plotH] = useMeasure<HTMLDivElement>();
+  const h = plotH || PX_H;
 
   /* ── 격자와 계열 ───────────────────────────────────────────────────────── */
   const grid = useMemo(() => {
@@ -150,8 +158,8 @@ export function PxChart({ px }: { px: NonNullable<View['px']> }) {
   /* ★대칭 여백 — 민평이 정중앙을 지키려면 위아래가 같아야 한다. 아래만 활동 띠
      높이를 더 준다(띠는 값이 아니라 그림이라 값 구간을 안 먹어야 한다). */
   const margins = useMemo(
-    () => ({ top: 0.06, bottom: 0.06 + (activity ? (ACT_BAND + 6) / PX_H : 0) }),
-    [activity],
+    () => ({ top: 0.06, bottom: 0.06 + (activity ? (ACT_BAND + 6) / h : 0) }),
+    [activity, h],
   );
 
   /* ── 리드아웃 ──────────────────────────────────────────────────────────── */
@@ -256,13 +264,13 @@ export function PxChart({ px }: { px: NonNullable<View['px']> }) {
   const dbp = grid.mid[at] != null && px.mp != null ? (grid.mid[at]! - px.mp) * 100 : null;
 
   return (
-    <>
+    <div className="kb-plotwrap">
       <ChartReadoutStrip
         date={fmtHms(grid.times[at])}
         slots={slots}
         change={dbp == null ? undefined : { label: '민평 대비', text: fmtBpUnit(dbp), v: dbp }}
       />
-      <div className="sr-plot" style={{ height: PX_H }}>
+      <div className="sr-plot" ref={plotRef}>
         <TimeChart
           times={grid.times}
           lines={lines}
@@ -270,7 +278,7 @@ export function PxChart({ px }: { px: NonNullable<View['px']> }) {
           yRange={yRange}
           margins={margins}
           activity={activity}
-          height={PX_H}
+          height={h}
           precision={3}
           onHoverIndex={setHover}
           accessibilityLabel={`시세. 표본 ${grid.sample.length}개. 화살표 키로 표본을 옮깁니다.`}
@@ -281,6 +289,6 @@ export function PxChart({ px }: { px: NonNullable<View['px']> }) {
           }
         />
       </div>
-    </>
+    </div>
   );
 }

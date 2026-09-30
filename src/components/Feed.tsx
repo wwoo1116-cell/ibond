@@ -191,7 +191,8 @@ export function Feed({ rows }: { rows: FeedRow[] }) {
 
   const shown = rows.slice(-800);
   return (
-    <div ref={box} onScroll={onScroll} className="kb-feed">
+    /* 피드는 «카드 몸통» 을 겸한다 — 스크롤·방향은 `.kb-cb` 가 준다(캐논 ③). */
+    <div ref={box} onScroll={onScroll} className="kb-cb kb-feed">
       <Head />
       {shown.length ? (
         shown.map((e) => (

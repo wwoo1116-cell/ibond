@@ -273,7 +273,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           <Text as="span" font="label2">종목</Text>
           <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">{rows.length}종</Text>
         </div>
-        <div className="kb-scroll">
+        <div className="kb-cb">
           {sections.map(({ head, list }) => (
             <Fragment key={head}>
               <div className="kb-sec">{head}</div>
@@ -331,7 +331,7 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
       </div>
 
       <div className="kb-mid">
-        <div className="kb-card">
+        <div className="kb-card fix">
           <div className="kb-ch">
             <Text as="span" font="label2">{sel?.nm ?? '—'}</Text>
             {sel?.alias ? <b className="kb-badge al">{sel.alias}</b> : null}
@@ -339,81 +339,87 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               {sel?.full && sel.full !== sel.nm ? sel.full : (sel?.ten ?? '')}
             </Text>
           </div>
-          <div className="kb-big">{fmtYield(sel?.mid)}</div>
-          <div className="kb-sub">
-            {sel?.mid != null && sel?.mp != null
-              ? `민평 ${fmtYield(sel.mp)} 대비 ${fmtBpUnit((sel.mid - sel.mp) * 100)}`
-              : '민평 대비를 낼 수 없습니다'}
-          </div>
-          {/* 옛 화면과 같은 네 칸 — 오퍼·비드·스프레드·당일 체결 */}
-          <div className="kb-quad">
-            <div>
-              <span className="kb-n">매도 (오퍼)</span>
-              {/* ★레벨은 잉크다 — 이 칸이 «매도(오퍼)» 라는 것은 바로 위 라벨이
-                  말한다. 값에까지 옆색을 주면 같은 화면의 부호색과 구별이 안 된다. */}
-              <b>{fmtYield(sel?.fa?.y)}</b>
+          <div className="kb-cb">
+            <div className="kb-big">{fmtYield(sel?.mid)}</div>
+            <div className="kb-sub">
+              {sel?.mid != null && sel?.mp != null
+                ? `민평 ${fmtYield(sel.mp)} 대비 ${fmtBpUnit((sel.mid - sel.mp) * 100)}`
+                : '민평 대비를 낼 수 없습니다'}
             </div>
-            <div>
-              <span className="kb-n">매수 (비드)</span>
-              <b>{fmtYield(sel?.fb?.y)}</b>
+            {/* 옛 화면과 같은 네 칸 — 오퍼·비드·스프레드·당일 체결 */}
+            <div className="kb-quad">
+              <div>
+                <span className="kb-n">매도 (오퍼)</span>
+                {/* ★레벨은 잉크다 — 이 칸이 «매도(오퍼)» 라는 것은 바로 위 라벨이
+                    말한다. 값에까지 옆색을 주면 같은 화면의 부호색과 구별이 안 된다. */}
+                <b>{fmtYield(sel?.fa?.y)}</b>
+              </div>
+              <div>
+                <span className="kb-n">매수 (비드)</span>
+                <b>{fmtYield(sel?.fb?.y)}</b>
+              </div>
+              <div>
+                <span className="kb-n">{v.ob?.best?.lock ? '락' : '스프레드'}</span>
+                <b>
+                  {v.ob?.best?.lock
+                    ? '양면'
+                    : v.ob?.best?.spread_bp != null
+                      ? `${fmtBpLevel(v.ob.best.spread_bp)}bp`
+                      : EMDASH}
+                </b>
+              </div>
+              <div>
+                <span className="kb-n">당일 체결</span>
+                <b>
+                  {sel?.fill ? fmtYield((sel.fill as { y?: number }).y) : EMDASH}
+                  {sel?.fill ? (
+                    <span className="kb-n"> {fmtHms((sel.fill as { t?: number }).t ?? 0)}</span>
+                  ) : null}
+                </b>
+              </div>
             </div>
-            <div>
-              <span className="kb-n">{v.ob?.best?.lock ? '락' : '스프레드'}</span>
-              <b>
-                {v.ob?.best?.lock
-                  ? '양면'
-                  : v.ob?.best?.spread_bp != null
-                    ? `${fmtBpLevel(v.ob.best.spread_bp)}bp`
-                    : EMDASH}
-              </b>
+            <div className="kb-sub2">
+              만기 {sel?.mat || '—'} · 오늘 호가 {sel?.n ?? 0}건
+              {sel?.hn ? ` · mid 표본 ${sel.hn}` : ''}
             </div>
-            <div>
-              <span className="kb-n">당일 체결</span>
-              <b>
-                {sel?.fill ? fmtYield((sel.fill as { y?: number }).y) : EMDASH}
-                {sel?.fill ? (
-                  <span className="kb-n"> {fmtHms((sel.fill as { t?: number }).t ?? 0)}</span>
-                ) : null}
-              </b>
-            </div>
-          </div>
-          <div className="kb-sub2">
-            만기 {sel?.mat || '—'} · 오늘 호가 {sel?.n ?? 0}건
-            {sel?.hn ? ` · mid 표본 ${sel.hn}` : ''}
           </div>
         </div>
 
-        <div className="kb-card">
+        <div className="kb-card w2">
           <div className="kb-ch">
             <Text as="span" font="label2">시세</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
               {v.px?.mp != null ? `민평 ${fmtYield(v.px.mp)} 중앙` : 'mid 이력'}
             </Text>
           </div>
-          {v.px ? <PxChart px={v.px} /> : <div className="kb-empty">종목을 고르세요</div>}
+          <div className="kb-cb">
+            {v.px ? <PxChart px={v.px} /> : <div className="kb-empty">종목을 고르세요</div>}
+          </div>
         </div>
 
-        <div className="kb-card">
+        <div className="kb-card w2">
           <div className="kb-ch">
             <Text as="span" font="label2">메시지</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">이 종목 {tape.length}건</Text>
           </div>
-          {tape.length ? (
-            <div className="kb-scroll">
-              {tape.map((e) => (
-                <div className="kb-tp" key={e.i}>
-                  <span className="kb-n">{fmtHms(e.t)}</span>
-                  <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
-                    {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
-                  </span>
-                  <span className="kb-tpr">{e.raw}</span>
-                  <span className="kb-n">{e.d}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="kb-empty">이 종목 메시지가 아직 없습니다</div>
-          )}
+          <div className="kb-cb">
+            {tape.length ? (
+              <>
+                {tape.map((e) => (
+                  <div className="kb-tp" key={e.i}>
+                    <span className="kb-n">{fmtHms(e.t)}</span>
+                    <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
+                      {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
+                    </span>
+                    <span className="kb-tpr" title={e.raw ?? undefined}>{e.raw}</span>
+                    <span className="kb-n kb-dk" title={e.d ?? undefined}>{e.d}</span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="kb-empty">이 종목 메시지가 아직 없습니다</div>
+            )}
+          </div>
         </div>
 
         {v.swap ? (
@@ -424,41 +430,50 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
                 {v.swap.n}건 · 신형−구형 bp
               </Text>
             </div>
-            {(v.swap.pairs ?? []).map((p) => {
-              /* 레벨은 신형−구형 bp 다. 아웃라이트처럼 ×100 하지 않는다. */
-              const leg = (e: Record<string, unknown>, side: 'a' | 'b', i: number) => {
-                const who = `${(e.d as string) ?? ''}${e.kind === 'AXE' ? ' · 관심' : ''}`;
-                const amt = fmtLot(e.a as number | null);
-                const y = fmtBpUnit(e.y as number | null);
+            <div className="kb-cb">
+              {(v.swap.pairs ?? []).map((p) => {
+                /* 레벨은 신형−구형 bp 다. 아웃라이트처럼 ×100 하지 않는다. */
+                const leg = (e: Record<string, unknown>, side: 'a' | 'b', i: number) => {
+                  const who = `${(e.d as string) ?? ''}${e.kind === 'AXE' ? ' · 관심' : ''}`;
+                  const amt = fmtLot(e.a as number | null);
+                  const y = fmtBpUnit(e.y as number | null);
+                  /* 한 문장을 두 곳(글·툴팁)에 쓴다 — 갈라지면 툴팁이 거짓이 된다.
+                     오퍼는 «금액 다음 데스크», 비드는 오른쪽 정렬이라 그 반대다. */
+                  const txt = side === 'a' ? `${amt} ${who}` : `${who} ${amt}`;
+                  return (
+                    <div key={`${side}${i}`} className={`kb-swr ${side}`}>
+                      <span className="w" title={side === 'a' ? txt : undefined}>
+                        {side === 'a' ? txt : ''}
+                      </span>
+                      <span className="lv">{y}</span>
+                      <span className="w r" title={side === 'b' ? txt : undefined}>
+                        {side === 'b' ? txt : ''}
+                      </span>
+                    </div>
+                  );
+                };
                 return (
-                  <div key={`${side}${i}`} className={`kb-swr ${side}`}>
-                    <span className="w">{side === 'a' ? `${amt} ${who}` : ''}</span>
-                    <span className="lv">{y}</span>
-                    <span className="w r">{side === 'b' ? `${who} ${amt}` : ''}</span>
+                  <div key={p.pair ?? ''} className="kb-swap">
+                    <div className="kb-obh">
+                      <span>오퍼(신형 매도)</span>
+                      <span>{p.pair}</span>
+                      <span>비드(신형 매수)</span>
+                    </div>
+                    {(p.asks ?? []).map((e, i) => leg(e as Record<string, unknown>, 'a', i))}
+                    {p.spread_bp != null ? (
+                      <div className="kb-obsp">스프레드 {fmtBpLevel(p.spread_bp)}bp</div>
+                    ) : null}
+                    {(p.bids ?? []).map((e, i) => leg(e as Record<string, unknown>, 'b', i))}
                   </div>
                 );
-              };
-              return (
-                <div key={p.pair ?? ''} className="kb-swap">
-                  <div className="kb-obh">
-                    <span>오퍼(신형 매도)</span>
-                    <span>{p.pair}</span>
-                    <span>비드(신형 매수)</span>
-                  </div>
-                  {(p.asks ?? []).map((e, i) => leg(e as Record<string, unknown>, 'a', i))}
-                  {p.spread_bp != null ? (
-                    <div className="kb-obsp">스프레드 {fmtBpLevel(p.spread_bp)}bp</div>
-                  ) : null}
-                  {(p.bids ?? []).map((e, i) => leg(e as Record<string, unknown>, 'b', i))}
-                </div>
-              );
-            })}
+              })}
+            </div>
           </div>
         ) : null}
       </div>
 
       <div className="kb-right">
-        <div className="kb-card">
+        <div className="kb-card w2">
           <div className="kb-ch">
             <Text as="span" font="label2">호가</Text>
             <select
@@ -485,7 +500,9 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               </select>
             ) : null}
           </div>
-          {v.ob ? <Ladder ob={v.ob} T={T} steps={v.age_steps} /> : <div className="kb-empty">종목을 고르세요</div>}
+          <div className="kb-cb">
+            {v.ob ? <Ladder ob={v.ob} T={T} steps={v.age_steps} /> : <div className="kb-empty">종목을 고르세요</div>}
+          </div>
         </div>
 
         <div className="kb-card">
@@ -495,7 +512,9 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
               {v.dealers ? `${v.dealers.n}곳 · 양면 ${v.dealers.n_both}` : ''}
             </Text>
           </div>
-          {v.dealers ? <Dealers d={v.dealers} T={T} /> : null}
+          <div className="kb-cb">
+            {v.dealers ? <Dealers d={v.dealers} T={T} /> : null}
+          </div>
         </div>
 
         {/* ★[OWNER 2026-09-07] 레벨 없는 «관심» — 책이 아니다.
@@ -509,9 +528,16 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
                 레벨 없는 호가 {ax.length}건 · 책에는 안 들어갑니다
               </Text>
             </div>
-            <div className="kb-axl">
+            <div className="kb-cb">
               {ax.slice(0, 24).map((e, i2) => (
-                <div className="kb-li ax" key={i2} title={`${e.d ?? ''} · ${fmtAge(T - e.t)} 전`}>
+                <div
+                  className="kb-li ax"
+                  key={i2}
+                  /* ★종목 이름을 앞에 넣는다 [2026-09-30] — `.nm` 이 «…» 로 잘리는데
+                     행의 title 이 데스크·나이뿐이라, 잘린 이름을 볼 길이 없었다
+                     (규칙 ③). 잘림을 보이게 하는 것만으로는 규칙을 지킨 게 아니다. */
+                  title={`${e.n ?? ''} · ${e.d ?? ''} · ${fmtAge(T - e.t)} 전`}
+                >
                   <span className="nm">{e.n}</span>
                   {/* ★옆색은 데스크 관례 — 매수 빨강 · 매도 파랑. 부호색(`.sr-*`)이
                       아니라 옆색(`.kb-side-*`)이다: 여기 색은 «올랐다» 가 아니라

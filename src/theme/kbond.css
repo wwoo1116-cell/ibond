@@ -12,22 +12,50 @@
 /* ★면은 `direction.css` 의 별칭을 쓴다 — 라이트/다크에서 **역할이 뒤집힌다**
  * (라이트 페이지=bgAlternate·카드=bg / 다크 페이지=bg·카드=bgElevation1).
  * `--color-*` 를 직접 못박으면 한쪽 스킴에서 위계가 사라진다. */
+/* ══ 배치 캐논 「한 화면」 [OWNER 2026-09-29 「전체 페이지 스크롤을 ban 한다고
+ *    생각하고 짜보자」] ════════════════════════════════════════════════════
+ *
+ * 규칙 넷. 아래 모든 높이 규칙이 이 넷에서 나온다.
+ *   ① **페이지는 스크롤하지 않는다.** html·body 가 넘치지 않고, 셸이 뷰포트 높이다.
+ *   ② **판(board)도 스크롤하지 않는다.** 탭을 바꿔도 바·캡션은 제자리에 있고
+ *      카드 격자가 통째로 미끄러지는 일이 없다.
+ *   ③ **스크롤은 «카드 몸통» 이 한다** — 카드 하나에 스크롤 상자 하나(`.kb-cb`).
+ *   ④ 열의 남는 높이는 **가중치로** 나눈다(`.w2`·`.w3`) · 내용이 고정인 카드는
+ *      `.fix` 로 빠진다.
+ *
+ * ★고정 `vh`·`px` 캡을 쓰지 않는다. 종전 `.kb-scroll { max-height: 58vh }` 는
+ *   1100px 화면에서 638px 을 물었는데 그 열에는 962px 이 있었다 — **제 자리보다
+ *   짧게 잘리면서 동시에 열을 넘치게** 했다(실측 2026-09-29: 크레딧 판 1,603px
+ *   넘침 · 같은 축에 슬라이더 둘). 높이는 부모가 주고 자식은 `min-height: 0` 으로
+ *   받는다. 그래야 한 곳(여기)만 알면 화면 전체가 같은 규칙으로 산다.
+ *
+ * ★바닥은 **730px** 이다 [OWNER 2026-09-29] — 1080p 에 Windows 125% 배율을 쓰면
+ *   크롬 뷰포트가 그쯤이다. 그 높이에서 어떤 열도 안 넘치도록 카드 바닥
+ *   (`--kb-card-min`)과 그림 바닥(`--kb-plot-min`)을 잡았다: 카드 넷이면
+ *   4×92 + 간격 36 = 404 < 572(그 높이의 열 높이). 그 아래로 내려가면 열이
+ *   스크롤한다 — 판이 아니라 열이다(④의 최후 수단).
+ */
+html, body { height: 100%; overflow: hidden; }
+/* 설정 화면 — 셸 밖의 유일한 «페이지» 다(백엔드에 안 닿을 때만 나온다). 위 줄이
+   페이지 스크롤을 끊었으므로 넘침을 여기서 받는다 [2026-09-30]. */
+.kb-setup { height: 100dvh; overflow-y: auto; }
 .kb-app {
+  /* dvh — 모바일 주소창이 접힐 때 100vh 는 «접히기 전» 을 가리킨다. 옛 브라우저는
+     앞줄의 100vh 로 버틴다(두 줄을 함께 두는 이유). */
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--sr-page);
   color: var(--color-fg);
+  /* 카드 바닥 = 머리 48 + 두 줄쯤. 그림 바닥은 리드아웃 22 를 뺀 그림만의 높이다. */
+  --kb-card-min: 92px;
+  --kb-plot-min: 72px;
 }
 .kb-bar {
   flex: none;
   background: var(--sr-card);
   border-bottom: 1px solid var(--color-bgLine);
-}
-.kb-feed {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
 }
 .kb-row + .kb-row {
   border-top: 1px solid var(--color-bgLine);
@@ -40,13 +68,9 @@
   padding: 28px 30px;
 }
 
-/* 피드는 세로로 쌓이는 목록이다. CDS 의 Box/Stack 은 기본이 flex 라
- * 클래스로 방향을 못 박지 않으면 행이 가로로 흐른다(실측). */
-.kb-feed {
-  display: flex;
-  flex-direction: column;
-  padding: 0 18px 12px;
-}
+/* 피드는 세로로 쌓이는 목록이다 — 방향·스크롤은 `.kb-cb` 가 준다(피드는 그것을
+ * 겸한다). 여기 남는 것은 이 목록만의 여백뿐이다. */
+.kb-feed { padding: 0 18px 12px; }
 .kb-row { flex: none; }
 
 /* ══ 옮긴 화면 셋(종목·크레딧·동향) ═══════════════════════════════════════
@@ -61,10 +85,15 @@
  * ★방향색은 데스크 관례다: 매도 파랑(--sr-down) · 매수 빨강(--sr-up).
  *   direction.css 의 뜻을 그대로 따르고 여기서 hex 를 새로 쓰지 않는다.
  */
+/* ★`align-items: start` 와 `overflow-y: auto` 를 걷었다 [2026-09-29] — 그 둘이
+   ②를 깨뜨린 자리다. start 는 열을 «내용 높이» 로 세우고, 그러면 남는 넘침을
+   판이 받는다. 이제 열은 `stretch`(기본)로 판 높이를 꽉 쓰고, 판은 안 넘친다.
+   `grid-template-rows: minmax(0, 1fr)` 가 그 한 줄에 «0 까지 줄어도 된다» 를
+   말한다 — 없으면 행이 auto 라 내용이 다시 높이를 정한다. */
 .kb-bonds, .kb-credit, .kb-trends {
   display: grid; gap: 12px; padding: 12px;
-  align-items: start; min-height: 0;
-  flex: 1 1 0; overflow-y: auto;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0; flex: 1 1 0; overflow: hidden;
   background: var(--sr-page);
 }
 .kb-bonds { grid-template-columns: 280px minmax(320px, 1fr) minmax(380px, 460px); }
@@ -76,8 +105,55 @@
   background: var(--sr-card);
   border: 1px solid var(--color-bgLine);
   overflow: hidden;
+  /* 카드 = 머리(고정) + 몸통 하나(`.kb-cb`, 스스로 스크롤). 캐논 ③. */
+  display: flex; flex-direction: column; min-height: 0;
 }
-.kb-mid, .kb-right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* 열 — 남는 높이를 카드들이 나눈다. `overflow-y: auto` 는 **최후 수단**이다:
+   730px 위에서는 발동하지 않고(위 계산), 그 아래에서만 «판 대신 열» 이 밀린다. */
+.kb-mid, .kb-right {
+  display: flex; flex-direction: column; gap: 12px;
+  min-width: 0; min-height: 0; overflow-y: auto;
+}
+/* 탄력 카드 — 기준 0 에서 가중치만큼 자란다(순수 비례 분배). 바닥은 카드 바닥.
+   ★`flex-basis: 0` 이라야 «비례» 다. auto 면 기준이 내용 높이라, 긴 카드가
+   남는 높이도 더 먹어 목록 하나가 열을 독차지한다(딜러 1,561px 이 그랬다). */
+.kb-mid > .kb-card, .kb-right > .kb-card {
+  flex: 1 1 0; min-height: var(--kb-card-min);
+}
+.kb-mid > .kb-card.w2, .kb-right > .kb-card.w2 { flex-grow: 2; }
+.kb-mid > .kb-card.w3, .kb-right > .kb-card.w3 { flex-grow: 3; }
+/* 고정 카드 — 내용이 짧고 늘 같은 높이다(요약 넷·딜러 한 줄). 늘리면 빈 면만
+   커지고, 줄이면 다 읽을 수 없다. 그래서 배분에서 빠진다. */
+.kb-mid > .kb-card.fix, .kb-right > .kb-card.fix { flex: none; min-height: 0; }
+
+/* ── 카드 몸통 [캐논 ③] ──────────────────────────────────────────────────
+ *
+ * 스크롤이 여기 «하나» 인 이유: 한 카드에 스크롤 상자가 둘이면 바퀴가 어느 쪽을
+ * 미는지 자리마다 달라지고, 읽던 자리를 잃는다. 그래서 머리·컨트롤 줄은 고정이고
+ * (`flex: none`) 나머지는 전부 이 한 상자 안에 든다.
+ *
+ * ★`min-height: 0` 이 있어야 flex 항목이 «내용보다 작게» 될 수 있다. 없으면
+ *   `min-height: auto` 가 내용 높이를 바닥으로 삼아, 스크롤 상자가 스크롤을 안 한다.
+ */
+.kb-cb {
+  flex: 1 1 0; min-height: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+}
+/* 몸통 안의 것은 제 높이를 지킨다 — 표가 눌려 행이 겹치면 안 된다. */
+.kb-cb > * { flex: 0 0 auto; }
+/* 그림만 예외다 — 남는 높이를 그림이 먹는다(칸이 커지면 그림도 커진다). */
+.kb-cb > .kb-plotwrap { flex: 1 1 0; min-height: 0; }
+
+/* ── 그림 자리 ────────────────────────────────────────────────────────────
+ * 리드아웃 한 줄(22px)은 고정, 그림이 남는 높이를 먹는다. 그림은 «제 칸을 재서»
+ * 그리므로(`useMeasure`) 카드가 커지면 표본이 더 넓게 퍼진다.
+ *
+ * ★`overflow: hidden` 이 있어야 재기와 그리기가 안 물린다 — 캔버스/SVG 가 제
+ *   높이로 상자를 다시 늘리면 «재고 → 커지고 → 다시 재고» 로 진동한다.
+ */
+.kb-plotwrap { display: flex; flex-direction: column; min-height: 0; }
+.kb-plotwrap > .sr-plot { flex: 1 1 0; min-height: var(--kb-plot-min); overflow: hidden; }
 
 /* ── 카드 머리 [v2 얼라인 5: 같은 위계의 카드 머리는 같은 패딩 리듬] ────────
  *
@@ -95,6 +171,8 @@
 .kb-ch {
   display: flex; align-items: flex-end; gap: 8px; min-height: 48px;
   padding: 12px 16px 4px;
+  /* 머리는 줄어들지 않는다 — 카드가 짧아지면 몸통이 준다(캐논 ③). */
+  flex: none;
 }
 /** 메타 — 늘 오른쪽 끝. */
 .kb-ch-meta { margin-left: auto; }
@@ -102,7 +180,6 @@
 .kb-ch-ctl { display: flex; align-items: center; gap: 4px; margin-left: 12px; }
 .kb-ch-meta ~ .kb-ch-ctl { margin-left: 12px; }
 .kb-ch:not(:has(.kb-ch-meta)) > :last-child { margin-left: auto; }
-.kb-scroll { max-height: 58vh; overflow-y: auto; overflow-x: hidden; }
 .kb-empty { padding: 18px 12px; color: var(--color-fgMuted); font-size: 13px; }
 .kb-n { color: var(--color-fgMuted); font-size: 11px; }
 
@@ -173,7 +250,6 @@
 .kb-li.ax { grid-template-columns: minmax(0, 1fr) 40px 52px 44px; }
 /* 묵은 민평 배지 [OWNER 2026-09-07] — 경고가 아니라 «사실 표시» 라 조용하게. */
 .kb-badge.stale { color: var(--color-fgMuted); border-color: var(--color-fgMuted); }
-.kb-axl { overflow-y: auto; max-height: 220px; }
 
 .kb-big { padding: 10px 12px 0; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .kb-sub { padding: 0 12px 10px; font-size: 12px; color: var(--color-fgMuted); }
@@ -266,6 +342,7 @@
 .kb-pills {
   display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px;
   border-bottom: 1px solid var(--color-bgLine);
+  flex: none;
 }
 .kb-pill {
   padding: 0 12px; height: 28px; border: 0; border-radius: 999px;
@@ -293,7 +370,7 @@
  *   그 자를 그림 위에 복사해 둔 것이다. 축 글자는 `.kb-ax` 가 진다(위). */
 
 /* ═══ 커브(잔존×YTM) 상호작용 [OWNER 2026-09-23 「인터렉션도 없고」] ═══ */
-.kb-curvewrap { position: relative; }
+/* 커브도 그림 자리 규약을 따른다 — 리드아웃 고정 + 그림이 남는 높이(위 `.kb-plotwrap`). */
 /* ★포커스 링은 **한 가지**다 [v2 `.sr-navitem:focus-visible`] — 잉크 2px.
    파랑을 쓰면 이 앱에서 그건 낱말이다(«내림»), 그리고 링 색이 자리마다 다르면
    읽는 사람이 «무엇이 지금 초점인가» 를 색으로 못 배운다. */
@@ -355,13 +432,29 @@
   background: var(--sr-up); border-radius: 0;
 }
 
+/* ── 데스크 칸 [2026-09-30] ──────────────────────────────────────────────
+ *
+ * 줄꼴 셋(`.kb-tp` 메시지 테이프 · `.kb-ev` 이벤트 · `.kb-swr` 교체 다리)이 끝칸에
+ * **데스크 이름**을 놓는다. 그 셋은 저마다 `overflow: hidden` 을 갖고 있었고
+ * «…» 가 없었다 — 이 파일이 `.kb-c` 블록에서 «진짜 금지» 라고 적어 둔 바로 그것,
+ * 소리 없이 사라지는 글자다(2026-09-30 에 네 자리를 찾았다: `.kb-tp` 둘 ·
+ * `.kb-ev` · `.kb-swr`). 이름은 서식이 아니라 자료라 어떤 폭도 모자란다.
+ *
+ * ★끝칸은 `text-align: right` 인데 «…» 는 **오른쪽**에 선다 — 실측이다
+ *   [2026-09-30, Chrome]. 글이 칸보다 길면 정렬이 무력해져 왼쪽 끝에서 시작하고,
+ *   `text-overflow` 는 줄의 «끝» 에만 붙기 때문이다. 그래서 잘리는 것은 이름의
+ *   **뒤쪽**이다(「엔에이치투자증권 채권운용…」). 처음 이 주석은 반대로 적었다가
+ *   재고 고쳤다 — 정렬을 보고 짐작한 것이었다.
+ */
+.kb-dk { min-width: 0; text-overflow: ellipsis; }
+
 /* 교체 다리 — 사다리와 같은 세 열 배치. 레벨은 신형−구형 bp 다. */
 .kb-swap { padding-bottom: 6px; }
 .kb-swr {
   display: grid; grid-template-columns: 1fr 92px 1fr; align-items: center;
   padding: 2px 12px; height: 20px; font-size: 11px;
 }
-.kb-swr .w { overflow: hidden; white-space: nowrap; }
+.kb-swr .w { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .kb-swr .w.r { text-align: right; }
 .kb-swr .lv { text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
 /* ★스왑 다리의 레벨은 **잉크**다 [2026-09-28]. 색으로 «오퍼·비드» 를 말하고
@@ -440,13 +533,13 @@
 /* 메인 = 피드 + 전일 민평 대비 */
 .kb-main {
   display: grid; grid-template-columns: minmax(520px, 1fr) minmax(420px, 480px);
-  gap: 12px; padding: 12px; align-items: start;
+  gap: 12px; padding: 12px;
+  grid-template-rows: minmax(0, 1fr);
   flex: 1 1 0; min-height: 0; overflow: hidden;
   background: var(--sr-page);
 }
-.kb-mainfeed, .kb-mainheat { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
 .kb-mainfeed .kb-feed { padding: 0 12px 8px; }
-.kb-mainheat { padding-bottom: 12px; }
+.kb-mainheat > .kb-cb { padding-bottom: 12px; }
 
 /* 히트맵 — 칸마다 둥근 상자 */
 .kb-hmwrap { padding: 10px 12px 0; }
@@ -460,7 +553,7 @@
   font-size: 11px; font-weight: 600; color: var(--color-fgMuted);
   padding: 10px 12px 4px; border-top: 1px solid var(--color-bgLine); margin-top: 6px;
 }
-.kb-scroll > .kb-sec:first-child { border-top: none; margin-top: 0; padding-top: 4px; }
+.kb-cb > .kb-sec:first-child { border-top: none; margin-top: 0; padding-top: 4px; }
 .kb-mb { font-size: 11px; color: var(--color-fgMuted); margin-left: 4px; font-weight: 500; }
 .kb-crv { margin-left: auto; display: flex; gap: 4px; }
 .kb-crv .kb-pill { padding: 2px 8px; font-size: 11px; }
@@ -505,13 +598,15 @@
 .kb-hm th.l, .kb-hm td.l { width: 96px; }
 .kb-hm td.l .g { margin-left: 5px; }
 /* 메인 피드는 카드 안에서 스스로 스크롤한다 */
-.kb-mainfeed { overflow: hidden; }
-.kb-mainfeed .kb-feed { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+/* (피드의 스크롤·방향은 `.kb-cb` 가 준다 — 피드가 그 몸통을 겸한다.) */
 
 /* 피드 필터 줄 — 옛 화면 둘째 줄. 고른 것은 진한 알약. */
 .kb-filt {
   display: flex; gap: 6px; padding: 8px 12px;
   border-bottom: 1px solid var(--color-bgLine);
+  /* 컨트롤 줄은 줄어들지 않는다 — 카드가 짧아지면 몸통이 준다(캐논 ③).
+     `.kb-ch`·`.kb-pills` 와 같은 규약인데 여기만 빠져 있었다 [2026-09-30]. */
+  flex: none;
 }
 /* ★알약은 한 문법이다 [v2 `.sr-pillbtn`] — 바탕 없는 스타디움, 호버는 면,
    **켜짐은 잉크 반전**. 종전에는 필터가 «페이지 톤 → 잉크 반전», 분류가
@@ -620,11 +715,35 @@
 .kb-dld .codes .kb-badge { margin-left: 0; }
 .kb-dld .codes .kb-badge b { margin-left: 4px; color: var(--color-fg); }
 
-/* 하단 캡션 */
+/* ── 하단 캡션 [OWNER 2026-09-29 「한 줄 + ⓘ 눌러 펴기」] ──────────────────
+ *
+ * 종전에는 어느 화면에서든 **74px** 을 물었다(실측) — 730px 화면의 10%, 표로 치면
+ * 여섯 줄이다. 읽는 법을 적은 도움글이라 매일 읽지 않는데 매일 그 자리를 먹었다.
+ * 그래서 첫 줄만 서고(22px) 나머지는 접힌다. 지우지는 않는다: «화면이 읽는 법을
+ * 스스로 말한다» 는 자리이고, 단가 잠정 규약 경고도 여기 산다.
+ *
+ * ★펴면 판이 그만큼 준다(캡션은 판과 같은 셸의 형제다) — 판은 여전히 안 넘친다.
+ *   전문이 길어도 셸을 밀지 않도록 캡션은 절반을 넘지 않고, 넘치면 전문이 스크롤한다.
+ */
 .kb-foot {
-  flex: none; padding: 10px 18px; font-size: 11px; line-height: 1.6;
+  flex: none; max-height: 50%; min-height: 0;
+  display: flex; flex-direction: column;
+  font-size: 11px; line-height: 1.6;
   color: var(--color-fgMuted); background: var(--sr-page);
   border-top: 1px solid var(--color-bgLine);
+}
+/* 한 줄 — 단추다(눌러 펴는 것이라 «누를 수 있음» 이 글자에 보여야 한다). */
+.kb-foot > .ln {
+  flex: none; display: flex; align-items: center; gap: 6px;
+  padding: 4px 18px; border: 0; background: transparent; cursor: pointer;
+  font: inherit; color: inherit; text-align: left;
+}
+.kb-foot > .ln:hover { color: var(--color-fg); }
+.kb-foot > .ln .i { flex: none; font-size: 12px; }
+/* 전문 — 펴진 동안만 있다. 자기 스크롤을 가진다(캐논 ③의 몸통과 같은 이유). */
+.kb-foot > .full {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 2px 18px 10px;
 }
 
 /* ══ 피드 표 [OWNER 2026-09-22 「문장 형태가 아니라 표로」] ═══════════════════

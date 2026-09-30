@@ -156,9 +156,60 @@ describe('말줄임 — 조용한 잘림만 금지', () => {
    * 규칙이 금지하는 것은 **소리 없이 사라지는 글자**다. 이름처럼 «서식이 아니라
    * 자료» 인 칸은 어떤 폭도 모자랄 수 있어서, 셋을 함께 갖추면 지킨 것으로 본다:
    * 실측 최대치까지 넓히고 · «…» 로 잘렸음을 보이고 · `title` 이 전체를 준다.
+   *
+   * ★이 묶음은 2026-09-30 에 **거꾸로 서 있었다**. 「말줄임이 허용 칸에만 있나」와
+   *   「허용 칸에 title 이 있나」만 물었고 — 둘 다 **예외 목록**을 재는 질문이다 —
+   *   정작 금지 대상인 「«…» 없이 잘리는 칸이 있나」는 묻지 않았다. 그래서 초록
+   *   아래에 다섯 자리가 살아 있었다(`.kb-tp` 의 데스크 둘·원문 둘 · `.kb-ev` 의
+   *   데스크 · `.kb-swr` 의 다리 · `.kb-li .nm` 은 «…» 는 보이는데 전문이 없었다).
+   *   아래 첫 시험이 그 질문이다 — 목록이 아니라 **CSS 전체**를 훑는다.
    */
-  const NAME_CELLS = ['.kb-c.n', '.kb-c.who', '.kb-c.h', '.kb-c.raw', '.kb-c.mat',
-    '.kb-li .nm', '.kb-tp > .kb-tpr', '.kb-evt', '.kb-tbl td.nm'];
+
+  /** 잘리는 칸 = `overflow: hidden` + `white-space: nowrap`. */
+  const clippers = (css: string) => {
+    const out: { sel: string; body: string }[] = [];
+    for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const body = m[2];
+      if (!/overflow(-x)?:\s*hidden/.test(body)) continue;
+      if (!/white-space:\s*nowrap/.test(body)) continue;
+      out.push({ sel: m[1].trim(), body });
+    }
+    return out;
+  };
+
+  /**
+   * 「무리 클리퍼」 — 칸 여럿을 한 번에 자르는 규칙. 자기 몸에 «…» 가 없어도 되지만,
+   * **자르는 칸마다** «…» 를 가진 자식 규칙을 여기 적어야 한다. 숫자 칸은 서식
+   * 최대치로 맞췄으니 자를 일이 없다(규칙 ①) — 그래서 이름 칸만 적는다.
+   */
+  const GROUPS: Record<string, string[]> = {
+    '.kb-c': ['.kb-c.n', '.kb-c.who', '.kb-c.h', '.kb-c.raw', '.kb-c.mat'],
+    '.kb-li > span': ['.kb-li .nm'],
+    '.kb-tp > *': ['.kb-tp > .kb-tpr', '.kb-dk'],
+    '.kb-ev > *': ['.kb-evt', '.kb-dk'],
+  };
+
+  it('«…» 없이 잘리는 칸이 없다 — 규칙 쪽에서 묻는다', () => {
+    const css = stripComments(read(path.relative(ROOT, KBOND_CSS)));
+    const ell = new Set(
+      [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+        .filter((m) => /text-overflow:\s*ellipsis/.test(m[2]))
+        .flatMap((m) => m[1].split(',').map((one) => one.trim())),
+    );
+    const bad: string[] = [];
+    for (const { sel, body } of clippers(css)) {
+      if (/text-overflow:\s*ellipsis/.test(body)) continue; /* 스스로 지킨다 */
+      const kids = GROUPS[sel];
+      if (!kids) {
+        bad.push(`  ${sel} — «…» 도 없고 GROUPS 등록도 없다`);
+        continue;
+      }
+      for (const k of kids) {
+        if (!ell.has(k)) bad.push(`  ${sel} → ${k} — 등록됐는데 «…» 규칙이 없다`);
+      }
+    }
+    expect(bad, `조용히 잘리는 칸 — ${bad.join(' | ')}`).toEqual([]);
+  });
 
   it('말줄임은 이름 칸에만 있다', () => {
     const css = stripComments(read(path.relative(ROOT, KBOND_CSS)));
@@ -166,16 +217,97 @@ describe('말줄임 — 조용한 잘림만 금지', () => {
     for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
       if (/text-overflow:\s*ellipsis/.test(m[2])) sels.push(m[1].trim());
     }
-    const unknown = sels.filter((s) => !s.split(',').every((one) => NAME_CELLS.includes(one.trim())));
+    const allowed = [...new Set(Object.values(GROUPS).flat())].concat([
+      /* 스스로 자르고 스스로 «…» 를 갖는 칸들. */
+      '.kb-tbl td.nm', '.kb-swr .w', '.kb-dk',
+    ]);
+    const unknown = sels.filter((s) => !s.split(',').every((one) => allowed.includes(one.trim())));
     expect(unknown, `허용 밖의 말줄임: ${unknown.join(' | ')}`).toEqual([]);
   });
 
-  it('잘리는 칸은 title 로 전체를 준다', () => {
-    const all = tsxAll();
-    for (const cls of ['kb-c n', 'kb-c who', 'kb-c h', 'kb-c raw', 'l nm']) {
-      const re = new RegExp(`className="${cls}"[^>]*title=`);
-      expect(re.test(all), `${cls} 에 title 이 없다 — 잘리면 전체를 볼 길이 없다`).toBe(true);
+  /**
+   * 규칙 ③ — 잘린 칸은 «마우스를 올리면 전체가 뜬다».
+   *
+   * 칸 자신이 `title` 을 가지거나, 행이 갖고 **그 title 이 이 칸의 자료를 담아야**
+   * 한다. 셋째 조건이 없으면 초록인데도 이름을 볼 길이 없다 — `.kb-li .nm` 이
+   * 그랬다(행 title 이 데스크·나이뿐이라 종목 이름만 빠졌다).
+   */
+  /**
+   * 여는 태그를 «자리마다» 집는다. 존재 검사(`정규식.test(전체)`)로는 안 된다 —
+   * 같은 클래스가 여러 파일에 있으면 한 자리만 지켜도 초록이 된다(2026-09-30 에
+   * 이 시험의 첫 판이 바로 그랬다: `.kb-dk` 의 title 을 한 곳에서 떼도 통과했다).
+   */
+  const tags = (src: string, cls: string): string[] => {
+    /* ★«낱말» 로 맞춘다 — 문자열이 꼭 같아야 잡던 첫 판은 `className="l nm kb-n"`
+       (크레딧 종류 칸)을 놓쳤다. 칸에 클래스가 하나 더 붙었다고 규칙 밖이 되면
+       자가 아니다. */
+    const want = cls.split(' ');
+    const out: string[] = [];
+    const re = /className="([^"]*)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      const have = m[1].split(' ');
+      if (!want.every((c) => have.includes(c))) continue;
+      const lt = src.lastIndexOf('<', m.index);
+      let depth = 0;
+      let end = m.index;
+      for (let q = lt; q < src.length; q++) {
+        const ch = src[q];
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+        else if (ch === '>' && depth === 0) { end = q; break; }
+      }
+      out.push(src.slice(lt, end + 1));
     }
+    return out;
+  };
+
+  /** CSS 에서 «…» 를 받는 칸 ↔ JSX 가 그 칸에 붙이는 클래스. */
+  const TITLED: { what: string; cls: string }[] = [
+    { what: '.kb-c.n', cls: 'kb-c n' },
+    { what: '.kb-c.who', cls: 'kb-c who' },
+    { what: '.kb-c.h', cls: 'kb-c h' },
+    { what: '.kb-c.raw', cls: 'kb-c raw' },
+    { what: '.kb-c.mat', cls: 'kb-c num mat' },
+    { what: '.kb-tbl td.nm', cls: 'l nm' },
+    { what: '.kb-tp > .kb-tpr', cls: 'kb-tpr' },
+    { what: '.kb-dk', cls: 'kb-n kb-dk' },
+    { what: '.kb-swr .w', cls: 'w' },
+    { what: '.kb-swr .w.r', cls: 'w r' },
+    /* 이벤트 문장·사다리 이름은 **행** 이 title 을 진다 — 그 title 이 칸의 식을
+       담는지까지 본다(다음 시험). */
+  ];
+
+  it('잘리는 칸은 자리마다 title 로 전체를 준다', () => {
+    const bad: string[] = [];
+    for (const f of walk(SRC, ['.tsx']).map(rel)) {
+      const src = read(f);
+      for (const { what, cls } of TITLED) {
+        tags(src, cls).forEach((t) => {
+          if (!/\stitle=/.test(t)) bad.push(`  ${f}  ${what}  ${t.replace(/\s+/g, ' ').slice(0, 90)}`);
+        });
+      }
+    }
+    expect(bad, `title 없이 잘리는 자리 — ${bad.join(' || ')}`).toEqual([]);
+  });
+
+  it('«…» 를 받는 칸은 JSX 에 실제로 있다', () => {
+    /* 위 시험은 «없으면 통과» 다(자리가 0 이면 셀 게 없다). 그래서 자리 수를 따로 센다 —
+       클래스 이름이 바뀌면 이 시험이 먼저 빨개진다. */
+    const all = tsxAll();
+    const gone = TITLED.filter(({ cls }) => tags(all, cls).length === 0).map((t) => t.what);
+    expect(gone, `CSS 는 «…» 를 주는데 JSX 에 그 칸이 없다: ${gone.join(', ')}`).toEqual([]);
+  });
+
+  it('행이 title 을 지는 칸은 그 행 title 이 칸의 자료를 담는다', () => {
+    const all = tsxAll();
+    /* 사다리 관심 줄 — 칸은 `{e.n}`, 행 title 은 그것을 담아야 한다. */
+    const ax = all.match(/className="kb-li ax"[\s\S]{0,400}?title=\{`([^`]*)`\}/);
+    expect(ax, '.kb-li ax 행에 title 이 없다').not.toBeNull();
+    expect(ax![1], `.kb-li ax 의 title 에 종목 이름(e.n)이 없다: ${ax![1]}`).toContain('e.n');
+    /* 이벤트 줄 — 칸과 행이 같은 식(`evText(e)`)이라야 툴팁이 그 문장이다. */
+    expect(/className="kb-ev"[^>]*title=\{evText\(e\)\}/.test(all), '.kb-ev 행 title 이 evText 가 아니다').toBe(true);
+    expect(/className="kb-evt">\{evText\(e\)\}/.test(all), '.kb-evt 칸이 evText 가 아니다').toBe(true);
   });
 });
 

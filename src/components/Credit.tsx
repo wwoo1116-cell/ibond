@@ -146,7 +146,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
             </button>
           ))}
         </div>
-        <div className="kb-scroll">
+        <div className="kb-cb">
           {shown.map((b) => (
             <button
               key={b.k}
@@ -195,7 +195,7 @@ export function Credit({ ttl, onTtl, feed = [] }: {
       </div>
 
       <div className="kb-mid">
-        <div className="kb-card">
+        <div className="kb-card w3">
           <div className="kb-ch">
             <Text as="span" font="label2">커브</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
@@ -216,89 +216,104 @@ export function Credit({ ttl, onTtl, feed = [] }: {
               ))}
             </div>
           </div>
-          {v.curve ? (
-            <Curve curve={v.curve} grade={v.grade_curve} range={crv} />
-          ) : (
-            <div className="kb-empty">커브가 없습니다</div>
-          )}
+          <div className="kb-cb">
+            {v.curve ? (
+              <Curve curve={v.curve} grade={v.grade_curve} range={crv} />
+            ) : (
+              <div className="kb-empty">커브가 없습니다</div>
+            )}
+          </div>
         </div>
 
-        <div className="kb-card">
+        <div className="kb-card w2">
           <div className="kb-ch">
             <Text as="span" font="label2">히트맵</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">종별 × 잔존 · 중앙 민평대비</Text>
           </div>
-          {v.heat ? <Heat heat={v.heat} /> : null}
+          <div className="kb-cb">
+            {v.heat ? <Heat heat={v.heat} /> : null}
+          </div>
         </div>
 
-        <div className="kb-card">
+        <div className="kb-card w2">
           <div className="kb-ch">
             <Text as="span" font="label2">매수 니즈</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">{needs.length}건</Text>
           </div>
-          {needs.length ? (
-            <table className="kb-tbl">
-              <ColGroup cols={TABLES.needs} />
-              <thead>
-                <tr>
-                  <th className="l">딜러</th>
-                  <th className="l">종별</th>
-                  <th>잔존</th>
-                  <th>수량</th>
-                  <th>기준</th>
-                </tr>
-              </thead>
-              <tbody>
-                {needs.slice(0, 40).map((b, i) => (
-                  <tr key={i}>
-                    <td className="l">{b.d}</td>
-                    <td className="l kb-n">
-                      {b.sec ?? '전체'}
-                      {b.rt ? ` ${b.rt}` : ''}
-                    </td>
-                    <td className="num kb-n">
-                      {b.lo != null && b.hi != null ? fmtTtmRange(b.lo, b.hi) : ''}
-                    </td>
-                    <td className="num">{fmtLot(b.a)}</td>
-                    <td className="num kb-n">
-                      {b.bo
-                        ? `${(b.bo as { n?: string }).n ?? ''} ${fmtBpUnit((b.bo as { bp?: number }).bp)}`
-                        : ''}
-                    </td>
+          <div className="kb-cb">
+            {needs.length ? (
+              <table className="kb-tbl">
+                <ColGroup cols={TABLES.needs} />
+                <thead>
+                  <tr>
+                    <th className="l">딜러</th>
+                    <th className="l">종별</th>
+                    <th>잔존</th>
+                    <th>수량</th>
+                    <th>기준</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="kb-empty">
-              {govSel ? '국고·통안에는 바스켓이 없습니다' : '살아 있는 니즈가 없습니다'}
-            </div>
-          )}
+                </thead>
+                <tbody>
+                  {needs.slice(0, 40).map((b, i) => {
+                    /* 종류는 «서식» 처럼 보이지만 자료다 — 여러 섹터를 파이프로 이어
+                       붙이기 때문에(「회사채|은행채|공사채」 102px 대 칸 85px, 실측
+                       2026-09-30) 어떤 폭도 모자랄 수 있다. 그래서 이름 칸 규약을
+                       따른다: 폭은 서식 최대치로 두고 · «…» 로 잘림을 보이고 ·
+                       `title` 이 전체를 준다. 한 문장을 둘에 쓰려고 변수로 뽑는다. */
+                    const kind = `${b.sec ?? '전체'}${b.rt ? ` ${b.rt}` : ''}`;
+                    return (
+                    <tr key={i}>
+                      <td className="l">{b.d}</td>
+                      <td className="l nm kb-n" title={kind}>
+                        {kind}
+                      </td>
+                      <td className="num kb-n">
+                        {b.lo != null && b.hi != null ? fmtTtmRange(b.lo, b.hi) : ''}
+                      </td>
+                      <td className="num">{fmtLot(b.a)}</td>
+                      <td className="num kb-n">
+                        {b.bo
+                          ? `${(b.bo as { n?: string }).n ?? ''} ${fmtBpUnit((b.bo as { bp?: number }).bp)}`
+                          : ''}
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className="kb-empty">
+                {govSel ? '국고·통안에는 바스켓이 없습니다' : '살아 있는 니즈가 없습니다'}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="kb-card">
+        <div className="kb-card w2">
           <div className="kb-ch">
             <Text as="span" font="label2">메시지</Text>
             <Text as="span" font="legal" color="fgMuted">
               {govSel ? cls : '크레딧'} 전체 {fmtCount(tape.length)}건
             </Text>
           </div>
-          {tape.length ? (
-            <div className="kb-scroll">
-              {tape.map((e) => (
-                <div className="kb-tp" key={e.i}>
-                  <span className="kb-n">{fmtHms(e.t)}</span>
-                  <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
-                    {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
-                  </span>
-                  <span className="kb-tpr">{e.raw}</span>
-                  <span className="kb-n">{e.d}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="kb-empty">아직 {govSel ? cls : '크레딧'} 메시지가 없습니다</div>
-          )}
+          <div className="kb-cb">
+            {tape.length ? (
+              <>
+                {tape.map((e) => (
+                  <div className="kb-tp" key={e.i}>
+                    <span className="kb-n">{fmtHms(e.t)}</span>
+                    <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
+                      {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
+                    </span>
+                    <span className="kb-tpr" title={e.raw ?? undefined}>{e.raw}</span>
+                    <span className="kb-n kb-dk" title={e.d ?? undefined}>{e.d}</span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="kb-empty">아직 {govSel ? cls : '크레딧'} 메시지가 없습니다</div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -347,97 +362,99 @@ export function Credit({ ttl, onTtl, feed = [] }: {
               </select>
             ) : null}
           </div>
-          {offers.length ? (
-            <table className="kb-tbl">
-              <ColGroup cols={TABLES.offers} />
-              <thead>
-                <tr>
-                  <th className="l">종목</th>
-                  <th>잔존</th>
-                  <th>민평대비</th>
-                  <th title={cmTitle}>커브반영</th>
-                  <th>YTM</th>
-                  <th>수량</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lvl.slice(0, 60).map((e, i) => (
-                  /* ★순위는 칸을 안 쓴다 — 표는 이미 여섯 칸이고 일곱째를 내면
-                      종목 이름이 «…» 만 남는다. 무리의 **1위에만 배지**를 달고
-                      나머지 순위는 줄 툴팁이 진다: 훑는 눈에는 «여기» 하나면 되고,
-                      따져 볼 때는 마우스를 올린다. */
-                  <tr
-                    key={i}
-                    title={[e.d ?? '', e.pk && e.pn ? `${e.pk} ${e.pn}개 중 ${e.pr}위` : '']
-                      .filter(Boolean).join(' · ') || undefined}
-                  >
-                    <td className="l nm" title={e.n ?? undefined}>
-                      {e.n}
-                      {e.pr === 1 ? <b className="kb-badge best">1위</b> : null}
-                    </td>
-                    <td className="num kb-n">{fmtTtm(e.ttm)}</td>
-                    {/* «민평에 팔자» 는 +0.0bp 가 아니라 «민평» 으로 읽어야 한다 —
-                        0.0 으로 쓰면 딜러가 정확히 0 을 부른 것처럼 보인다 [OWNER 2026-09-07] */}
-                    {/* ★방향색은 **한 칸에만** 준다 [2026-09-28].
-                        두 칸이 나란히 붉고 푸르면 눈이 둘 다 읽어야 하고, 그러면
-                        어느 쪽이 «읽는 수» 인지 화면이 말하지 않는 셈이 된다.
-                        왼쪽은 문면에서 든 값이라 잉크, 오른쪽이 판단할 값이다. */}
-                    <td className={`num${e.atmp ? ' kb-n' : ''}`}>
-                      {e.atmp ? (
-                        '민평'
-                      ) : e.bpe != null ? (
-                        <Delta v={e.bpe} unit="bp" ink />
-                      ) : e.won != null ? (
-                        <Delta v={e.won} unit="원" ink />
-                      ) : (
-                        ''
-                      )}
-                    </td>
-                    {/* 뺄 수 없으면 «—» 다(0 이 아니다) — 닻 밖이거나 닻이 모자란다.
-                        `title` 이 그 줄에서 실제로 뺀 양을 말한다. */}
-                    <td
-                      className="num"
-                      title={
-                        e.bpc != null && e.cmv != null
-                          ? `${fmtBp(e.bpe)} − (커브 ${fmtBp(e.cmv)}) = ${fmtBp(e.bpc)}bp`
-                          : cmOn
-                            ? '닻이 덮는 잔존 밖입니다'
-                            : undefined
-                      }
-                    >
-                      {e.bpc != null ? <Delta v={e.bpc} /> : EMDASH}
-                    </td>
-                    <td className={`num${e.lvl === 'est' ? ' kb-n' : ''}`}>
-                      {fmtYield(e.ytm)}
-                      {e.lvl && e.lvl !== 'quoted' ? (
-                        <b className="kb-badge">{e.lvl === 'conv' ? '환산' : '추정'}</b>
-                      ) : null}
-                    </td>
-                    <td className="num">{fmtLot(e.a)}</td>
-                  </tr>
-                ))}
-                {noLvl.length ? (
+          <div className="kb-cb">
+            {offers.length ? (
+              <table className="kb-tbl">
+                <ColGroup cols={TABLES.offers} />
+                <thead>
                   <tr>
-                    <td colSpan={6} className="l kb-n" style={{ paddingTop: 8 }}>
-                      ── 레벨 미상 (결과금리 없음) ──
-                    </td>
+                    <th className="l">종목</th>
+                    <th>잔존</th>
+                    <th>민평대비</th>
+                    <th title={cmTitle}>커브반영</th>
+                    <th>YTM</th>
+                    <th>수량</th>
                   </tr>
-                ) : null}
-                {noLvl.slice(0, 30).map((e, i) => (
-                  <tr key={`x${i}`} className="mut">
-                    <td className="l nm" title={e.n ?? undefined}>{e.n}</td>
-                    <td className="num kb-n">{fmtTtm(e.ttm)}</td>
-                    <td className="num kb-n">{e.won != null ? <Delta v={e.won} unit="원" ink /> : ''}</td>
-                    <td className="num kb-n">{EMDASH}</td>
-                    <td className="num kb-n">{EMDASH}</td>
-                    <td className="num kb-n">{fmtLot(e.a)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="kb-empty">살아 있는 오퍼가 없습니다</div>
-          )}
+                </thead>
+                <tbody>
+                  {lvl.slice(0, 60).map((e, i) => (
+                    /* ★순위는 칸을 안 쓴다 — 표는 이미 여섯 칸이고 일곱째를 내면
+                        종목 이름이 «…» 만 남는다. 무리의 **1위에만 배지**를 달고
+                        나머지 순위는 줄 툴팁이 진다: 훑는 눈에는 «여기» 하나면 되고,
+                        따져 볼 때는 마우스를 올린다. */
+                    <tr
+                      key={i}
+                      title={[e.d ?? '', e.pk && e.pn ? `${e.pk} ${e.pn}개 중 ${e.pr}위` : '']
+                        .filter(Boolean).join(' · ') || undefined}
+                    >
+                      <td className="l nm" title={e.n ?? undefined}>
+                        {e.n}
+                        {e.pr === 1 ? <b className="kb-badge best">1위</b> : null}
+                      </td>
+                      <td className="num kb-n">{fmtTtm(e.ttm)}</td>
+                      {/* «민평에 팔자» 는 +0.0bp 가 아니라 «민평» 으로 읽어야 한다 —
+                          0.0 으로 쓰면 딜러가 정확히 0 을 부른 것처럼 보인다 [OWNER 2026-09-07] */}
+                      {/* ★방향색은 **한 칸에만** 준다 [2026-09-28].
+                          두 칸이 나란히 붉고 푸르면 눈이 둘 다 읽어야 하고, 그러면
+                          어느 쪽이 «읽는 수» 인지 화면이 말하지 않는 셈이 된다.
+                          왼쪽은 문면에서 든 값이라 잉크, 오른쪽이 판단할 값이다. */}
+                      <td className={`num${e.atmp ? ' kb-n' : ''}`}>
+                        {e.atmp ? (
+                          '민평'
+                        ) : e.bpe != null ? (
+                          <Delta v={e.bpe} unit="bp" ink />
+                        ) : e.won != null ? (
+                          <Delta v={e.won} unit="원" ink />
+                        ) : (
+                          ''
+                        )}
+                      </td>
+                      {/* 뺄 수 없으면 «—» 다(0 이 아니다) — 닻 밖이거나 닻이 모자란다.
+                          `title` 이 그 줄에서 실제로 뺀 양을 말한다. */}
+                      <td
+                        className="num"
+                        title={
+                          e.bpc != null && e.cmv != null
+                            ? `${fmtBp(e.bpe)} − (커브 ${fmtBp(e.cmv)}) = ${fmtBp(e.bpc)}bp`
+                            : cmOn
+                              ? '닻이 덮는 잔존 밖입니다'
+                              : undefined
+                        }
+                      >
+                        {e.bpc != null ? <Delta v={e.bpc} /> : EMDASH}
+                      </td>
+                      <td className={`num${e.lvl === 'est' ? ' kb-n' : ''}`}>
+                        {fmtYield(e.ytm)}
+                        {e.lvl && e.lvl !== 'quoted' ? (
+                          <b className="kb-badge">{e.lvl === 'conv' ? '환산' : '추정'}</b>
+                        ) : null}
+                      </td>
+                      <td className="num">{fmtLot(e.a)}</td>
+                    </tr>
+                  ))}
+                  {noLvl.length ? (
+                    <tr>
+                      <td colSpan={6} className="l kb-n" style={{ paddingTop: 8 }}>
+                        ── 레벨 미상 (결과금리 없음) ──
+                      </td>
+                    </tr>
+                  ) : null}
+                  {noLvl.slice(0, 30).map((e, i) => (
+                    <tr key={`x${i}`} className="mut">
+                      <td className="l nm" title={e.n ?? undefined}>{e.n}</td>
+                      <td className="num kb-n">{fmtTtm(e.ttm)}</td>
+                      <td className="num kb-n">{e.won != null ? <Delta v={e.won} unit="원" ink /> : ''}</td>
+                      <td className="num kb-n">{EMDASH}</td>
+                      <td className="num kb-n">{EMDASH}</td>
+                      <td className="num kb-n">{fmtLot(e.a)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="kb-empty">살아 있는 오퍼가 없습니다</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

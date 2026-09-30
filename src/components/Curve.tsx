@@ -109,9 +109,14 @@ export function Curve({ curve, grade, range }: {
   /* ★실제 픽셀로 그린다 [2026-09-28] — 종전에는 560×260 `viewBox` 를 CSS 로 늘려
      그렸고, 그러면 11px 글꼴과 61px 축 폭이 카드 폭에 따라 같이 늘어난다. 축
      글자가 카드마다 다른 크기가 되면 그건 «같은 문법» 이 아니다. */
-  const [wrapRef, wrapW] = useMeasure<HTMLDivElement>();
+  const [wrapRef, wrapW, wrapH] = useMeasure<HTMLDivElement>();
   const W = Math.max(320, wrapW || 560);
-  const H = 240;
+  /* 그림 높이는 **카드가 준다** [2026-09-29 「한 화면」]. 종전에는 상수였고, 그러면
+   * 카드가 커져도 그림은 그대로이고 카드가 작아지면 그림이 카드를 밀어냈다.
+   * 이제 `.sr-plot` 이 남는 높이를 먹고(`kbond.css` 의 `.kb-plotwrap`), 그림은 그
+   * 칸을 재서 그린다. 상수는 **첫 프레임의 기본값**으로만 남는다 — 재기 전 한 번은
+   * 0 이고, 0 으로 그리면 라이브러리가 캔버스를 안 만든다. */
+  const H = Math.max(72, wrapH || 240);
   /* 오른쪽 축 폭은 시세·맥박(캔버스)과 **같은 수**를 쓴다 — 두 그림이 한 화면에
      서면 플롯의 오른쪽 끝이 어긋나 보인다. */
   const pad = { l: 8, r: CROSSHAIR_LABEL_MIN_W, t: 12, b: 24 };
@@ -249,7 +254,7 @@ export function Curve({ curve, grade, range }: {
   }
 
   return (
-    <div className="kb-curvewrap" ref={wrapRef}>
+    <div className="kb-plotwrap">
       {/* ★범례를 흡수한 한 줄 — 견본(그려진 색)·이름·값이 한 자리에 있다
           [v2 §8.5b]. 커서가 그림 밖이면 «가장 긴 잔존» 을 읽는다: 빈 상태가
           없으므로 줄이 생겼다 사라지며 그림 높이를 흔드는 일이 없다. */}
@@ -258,65 +263,67 @@ export function Curve({ curve, grade, range }: {
         slots={slots}
         change={r?.bpe == null ? undefined : { label: '민평 대비', text: fmtBpUnit(r.bpe), v: r.bpe }}
       />
-      <svg
-        ref={svgRef}
-        className="kb-curve"
-        width={W}
-        height={H}
-        viewBox={`0 0 ${W} ${H}`}
-        role="application"
-        tabIndex={0}
-        aria-label={`잔존 대 YTM 산점도. 점 ${pts.length}개. 화살표 키로 점을 옮깁니다.`}
-        onPointerMove={onMove}
-        onPointerLeave={() => setHot(null)}
-        onKeyDown={onKey}
-      >
-        {/* ★격자가 없다 — 눈금이 곧 자다(v2 `canonOptions.grid`). */}
-        {yTicks.map((y) => (
-          <text key={`y${y}`} x={W - pad.r + 6} y={py(y) + 3} className="kb-ax">
-            {fmtAxis(y)}
-          </text>
-        ))}
-        {xTicks.map((x) => (
-          <text key={`x${x.y}`} x={px(x.y)} y={H - 7} className="kb-ax" textAnchor="middle">
-            {x.label}
-          </text>
-        ))}
-        {path ? <path d={path} className="kb-mpline" /> : null}
-        {gradePath ? <path d={gradePath} className="kb-gradeline" /> : null}
-        {pts.map((q, i) =>
-          q.ttm == null || q.ytm == null ? null : (
-            <circle
-              key={i}
-              cx={px(q.ttm)}
-              cy={py(q.ytm)}
-              r={i === hot ? 5 : 3}
-              className={`kb-pt ${q.bpe == null ? '' : q.bpe < 0 ? 'dn' : 'up'}${
-                i === hot ? ' on' : ''
-              }`}
-            />
-          ),
-        )}
-        {/* ★십자선은 **세로만** 긋고 자리는 축 칩이 말한다 — 캔버스 차트의
-            `crosshair.horzLine.visible: false, labelVisible: true` 와 같은 그림이다.
-            가로로 그림을 가로지르는 선은 «그림 위에 덧대는 것» 이고, 이번에
-            말풍선을 걷은 것과 같은 계열이다. */}
-        {p ? (
-          <g>
-            <line className="kb-xh" x1={hx} x2={hx} y1={pad.t} y2={H - pad.b} />
-            <g className="kb-xl">
-              <rect x={W - pad.r + 2} y={hy - 8} width={pad.r - 4} height={16} rx={2} />
-              <text x={W - pad.r + 6} y={hy + 3}>{fmtAxis(p.ytm ?? 0)}</text>
+      <div className="sr-plot" ref={wrapRef}>
+        <svg
+          ref={svgRef}
+          className="kb-curve"
+          width={W}
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          role="application"
+          tabIndex={0}
+          aria-label={`잔존 대 YTM 산점도. 점 ${pts.length}개. 화살표 키로 점을 옮깁니다.`}
+          onPointerMove={onMove}
+          onPointerLeave={() => setHot(null)}
+          onKeyDown={onKey}
+        >
+          {/* ★격자가 없다 — 눈금이 곧 자다(v2 `canonOptions.grid`). */}
+          {yTicks.map((y) => (
+            <text key={`y${y}`} x={W - pad.r + 6} y={py(y) + 3} className="kb-ax">
+              {fmtAxis(y)}
+            </text>
+          ))}
+          {xTicks.map((x) => (
+            <text key={`x${x.y}`} x={px(x.y)} y={H - 7} className="kb-ax" textAnchor="middle">
+              {x.label}
+            </text>
+          ))}
+          {path ? <path d={path} className="kb-mpline" /> : null}
+          {gradePath ? <path d={gradePath} className="kb-gradeline" /> : null}
+          {pts.map((q, i) =>
+            q.ttm == null || q.ytm == null ? null : (
+              <circle
+                key={i}
+                cx={px(q.ttm)}
+                cy={py(q.ytm)}
+                r={i === hot ? 5 : 3}
+                className={`kb-pt ${q.bpe == null ? '' : q.bpe < 0 ? 'dn' : 'up'}${
+                  i === hot ? ' on' : ''
+                }`}
+              />
+            ),
+          )}
+          {/* ★십자선은 **세로만** 긋고 자리는 축 칩이 말한다 — 캔버스 차트의
+              `crosshair.horzLine.visible: false, labelVisible: true` 와 같은 그림이다.
+              가로로 그림을 가로지르는 선은 «그림 위에 덧대는 것» 이고, 이번에
+              말풍선을 걷은 것과 같은 계열이다. */}
+          {p ? (
+            <g>
+              <line className="kb-xh" x1={hx} x2={hx} y1={pad.t} y2={H - pad.b} />
+              <g className="kb-xl">
+                <rect x={W - pad.r + 2} y={hy - 8} width={pad.r - 4} height={16} rx={2} />
+                <text x={W - pad.r + 6} y={hy + 3}>{fmtAxis(p.ytm ?? 0)}</text>
+              </g>
+              <g className="kb-xl">
+                <rect x={Math.max(0, hx - 20)} y={H - pad.b + 1} width={40} height={15} rx={2} />
+                <text x={Math.max(20, hx)} y={H - pad.b + 12} textAnchor="middle">
+                  {fmtTtm(p.ttm)}
+                </text>
+              </g>
             </g>
-            <g className="kb-xl">
-              <rect x={Math.max(0, hx - 20)} y={H - pad.b + 1} width={40} height={15} rx={2} />
-              <text x={Math.max(20, hx)} y={H - pad.b + 12} textAnchor="middle">
-                {fmtTtm(p.ttm)}
-              </text>
-            </g>
-          </g>
-        ) : null}
-      </svg>
+          ) : null}
+        </svg>
+      </div>
     </div>
   );
 }

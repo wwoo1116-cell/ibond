@@ -47,12 +47,16 @@ export function Setup({
     }
   }
 
+  /* ★`className` 으로 스크롤을 준다 [2026-09-30] — 「한 화면」 레인에서
+     `html, body { overflow: hidden }` 을 켠 뒤로 이 화면은 셸 밖의 «페이지» 다.
+     오류문이 붙어 세로가 모자라면 갈 길이 없어 **조용히 잘린다**. 판이 아니라
+     이 상자가 밀리게 한다(캐논 ④ 의 최후 수단과 같은 판단). */
   return (
     <Box
+      className="kb-setup"
       display="flex"
       alignItems="center"
       justifyContent="center"
-      height="100vh"
       paddingX={4}
     >
       <VStack gap={3} padding={5} width="100%" maxWidth={460}>

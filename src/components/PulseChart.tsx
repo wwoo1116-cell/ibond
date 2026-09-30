@@ -22,10 +22,16 @@ import { StackChart, type Stack } from '@/chart/StackChart';
 import type { View } from '@/lib/api';
 import { EMDASH, fmtCount, fmtHm } from '@/lib/format';
 import { ChartReadoutStrip, slotChars, type StripSlot } from '@/ui/ChartReadoutStrip';
+import { useMeasure } from '@/ui/useMeasure';
 
 type Pulse = NonNullable<View['pulse']>;
 type BinKey = 'q' | 'a' | 'c' | 'i' | 'o';
 
+/* 그림 높이는 **카드가 준다** [2026-09-29 「한 화면」]. 종전에는 상수였고, 그러면
+ * 카드가 커져도 그림은 그대로이고 카드가 작아지면 그림이 카드를 밀어냈다.
+ * 이제 `.sr-plot` 이 남는 높이를 먹고(`kbond.css` 의 `.kb-plotwrap`), 그림은 그
+ * 칸을 재서 그린다. 상수는 **첫 프레임의 기본값**으로만 남는다 — 재기 전 한 번은
+ * 0 이고, 0 으로 그리면 라이브러리가 캔버스를 안 만든다. */
 const PULSE_H = 190;
 
 /**
@@ -46,6 +52,8 @@ const CATS: readonly { k: BinKey; label: string; css: string }[] = [
 
 export function PulseChart({ p }: { p: Pulse }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [plotRef, , plotH] = useMeasure<HTMLDivElement>();
+  const h = plotH || PULSE_H;
 
   const grid = useMemo(() => {
     const bins = p.bins ?? [];
@@ -136,14 +144,14 @@ export function PulseChart({ p }: { p: Pulse }) {
   });
 
   return (
-    <>
+    <div className="kb-plotwrap">
       <ChartReadoutStrip date={fmtHm(grid.times[at])} slots={slots} />
-      <div className="sr-plot" style={{ height: PULSE_H }}>
+      <div className="sr-plot" ref={plotRef}>
         <StackChart
           times={grid.times}
           stacks={stacks}
           lines={lines}
-          height={PULSE_H}
+          height={h}
           onHoverIndex={setHover}
           format={(v) => String(Math.round(v))}
           accessibilityLabel={`시장 맥박. ${grid.bin / 60}분 묶음 ${grid.times.length}개. 화살표 키로 묶음을 옮깁니다.`}
@@ -152,6 +160,6 @@ export function PulseChart({ p }: { p: Pulse }) {
           }
         />
       </div>
-    </>
+    </div>
   );
 }

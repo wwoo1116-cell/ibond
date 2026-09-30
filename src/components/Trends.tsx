@@ -198,7 +198,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
   return (
     <div className="kb-trends">
       <div className="kb-mid">
-        <div className="kb-card">
+        <div className="kb-card w3">
           <div className="kb-ch">
             <Text as="span" font="label2">시장 맥박</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
@@ -218,63 +218,65 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
               </select>
             ) : null}
           </div>
-          <div className="kb-kvgrid">
-            {kv('호가 · 관심', `${fmtCount(p.nq)} · ${fmtCount(p.na)}`)}
-            {/* v12 체결 귀속의 부산물 — 오퍼가 맞았으면 사 간 것, 비드면 판 것.
-                장외 대화록에 없던 축이다. 서버가 세고 화면은 읽기만 한다.
-                ★합계가 체결 응답 수보다 작다: 내용 없는 «ㅎㅈ» 은 책에 못 붙는다. */}
-            {kv(
-              '체결 응답 — 사 감 · 팜',
-              `${fmtCount(p.nc)} ${EMDASH} ${v.aggr?.B ?? 0} · ${v.aggr?.S ?? 0}`,
-            )}
-            {kv('호가/체결', p.nc ? fmtRatio(p.nq / p.nc, 1) : EMDASH)}
-            {kv('어제 같은 시각 대비', <Delta v={p.vs_prev_pct} unit="%" />)}
-            {kv('국고 · 통안 · 크레딧', `${p.ktb} · ${p.msb} · ${p.cr}`)}
-            {kv('문의', fmtCount(p.ni))}
-            {kv(
-              '딜러(데스크)',
-              `${p.n_dealer}${p.prev_n_dealer ? ` / 어제 ${p.prev_n_dealer}` : ''}`,
-            )}
-            {kv('이벤트', fmtCount(p.n_event))}
-          </div>
-          {/* +++ 책이 말하는 것 — 귀속 체결(국고·통안)에서 엔진이 «체결 순간» 에 재 둔 값.
-              국고 전 이력 실측(RESULT_book_dynamics_2026-09-15.md):
-                · 책은 한 틱(0.5bp, 93.6%)이고 체결의 81% 가 최우선 레벨에서 난다 → 유효 = 호가 반스프레드
-                · 직전 불균형(잠금 동점 제외): 비드 우세 → 사 감 59.5% · 오퍼 우세 → 39.1% (위약 AUC 0.51 대 0.58)
-              여기 수는 «오늘» 이 그 실측과 같은 자리에 있는지 보는 것이다. 표본이 작은 날은 흔들린다. */}
-          {bi ? (
-            <div className="kb-kvgrid" style={{ marginTop: 6 }}>
+          <div className="kb-cb">
+            <div className="kb-kvgrid">
+              {kv('호가 · 관심', `${fmtCount(p.nq)} · ${fmtCount(p.na)}`)}
+              {/* v12 체결 귀속의 부산물 — 오퍼가 맞았으면 사 간 것, 비드면 판 것.
+                  장외 대화록에 없던 축이다. 서버가 세고 화면은 읽기만 한다.
+                  ★합계가 체결 응답 수보다 작다: 내용 없는 «ㅎㅈ» 은 책에 못 붙는다. */}
               {kv(
-                '유효 반스프레드 · 호가 (bp)',
-                bi.eff_med == null
-                  ? '—'
-                  : `${fmtBpLevel(bi.eff_med, 2)} · ${fmtBpLevel(bi.qs_half_med, 2)}`,
+                '체결 응답 — 사 감 · 팜',
+                `${fmtCount(p.nc)} ${EMDASH} ${v.aggr?.B ?? 0} · ${v.aggr?.S ?? 0}`,
               )}
+              {kv('호가/체결', p.nc ? fmtRatio(p.nq / p.nc, 1) : EMDASH)}
+              {kv('어제 같은 시각 대비', <Delta v={p.vs_prev_pct} unit="%" />)}
+              {kv('국고 · 통안 · 크레딧', `${p.ktb} · ${p.msb} · ${p.cr}`)}
+              {kv('문의', fmtCount(p.ni))}
               {kv(
-                '최우선 레벨에서 난 체결',
-                bi.at_best_pct == null ? EMDASH : `${fmtPct(bi.at_best_pct)} / ${bi.n_ab}건`,
+                '딜러(데스크)',
+                `${p.n_dealer}${p.prev_n_dealer ? ` / 어제 ${p.prev_n_dealer}` : ''}`,
               )}
-              {kv(
-                '직전 불균형 → 사 감 % (오퍼·균형·비드)',
-                bi.n_imb
-                  ? ['오퍼 우세', '균형', '비드 우세']
-                      .map((k) => {
-                        const c = bi.p_b_by_imb?.[k];
-                        return c && c.pB != null ? `${fmtPct(c.pB)}(${c.n})` : EMDASH;
-                      })
-                      .join(' · ')
-                  : '—',
-              )}
-              {kv(
-                '귀속 체결 · 불균형 잰 것',
-                `${bi.n} · ${bi.n_imb}${bi.n_imb_prev ? ` (+${bi.n_imb_prev})` : ''}`,
-              )}
+              {kv('이벤트', fmtCount(p.n_event))}
             </div>
-          ) : null}
-          <PulseChart p={p} />
+            {/* +++ 책이 말하는 것 — 귀속 체결(국고·통안)에서 엔진이 «체결 순간» 에 재 둔 값.
+                국고 전 이력 실측(RESULT_book_dynamics_2026-09-15.md):
+                  · 책은 한 틱(0.5bp, 93.6%)이고 체결의 81% 가 최우선 레벨에서 난다 → 유효 = 호가 반스프레드
+                  · 직전 불균형(잠금 동점 제외): 비드 우세 → 사 감 59.5% · 오퍼 우세 → 39.1% (위약 AUC 0.51 대 0.58)
+                여기 수는 «오늘» 이 그 실측과 같은 자리에 있는지 보는 것이다. 표본이 작은 날은 흔들린다. */}
+            {bi ? (
+              <div className="kb-kvgrid" style={{ marginTop: 6 }}>
+                {kv(
+                  '유효 반스프레드 · 호가 (bp)',
+                  bi.eff_med == null
+                    ? '—'
+                    : `${fmtBpLevel(bi.eff_med, 2)} · ${fmtBpLevel(bi.qs_half_med, 2)}`,
+                )}
+                {kv(
+                  '최우선 레벨에서 난 체결',
+                  bi.at_best_pct == null ? EMDASH : `${fmtPct(bi.at_best_pct)} / ${bi.n_ab}건`,
+                )}
+                {kv(
+                  '직전 불균형 → 사 감 % (오퍼·균형·비드)',
+                  bi.n_imb
+                    ? ['오퍼 우세', '균형', '비드 우세']
+                        .map((k) => {
+                          const c = bi.p_b_by_imb?.[k];
+                          return c && c.pB != null ? `${fmtPct(c.pB)}(${c.n})` : EMDASH;
+                        })
+                        .join(' · ')
+                    : '—',
+                )}
+                {kv(
+                  '귀속 체결 · 불균형 잰 것',
+                  `${bi.n} · ${bi.n_imb}${bi.n_imb_prev ? ` (+${bi.n_imb_prev})` : ''}`,
+                )}
+              </div>
+            ) : null}
+            <PulseChart p={p} />
+          </div>
         </div>
 
-        <div className="kb-card">
+        <div className="kb-card w2">
           <div className="kb-ch">
             <Text as="span" font="label2">이벤트</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
@@ -292,7 +294,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
               </button>
             ))}
           </div>
-          <div className="kb-scroll">
+          <div className="kb-cb">
             {evs.slice(0, 300).map((e, i) => (
               /* 이벤트 문장은 길이가 자료라 어떤 폭도 모자랄 수 있다 —
                  잘리면 «…» 로 보이고 전체는 이 `title` 이 준다. */
@@ -303,7 +305,7 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
                   {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
                 </span>
                 <span className="kb-evt">{evText(e)}</span>
-                <span className="kb-n">{e.d}</span>
+                <span className="kb-n kb-dk" title={e.d ?? undefined}>{e.d}</span>
               </div>
             ))}
           </div>
@@ -316,56 +318,58 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
             <Text as="span" font="label2">커브 오늘</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">지표 · 차기지표</Text>
           </div>
-          <table className="kb-tbl">
-            {/* ★인라인 px 를 걷었다 [2026-09-28] — 폭은 `lib/columns` 한 곳이 정한다.
-                다섯 표 중 하나만 자기 폭을 들고 있으면 그 표만 다른 규칙으로 산다. */}
-            <ColGroup cols={TABLES.curveToday} />
-            <thead>
-              <tr>
-                <th className="l">연물</th>
-                <th className="l">종목</th>
-                <th>전일민평</th>
-                <th>mid</th>
-                <th>Δbp</th>
-                <th title="살아 있는 오퍼 딜러 · 비드 딜러 (▲ 비드 우세 · ▼ 오퍼 우세)">딜러</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(ct).map(([lane, rows]) =>
-                !rows.length ? null : (
-                  <Fragment key={lane}>
-                    <tr>
-                      <td colSpan={6} className="l kb-n" style={{ paddingTop: 8 }}>
-                        {LANE_NM[lane] ?? lane}
-                      </td>
-                    </tr>
-                    {rows.map((r) => (
-                      <tr key={`${lane}${r.c}`} title={r.full ?? r.nm ?? r.c}>
-                        <td className="l kb-n">{r.ten}</td>
-                        <td className="l">
-                          {lane === 'msb' ? (r.alias ?? r.c) : r.c}
-                          {r.bench ? <b className="kb-badge">지표</b> : null}
-                          {r.next ? <b className="kb-badge">차기</b> : null}
-                        </td>
-                        <td className="num kb-n">{fmtYield(r.mp)}</td>
-                        <td className="num">{fmtYield(r.mid)}</td>
-                        <td className="num">
-                          <Delta v={r.dbp} />
-                        </td>
-                        <td
-                          className="num kb-n"
-                          title={r.imb == null ? '' : `지금 불균형 (비드−오퍼)/합 ${fmtSigned(r.imb, 2)}`}
-                        >
-                          {r.nd}
-                          {r.imb == null ? '' : r.imb > 0.15 ? ' ▲' : r.imb < -0.15 ? ' ▼' : ''}
+          <div className="kb-cb">
+            <table className="kb-tbl">
+              {/* ★인라인 px 를 걷었다 [2026-09-28] — 폭은 `lib/columns` 한 곳이 정한다.
+                  다섯 표 중 하나만 자기 폭을 들고 있으면 그 표만 다른 규칙으로 산다. */}
+              <ColGroup cols={TABLES.curveToday} />
+              <thead>
+                <tr>
+                  <th className="l">연물</th>
+                  <th className="l">종목</th>
+                  <th>전일민평</th>
+                  <th>mid</th>
+                  <th>Δbp</th>
+                  <th title="살아 있는 오퍼 딜러 · 비드 딜러 (▲ 비드 우세 · ▼ 오퍼 우세)">딜러</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(ct).map(([lane, rows]) =>
+                  !rows.length ? null : (
+                    <Fragment key={lane}>
+                      <tr>
+                        <td colSpan={6} className="l kb-n" style={{ paddingTop: 8 }}>
+                          {LANE_NM[lane] ?? lane}
                         </td>
                       </tr>
-                    ))}
-                  </Fragment>
-                ),
-              )}
-            </tbody>
-          </table>
+                      {rows.map((r) => (
+                        <tr key={`${lane}${r.c}`} title={r.full ?? r.nm ?? r.c}>
+                          <td className="l kb-n">{r.ten}</td>
+                          <td className="l">
+                            {lane === 'msb' ? (r.alias ?? r.c) : r.c}
+                            {r.bench ? <b className="kb-badge">지표</b> : null}
+                            {r.next ? <b className="kb-badge">차기</b> : null}
+                          </td>
+                          <td className="num kb-n">{fmtYield(r.mp)}</td>
+                          <td className="num">{fmtYield(r.mid)}</td>
+                          <td className="num">
+                            <Delta v={r.dbp} />
+                          </td>
+                          <td
+                            className="num kb-n"
+                            title={r.imb == null ? '' : `지금 불균형 (비드−오퍼)/합 ${fmtSigned(r.imb, 2)}`}
+                          >
+                            {r.nd}
+                            {r.imb == null ? '' : r.imb > 0.15 ? ' ▲' : r.imb < -0.15 ? ' ▼' : ''}
+                          </td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="kb-card">
@@ -375,9 +379,11 @@ export function Trends({ ttl, onTtl }: { ttl: TtlMode; onTtl?: (t: TtlMode) => v
               오늘 {v.leaderboard?.n ?? 0}곳 · 건수 순
             </Text>
           </div>
-          {v.leaderboard ? (
-            <Leaderboard lb={v.leaderboard} lane={dlLane} onLane={setDlLane} />
-          ) : null}
+          <div className="kb-cb">
+            {v.leaderboard ? (
+              <Leaderboard lb={v.leaderboard} lane={dlLane} onLane={setDlLane} />
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
