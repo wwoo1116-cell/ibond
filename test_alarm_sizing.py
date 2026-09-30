@@ -35,7 +35,9 @@ def _offer(**over):
 
 
 def _view(offers, buckets=None, t=T):
-    return {"t": t, "offers": offers, "buckets": buckets or [_bucket()]}
+    # ★페이로드의 시계는 대문자 `T` 다(«자정 이후 초»). 소문자 `t` 는 **없는 열쇠**다.
+    return {"T": t, "now": "13:53:20", "offers": offers,
+            "buckets": buckets or [_bucket()]}
 
 
 # ── 환산: 식은 한 곳에만 있다 ───────────────────────────────────────────────
@@ -135,12 +137,44 @@ def test_무리_최소가_알람과_같은_값이다():
     assert AS.PEER_MIN == KV.PEER_MIN
 
 
+# ── ★★시계: 페이로드의 `T` 하나뿐 ───────────────────────────────────────────
+def test_시계는_페이로드의_대문자_T_다():
+    """★★2026-10-01 에 여기서 틀렸다 — `d["t"]` 를 봤는데 그런 열쇠가 **없다**.
+
+    `kbond_view.view` 가 싣는 것은 `T`(= `now` 를 자정 이후 초로 쪼갠 값)이고, 그것도
+    **책의 시계**라 벽시계와 1분쯤 어긋난다(실측 08:20 에 T=30018 대 벽시계 30084).
+    """
+    r = AS._pop({"T": T, "offers": [_offer(t=T - 10)], "buckets": [_bucket()]})
+    assert r[0]["age"] == 10
+
+
+def test_시계가_없으면_벽시계로_떨어지지_않는다():
+    """⚠조용한 대체가 틀린 축을 그럴듯하게 만든 자리다 — 나이가 17억 초가 되어
+    **하루 종일 0행**을 적을 뻔했다. 축이 없으면 «없다» 고 말한다."""
+    r = AS._pop({"offers": [_offer()], "buckets": [_bucket()]})     # T 가 없다
+    assert r and r[0]["age"] is None
+
+
+def test_소문자_t_는_시계가_아니다():
+    """에포크가 실려 와도 그걸 나이의 축으로 쓰면 안 된다."""
+    r = AS._pop({"t": 1790810412.0, "offers": [_offer()], "buckets": [_bucket()]})
+    assert r and r[0]["age"] is None
+
+
+def test_표집이_시계_없는_페이로드를_만나면_멈춘다(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(AS, "_get", lambda url: {"offers": [], "buckets": []})
+    p = tmp_path / "s.jsonl"
+    assert AS.sample(1, str(p), every=5) == 3
+    assert "`T` 가 없다" in capsys.readouterr().out
+
+
 # ── 접기: 한 도착은 한 번 ───────────────────────────────────────────────────
 def _write(tmp_path, polls):
     p = tmp_path / "s.jsonl"
     with open(p, "w", encoding="utf-8") as f:
         for t, offers in polls:
-            f.write(json.dumps({"ev": "poll", "t": t,
+            # 축이 둘이다 — 날 가르기는 벽시계 `wt`, 나이는 책의 `T`.
+            f.write(json.dumps({"ev": "poll", "T": t, "wt": 1790810412.0 + t,
                                 "rows": AS._pop(_view(offers, [_bucket(bpc_med=0.0)], t))},
                                ensure_ascii=False) + "\n")
     return str(p)
@@ -153,6 +187,8 @@ def test_같은_도착을_여러_폴에서_봐도_한_번으로_센다(tmp_path,
     assert AS.pool([path]) == 0
     out = capsys.readouterr().out
     assert "도착 1건" in out
+    # ★날 가르기가 벽시계여야 한다 — 책의 `T`(자정 이후 초)로 가르면 전부 1970년이 된다.
+    assert "2026-10-01" in out
 
 
 def test_나이_창을_넘은_것은_안_센다(tmp_path, capsys):

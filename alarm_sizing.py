@@ -155,9 +155,17 @@ def _pop(d: dict, T=None) -> list[dict]:
 
     울리지 않는 것은 세지도 않는다: 비드 · 「민평에」 · 레벨이 가정(`est`) ·
     무리가 작다 · 중앙값이 없다. (2026-10-01 이전 이 함수가 없어 `est` 가 섞였다.)
+
+    ★★**시계는 페이로드의 `T` 다 — 벽시계가 아니다.** `T` 는 «자정 이후 초»이고
+      (`kbond_view.view`: `now` 를 시·분·초로 쪼갠 값), 그것도 **책의 시계**라 벽시계와
+      1분쯤 어긋난다(실측 2026-10-01 08:20: T=30018 대 벽시계 30084). 오퍼의 `t` 도
+      같은 축이므로 나이는 `T − t` 여야 한다.
+    ⚠**대체하지 않는다.** 처음 이 함수는 `d.get("t")`(페이로드에 **없는 열쇠**)를 보고
+      `time.time()` 으로 떨어졌고, 그러면 나이가 17억 초가 되어 **하루 종일 0행**을
+      적는다. 축이 없으면 조용히 다른 축을 쓰는 대신 **없다고 말한다**.
     """
     bks = d.get("buckets") or []
-    T = d.get("t") if T is None else T
+    T = d.get("T") if T is None else T
     out = []
     for o in d.get("offers") or []:
         if o.get("s") not in (None, "S") or o.get("atmp") or o.get("lvl") == "est":
@@ -296,11 +304,20 @@ def sample(secs: int, out_path: str, every: int = 20,
                 f.write(json.dumps({"ev": "err", "t": time.time(), "m": str(exc)}) + "\n")
                 f.flush(); time.sleep(every); continue
             n += 1
-            T = d.get("t") or time.time()
+            T = d.get("T")
+            if T is None:
+                # ★대체하지 않는다 — 벽시계로 떨어지면 나이가 17억 초가 되고
+                #   하루 종일 0행을 적는다(2026-10-01 에 그럴 뻔했다).
+                print("⚠페이로드에 `T` 가 없다 — 나이를 잴 축이 없어 멈춘다")
+                f.write(json.dumps({"ev": "err", "wt": time.time(),
+                                    "m": "no T in payload"}) + "\n")
+                return 3
             rows = [r for r in _pop(d, T)
                     if r["age"] is not None and 0 <= r["age"] <= age_cap]
-            f.write(json.dumps({"ev": "poll", "t": T, "ver": d.get("ver"),
-                                "rows": rows}, ensure_ascii=False) + "\n")
+            # `T` 는 책의 «자정 이후 초» 라 날짜가 없다 — 날 가르기는 벽시계(`wt`)로 한다.
+            f.write(json.dumps({"ev": "poll", "T": T, "wt": time.time(),
+                                "ver": d.get("ver"), "rows": rows},
+                               ensure_ascii=False) + "\n")
             f.flush()
             time.sleep(every)
     print(f"폴 {n}회(실패 {err}) → {out_path}")
@@ -312,6 +329,8 @@ def pool(paths: list, max_age: int = MAX_AGE) -> int:
 
     ★대리 지표(비율 × 도착 38건)를 안 쓴다 — 도착을 세었으니 그냥 센다.
     ⚠덮이지 않은 시간대는 빠진다. 아래 «덮은 시간» 으로 먼저 확인할 것.
+    ★날 가르기는 **벽시계 `wt`** 로 한다 — 행의 나이는 책의 `T` 로 이미 재어 두었고,
+      `T` 는 «자정 이후 초» 라 날짜를 모른다. 두 축을 섞지 않는다.
     """
     seen: dict = {}
     polls: list = []
@@ -322,9 +341,9 @@ def pool(paths: list, max_age: int = MAX_AGE) -> int:
                     o = json.loads(line)
                 except Exception:                              # noqa: BLE001
                     continue
-                if o.get("ev") != "poll":
+                if o.get("ev") != "poll" or o.get("wt") is None:
                     continue
-                polls.append(o["t"])
+                polls.append(o["wt"])
                 for r in o.get("rows") or []:
                     a = r.get("age")
                     if a is None or a > max_age or a < 0:
