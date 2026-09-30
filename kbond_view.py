@@ -608,8 +608,14 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
             out["mtx_group"] = mtx_group(cls, rt)
             out["grade_curve"] = grade_curve(snap, cls, rt)
             # 고른 종별·등급의 오퍼와 매수 니즈. 화면이 다시 거르지 않게 서버가 낸다.
-            out["offers"] = cr_sel(snap, T, mode, cls, rt, cv)
+            # 모집단은 **한 번만** 세운다 — 오퍼(거른 것)와 알람(거르기 전)이
+            # 같은 것을 봐야 한다. 둘이 각자 만들면 필터에 따라 알람이 갈린다.
+            allr = cr_ranked(snap, T, mode, cv)
+            out["offers"] = cr_sel(snap, T, mode, cls, rt, cv, rows=allr)
             out["needs"] = cr_needs(snap, T, mode, cls, rt)
+            # 「방금 온 싼 오퍼」 — 화면이 배너로 쓴다. 없으면 빈 목록이다.
+            out["alarms"] = alarm_hits(allr, out["buckets"], T)
+            out["alarm_n_bp"] = ALARM_N_BP
     elif lane == "dyn":
         out["pulse"] = pulse_stats(snap, T)
         out["events"] = snap.get("events") or []
@@ -882,23 +888,122 @@ def peer_rank(rows):
     return out
 
 
-def cr_sel(snap, T, mode="def", cls=None, rt=None, cv=None):
-    """고른 버킷(cls|rt) 또는 종별의 살아 있는 오퍼. 화면 crSel 그대로.
+def cr_ranked(snap, T, mode="def", cv=None):
+    """살아 있는 크레딧 오퍼 **전부** — 커브반영과 또래 순위를 얹고 **거르지 않는다**.
 
-    ★결과금리가 없는 원 호가는 정렬할 금리가 없다 — 걸러내지 않고 그대로 실어
-      보낸다. 화면이 «레벨 미상» 구획으로 따로 모은다 [OWNER].
+    ★얕은 복사다 — `cr_alive` 가 내주는 것은 책 그 자체라 여기서 고치면 스냅샷이
+      오염된다(다음 폴에서 «이미 반영된» 값을 또 민다).
+    ★★★순위는 **거르기 전에** 매긴다. 화면이 「은행채 AAA」를 골라 두었다고 해서
+      순위의 모집단이 같이 좁아지면, 같은 오퍼가 필터에 따라 다른 순위를 말한다
+      (등급을 품는 넓은 무리가 그 필터 안쪽만 보게 되어서다). 책은 하나다.
+
+    ★★[2026-09-30] 이 셋 줄을 함수로 뺀 이유: **알람이 같은 모집단을 봐야** 한다
+      (`alarm_hits`). 한쪽이 제 모집단을 다시 만들면 화면 필터에 따라 울리거나
+      안 울린다 — 「같은 수를 두 곳이 유도하면 한쪽만 고치게 된다」.
     """
-    # ★얕은 복사다 — `cr_alive` 가 내주는 것은 책 그 자체라 여기서 고치면
-    #   스냅샷이 오염된다(다음 폴에서 «이미 반영된» 값을 또 민다).
-    # ★★★순위는 **거르기 전에** 매긴다. 화면이 「은행채 AAA」를 골라 두었다고 해서
-    #   순위의 모집단이 같이 좁아지면, 같은 오퍼가 필터에 따라 다른 순위를 말한다
-    #   (등급을 품는 넓은 무리가 그 필터 안쪽만 보게 되어서다). 책은 하나다.
     allr = [{**e, **dict(zip(("bpc", "cmv"), curve_adj(cv, e)))}
             for e in cr_alive(snap, T, mode)]
     ranks = peer_rank(allr)                 # 커브 반영 뒤에 — 재는 자가 그 순서로 정해진다
     for e in allr:
         e.update(ranks.get(id(e)) or {"pr": None, "pn": None, "pk": None, "padj": None})
-    rows = allr
+    return allr
+
+
+#: 알람 문턱 — 무리 중앙보다 이만큼 싸면 울린다(bp). **고른 값이다.**
+#: 실측 2026-09-30(스냅샷 둘 · 25분 차): +1bp 하루 8.6~9.7건 · +2bp 4.3~5.9 ·
+#: +3bp 2.3~4.5 · +5bp 0.7~1.2. ★한 스냅샷으로 정하지 말 것 — 25분 차로 +3bp 가
+#: 4.5건과 2.3건 사이를 움직였다. `alarm_sizing.py --calibrate` 로 며칠 재서 정한다.
+#: 근거·분포는 `archive/docs/RESULT_alarm_sizing_2026-09-30.md` §3.
+ALARM_N_BP = 3.0
+
+#: 「방금 왔다」의 창(초). ★**1분 벼랑**과 같은 값이다 — 최우선 호가 나이별로 그
+#: 레벨에서 체결이 난 비율이 ~1분 90.6% → 1~5분 61.2% → 5~15분 29.6%(국고 전 이력
+#: 35,654건). 1분을 넘으면 알릴 값이 반으로 떨어진다. 화면 바램(`AGE_STEPS`)의
+#: 첫 단계와 같은 눈금이라 배너도 같은 자로 바랜다.
+ALARM_MAX_AGE = 60
+
+
+def alarm_hits(rows, buckets, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
+    """«방금 온 · 무리 중앙보다 n_bp 이상 싼» 오퍼 — 순수 함수, 상태 없음.
+
+    ## 왜 이 꼴인가 [설계 정본 `PROMPT_next_2026-09-30-alarm.md`]
+
+    [OWNER] 의 첫 말은 「1등이 바뀌면 알람」이었는데 **재 보고 바꿨다**: 1등 교체의
+    43%가 «직전 1등이 TTL 로 죽어 더 나쁜 것이 왕관을 물려받은» 것이었다(실측 7건 중
+    3 · 예 −2.0 → −5.0bp). 책이 나빠졌는데 울린다. 문턱 돌파는 그것이 **구조적으로
+    불가능**하고, 「1등」이 좁은/넓은 무리에서 두 뜻이 되는 문제도 없다.
+
+    ★**상태를 두지 않는다.** 호가마다 도착 시각 `t` 가 있어 「방금 왔다」를 직전
+    스냅샷과 비교하지 않고 **나이**(T − t)로 판정한다. 그래서 이 함수는 같은 입력에
+    같은 답을 낸다.
+
+    ★**재는 자가 하나여야 한다** — 무리가 `bpc_med` 를 가졌고 이 오퍼도 `bpc` 가
+    있으면 커브반영으로, 아니면 둘 다 민평대비로 잰다. `peer_rank` 의 규칙과 같다
+    (그쪽 docstring: 「섞어서 재지 않는다」).
+
+    ⚠**모집단은 `cr_ranked` 의 것**이어야 한다(거르기 전). 화면 필터를 태운 목록을
+    넣으면 같은 오퍼가 필터에 따라 울리거나 안 울린다.
+
+    울리지 않는 것들과 그 이유:
+      · 비드(`s != "S"`)               — 살 것을 찾는 화면이다
+      · 「민평에」(`atmp`)              — 부른 값이 없다. 무리의 3분의 2가 여기 있다
+      · 레벨이 가정(`lvl == "est"`)    — 0.5 가정 위에서는 안 울린다
+      · 무리가 작다(`n < PEER_MIN`)    — 중앙값이 뜻이 없다(그때는 `*_med` 가 None 이다)
+      · 중앙값이 없다                  — 뺄 수 없으면 «—» 라는 이 레인 규율
+    """
+    out = []
+    for o in rows:
+        if o.get("s") != "S" or o.get("atmp") or o.get("lvl") == "est":
+            continue
+        t = o.get("t")
+        ttm = o.get("ttm")
+        if t is None or ttm is None:
+            continue
+        age = T - t
+        if age < 0 or age > max_age:
+            continue
+        b = None
+        for x in buckets or ():
+            lo, hi = x.get("ttm_lo"), x.get("ttm_hi")
+            if (x.get("cls") == o.get("cls") and x.get("rt") == o.get("rt")
+                    and lo is not None and hi is not None and lo <= ttm < hi):
+                b = x
+                break
+        if b is None or (b.get("n") or 0) < PEER_MIN:
+            continue
+        adj = o.get("bpc") is not None and b.get("bpc_med") is not None
+        val = o.get("bpc") if adj else o.get("bpe")
+        med = b.get("bpc_med") if adj else b.get("bp_med")
+        if val is None or med is None:
+            continue
+        dev = val - med
+        if dev < n_bp:
+            continue
+        out.append({
+            # 소비자가 같은 도착에 두 번 울리지 않게 하는 열쇠 — 5초 폴이면 한 도착이
+            # 최대 12번 보인다. (딜러, 종목, 도착초) 로 안정적이다.
+            "key": f"{o.get('d')}|{o.get('n')}|{t}",
+            "n": o.get("n"), "d": o.get("d"), "cls": o.get("cls"), "rt": o.get("rt"),
+            "ttm": ttm, "a": o.get("a"), "age": age,
+            "val": round(val, 2), "med": round(med, 2), "dev": round(dev, 2),
+            "adj": adj,                     # 커브반영으로 쟀나(아니면 민평대비)
+            "pk": o.get("pk"), "pr": o.get("pr"), "pn": o.get("pn"),
+            # 무리의 등급이 문면이 아니라 집계에서 온 것 — 배너가 그 사실을 적는다.
+            "est": bool(b.get("est")),
+        })
+    # 싼 것부터. 같으면 새것부터.
+    return sorted(out, key=lambda x: (-x["dev"], x["age"]))
+
+
+def cr_sel(snap, T, mode="def", cls=None, rt=None, cv=None, rows=None):
+    """고른 버킷(cls|rt) 또는 종별의 살아 있는 오퍼. 화면 crSel 그대로.
+
+    ★결과금리가 없는 원 호가는 정렬할 금리가 없다 — 걸러내지 않고 그대로 실어
+      보낸다. 화면이 «레벨 미상» 구획으로 따로 모은다 [OWNER].
+    ★`rows` 를 주면 그것을 모집단으로 쓴다 — 조립부가 `cr_ranked` 를 **한 번만**
+      부르고 오퍼와 알람이 그 하나를 나눠 쓰게 하려고 [2026-09-30].
+    """
+    rows = cr_ranked(snap, T, mode, cv) if rows is None else rows
     if rt:
         key = f"{cls}|{rt}"
         rows = [e for e in rows if bkey(e) == key]
