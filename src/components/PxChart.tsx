@@ -78,9 +78,13 @@ export function PxChart({
     () => [
       /* ⑤ 축 글자가 **세 자리**다(캐논 `fmtAxis` 는 두 자리) — 꼬리표가 같은 서식을 쓰므로
          두 자리면 3.945 가 「3.94」로 선다. 반 bp 가 사라지는 꼬리표는 현재가가 아니다. */
-      { id: 'bid', values: tape.bid, color: (p) => p.up, width: 1, step: true, lastValue: true, beacon: true, format: fmtYield },
-      { id: 'ask', values: tape.ask, color: (p) => p.down, width: 1, step: true, lastValue: true, format: fmtYield },
-      /* 민평은 한 단 뒤 — 잉크는 «오늘 호가» 의 몫이다. */
+      /* ★굵기 2 는 **주선의 무게**다 [OWNER 2026-10-01 「선이 너무 얇다」]. 이 리포와 v2 의
+         `addLine` 기본값이 둘 다 2 이고, 1 은 **보조선 전용**이다(v2 의 밴드 위·아래·이동평균,
+         이 앱의 맥박). 첫 판은 셋 다 1 로 줘서 매도·매수가 «참조선 무게» 로 그려졌다 —
+         mid 를 걷어 낸 뒤로 이 둘이 주선인데 옛 판의 보조선 무게를 그대로 들고 있었다. */
+      { id: 'bid', values: tape.bid, color: (p) => p.up, width: 2, step: true, lastValue: true, beacon: true, format: fmtYield },
+      { id: 'ask', values: tape.ask, color: (p) => p.down, width: 2, step: true, lastValue: true, format: fmtYield },
+      /* 민평은 한 단 뒤 — 잉크는 «오늘 호가» 의 몫이다. 참조선이라 굵기는 1 로 남는다. */
       { id: 'mp', values: tape.mp, color: (p) => p.dim(p.fgMuted, 70), width: 1, dash: true, step: true, format: fmtAxis },
     ],
     [tape],
@@ -92,11 +96,18 @@ export function PxChart({
     const label = tape.fills.length <= FILL_TEXT_MAX;
     return tape.fills.map((f) => ({ index: f.index, color: (p) => p.fg, price: f.y, text: label ? fmtYield(f.y) : undefined, size: 1 }));
   }, [tape.fills]);
+  /* 가로축 글자 — 하루면 시각, 여러 날이면 **날짜만**.
+   *
+   * ★여러 날에서 시각 눈금을 비우는 이유 [실측 2026-10-01]: 라이브러리는 눈금마다
+   *   «무게»(0 년 · 1 월 · 2 일 · 3 시각)를 주는데, 한 달이면 자리가 1만이 넘어 대부분의
+   *   눈금이 날 경계가 아닌 **하루 안**에 떨어진다. 그 자리에 시각을 찍으면 날짜들 사이에
+   *   「12:40」 하나가 끼어 서고, 읽는 사람은 그것을 날짜 자리로 읽는다(한 축이 두 단위를
+   *   말한다). 비우면 날 경계에 선 눈금만 남는다 — 그게 이 축이 세는 것이다. */
   const tick = useMemo<TimeTick>(
     () =>
       days === 1
         ? { mark: (t) => fmtTapeHm(t), at: (t) => fmtTapeHm(t) }
-        : { mark: (t, kind) => (kind <= 2 ? fmtTapeDay(t) : fmtTapeHm(t)), at: (t) => fmtTapeAt(t) },
+        : { mark: (t, kind) => (kind <= 2 ? fmtTapeDay(t) : ''), at: (t) => fmtTapeAt(t) },
     [days],
   );
 

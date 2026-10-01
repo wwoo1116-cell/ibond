@@ -366,7 +366,7 @@ export default function Page() {
       ) : tab === 'cr' ? (
         <Credit ttl={ttl} onTtl={setTtl} feed={rows} />
       ) : (
-        <Bonds lane={tab} ttl={ttl} onTtl={setTtl} feed={rows} />
+        <Bonds lane={tab} ttl={ttl} onTtl={setTtl} />
       )}
 
       {/* 옛 화면 하단 캡션 — 문구를 그대로 옮겼다(읽는 법을 화면이 스스로 말한다).

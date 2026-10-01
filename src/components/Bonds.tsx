@@ -16,7 +16,7 @@ import dynamic from 'next/dynamic';
 import { Text } from '@coinbase/cds-web/typography';
 
 import { getPxHist, getView } from '@/lib/api';
-import type { FeedRow, Lane, PxHist, TtlMode, View } from '@/lib/api';
+import type { Lane, PxHist, TtlMode, View } from '@/lib/api';
 import { SPANS, localYmd, spanDays, type SpanKey } from '@/lib/pxTape';
 import {
   EMDASH, fmtAge, fmtBpLevel, fmtBpUnit, fmtHms, fmtLot, fmtYield,
@@ -210,11 +210,10 @@ function pxHistCached(code: string, days: number, before: string): Promise<PxHis
   return p;
 }
 
-export function Bonds({ lane, ttl, onTtl, feed = [] }: {
+export function Bonds({ lane, ttl, onTtl }: {
   lane: Lane;
   ttl: TtlMode;
   onTtl?: (t: TtlMode) => void;
-  feed?: FeedRow[];
 }) {
   const [v, setV] = useState<View | null>(null);
   const [code, setCode] = useState<string | null>(null);
@@ -274,8 +273,6 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
 
   const rows: BondRow[] = v.rows ?? [];
   const sel = rows.find((r) => r.c === code) ?? null;
-  /* 피드에서 이 종목만 고른다. 접거나 세지 않으니 서버 계산과 겹치지 않는다. */
-  const tape = code ? feed.filter((e) => e.code === code).slice(-200).reverse() : [];
   const T = v.T;
   /* 레벨 없는 «관심» — 서버가 이미 TTL 로 거르고 최신순으로 준다 [OWNER 2026-09-07] */
   const ax = v.axes ?? [];
@@ -421,7 +418,9 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           </div>
         </div>
 
-        <div className="kb-card w2">
+        {/* 시세는 이 판에서 가장 많이 보는 그림이라 남는 높이를 가장 많이 가져간다
+            (`w3`) — 메시지를 걷고 나면 교체 카드(가중치 1)와 셋이 나눈다. */}
+        <div className="kb-card w3">
           <div className="kb-ch">
             <Text as="span" font="label2">시세</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
@@ -451,30 +450,11 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           </div>
         </div>
 
-        <div className="kb-card w2">
-          <div className="kb-ch">
-            <Text as="span" font="label2">메시지</Text>
-            <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">이 종목 {tape.length}건</Text>
-          </div>
-          <div className="kb-cb">
-            {tape.length ? (
-              <>
-                {tape.map((e) => (
-                  <div className="kb-tp" key={e.i}>
-                    <span className="kb-n">{fmtHms(e.t)}</span>
-                    <span className={e.s === 'S' ? 'kb-side-s' : e.s === 'B' ? 'kb-side-b' : undefined}>
-                      {e.s === 'S' ? '매도' : e.s === 'B' ? '매수' : ''}
-                    </span>
-                    <span className="kb-tpr" title={e.raw ?? undefined}>{e.raw}</span>
-                    <span className="kb-n kb-dk" title={e.d ?? undefined}>{e.d}</span>
-                  </div>
-                ))}
-              </>
-            ) : (
-              <div className="kb-empty">이 종목 메시지가 아직 없습니다</div>
-            )}
-          </div>
-        </div>
+        {/* ★메시지 카드를 걷었다 [OWNER 2026-10-01 「시세 칸이 가로로 너무 길고 세로로
+            너무 좁아 · 메시지를 빼도 되지 않을까」]. 그 카드가 가중치 2 를 물고 있어
+            시세 그림이 **1060 × 98**(10.8:1) 이었다 — 그림이 아니라 띠였다. 같은 메시지는
+            메인 탭의 피드에 전부 있고(이 카드는 그 피드를 종목으로 거른 것뿐이었다),
+            이 판에서 «누가 무엇을» 은 오른쪽 호가·딜러 카드가 이미 말한다. */}
 
         {v.swap ? (
           <div className="kb-card">
