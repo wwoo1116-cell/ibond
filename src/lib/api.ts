@@ -98,6 +98,18 @@ export type FeedPage =
   paths['/feed.json']['get']['responses'][200]['content']['application/json'];
 export type FeedRow = FeedPage['feed'][number];
 
+/** 「방금 온 싼 오퍼」 — `/api/alarms` 의 응답. **1KB 아래**다.
+ *
+ *  왜 `/api/view` 가 아닌가: `lane=cr` 응답은 오퍼 825개를 실어 **455KB** 다(실측
+ *  2026-10-01). 알람 하나 보려고 그걸 5초마다 받으면 [OWNER 2026-09-23 「렉이
+ *  미친듯이 걸림」]을 다시 만든다. 그 교훈이 SSE 의 `lite=1` 을 만든 것과 같은 자리다.
+ *
+ *  ⚠**빈 목록은 「없다」가 아니라 「창(60초) 안에 안 왔다」다.** 60초 창이면 대부분의
+ *  순간에 0건이다(실측) — 그래서 화면은 **쌓아야** 하고, 이 응답이 비었다고 쌓인 것을
+ *  지우면 안 된다. 같은 도착은 5초 폴에서 최대 12번 실려 오므로 `key` 로 접는다. */
+export type Alarms = paths['/api/alarms']['get']['responses'][200]['content']['application/json'];
+export type AlarmHit = Alarms['alarms'][number];
+
 export type Lane = 'ktb' | 'msb' | 'nhb' | 'cr' | 'dyn';
 export type TtlMode = 'def' | 'half' | 'inf';
 
@@ -110,6 +122,9 @@ export const getView = (
   code?: string,
   agg?: number,
 ) => get<View>('/api/view', { lane, ttl, cls, rt, code, agg: agg || undefined });
+
+/** 알람만. 어느 탭에 있어도 들을 수 있게 **가벼운 자리**를 따로 쓴다. */
+export const getAlarms = () => get<Alarms>('/api/alarms');
 
 export const getFeed = (since: number, limit = 3000) =>
   get<FeedPage>('/feed.json', { since, limit });

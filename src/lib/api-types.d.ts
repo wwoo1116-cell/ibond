@@ -81,6 +81,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alarms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Alarms
+         * @description 「방금 온 싼 오퍼」만. **1KB 아래**라 화면이 어느 탭에 있어도 계속 들을 수 있다.
+         *
+         *     왜 `/api/view` 로 안 하는가 — `lane=cr` 응답은 오퍼 825개를 실어 **455KB** 다(실측
+         *     2026-10-01). 알람 하나 보려고 그걸 5초마다 받으면 [OWNER 2026-09-23 「렉이 미친듯이
+         *     걸림」] 을 다시 만든다. 그 교훈이 SSE 의 `lite=1` 을 만든 것과 같은 자리다.
+         *
+         *     ★수는 `kbond_view.alarm_view` **한 곳**이 낸다 — `/api/view` 의 `alarms` 와 같은
+         *       함수다. 두 곳이 각자 유도하면 한쪽만 고치게 된다(`verify_v4` [M2] 가 대조한다).
+         *     ⚠빈 목록은 「없다」가 아니라 「창 안에 안 왔다」다 — 60초 창이면 대부분의 순간에 0건이다.
+         *       화면은 **쌓아야** 하고, 이 응답이 비었다고 쌓인 것을 지우면 안 된다.
+         */
+        get: operations["api_alarms_api_alarms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -147,6 +176,132 @@ export interface components {
              * @default 0
              */
             tot: number;
+        };
+        /**
+         * AlarmHit
+         * @description 「방금 온 싼 오퍼」 한 건. `kbond_view.alarm_hits` 가 낸다.
+         *
+         *     ★**모집단은 «거르기 전 크레딧 책»** 이다 — 화면이 어떤 pill·등급을 보고 있어도 같은
+         *       답이 온다. 필터에 따라 울리거나 안 울리면 그건 알람이 아니다.
+         *     ★**상태가 없다** — 호가의 도착 시각으로 나이를 재서 판정하므로 같은 입력에 같은 답이다.
+         *       그래서 **같은 도착이 창(60초) 동안 여러 번 실려 온다**(5초 폴이면 최대 12번).
+         *       소비자가 `key` 로 접는다.
+         */
+        AlarmHit: {
+            /**
+             * Key
+             * @description 한 도착을 가리키는 열쇠 «딜러|종목|도착초». 이것으로 접는다
+             */
+            key: string;
+            /**
+             * N
+             * @description 종목/발행체 표시명
+             */
+            n?: string | null;
+            /**
+             * D
+             * @description 딜러 표시명
+             */
+            d?: string | null;
+            /**
+             * Cls
+             * @description 종별 — 위험순
+             */
+            cls?: string | null;
+            /**
+             * Rt
+             * @description 신용등급
+             */
+            rt?: string | null;
+            /**
+             * Ttm
+             * @description 잔존(년)
+             */
+            ttm?: number | null;
+            /**
+             * A
+             * @description 수량(억)
+             */
+            a?: number | null;
+            /**
+             * Age
+             * @description 나이(초) = 책의 T − 호가 도착 시각. 창은 60초(1분 벼랑)
+             */
+            age?: number | null;
+            /**
+             * Val
+             * @description 이 오퍼의 값 — 무리가 커브반영을 가졌으면 bpc, 아니면 bpe
+             */
+            val?: number | null;
+            /**
+             * Med
+             * @description 그 무리의 중앙값(같은 자로 잰 것)
+             */
+            med?: number | null;
+            /**
+             * Dev
+             * @description 무리 중앙 대비 편차(bp). 싸다 = 양수. 이것이 문턱을 넘었다
+             */
+            dev?: number | null;
+            /**
+             * Won
+             * @description 그 편차가 **단가 몇 원인가**(액면 1만원). 100억 기준은 ×1e6. ★bp 는 짧은 잔존에서 돈이 아니다 — 잔존 0.01년의 3bp 는 100억에 3만원이고 1년이면 289만원이다(1,000배). 환산표는 끝전 환산이 쓰는 그 한 벌(`enrich_kbond_quotes.won_to_bp`)이고, 못 꽂혔으면 `None` 이다 (0 이 아니다 — 「못 쟀다」와 「0원」은 다른 말이다)
+             */
+            won?: number | null;
+            /**
+             * Adj
+             * @description 커브 반영값으로 쟀나(아니면 민평대비). 무리 안에서 자는 하나다
+             */
+            adj?: boolean | null;
+            /**
+             * Pk
+             * @description 무리 이름
+             */
+            pk?: string | null;
+            /**
+             * Pr
+             * @description 그 무리 안 순위
+             */
+            pr?: number | null;
+            /**
+             * Pn
+             * @description 그 무리에서 값을 부른 오퍼 수
+             */
+            pn?: number | null;
+            /**
+             * Est
+             * @description 무리의 등급이 문면이 아니라 집계에서 온 것 — 화면이 그 사실을 적는다
+             */
+            est?: boolean | null;
+        };
+        /**
+         * Alarms
+         * @description `/api/alarms` 의 응답 — 알람만 내는 가벼운 자리.
+         *
+         *     왜 따로 있는가: `/api/view?lane=cr` 은 오퍼 825개를 실어 **455KB** 다(실측). 알람만
+         *     보려고 그걸 5초마다 받으면 2026-09-23 의 「렉이 미친듯이 걸림」을 다시 만든다.
+         *     이 응답은 **1KB 아래**라 화면이 어느 탭에 있어도 계속 들을 수 있다.
+         *     ★`/api/view` 의 `alarms` 와 **같은 함수**(`kbond_view.alarm_view`)가 낸다 —
+         *       두 곳이 각자 유도하면 한쪽만 고치게 된다. `verify_v4` [M2] 가 둘을 대조한다.
+         */
+        Alarms: {
+            /** Now */
+            now?: string | null;
+            /** T */
+            T: number;
+            /** Ver */
+            ver?: number | null;
+            /**
+             * Alarms
+             * @description 창 안에 온 것. **대부분의 순간에 비어 있다**(실측)
+             * @default []
+             */
+            alarms: components["schemas"]["AlarmHit"][];
+            /**
+             * Alarm N Bp
+             * @description 지금 걸린 문턱(bp) — 무리 중앙 대비. 화면이 이 값을 적고 스스로 정하지 않는다
+             */
+            alarm_n_bp: number;
         };
         /**
          * Axis
@@ -495,6 +650,11 @@ export interface components {
              * @description 그 무리를 커브 반영값으로 줄 세웠나(전원이 가졌을 때만)
              */
             padj?: boolean | null;
+            /**
+             * Pmed
+             * @description 그 무리의 중앙값 — `padj` 가 참이면 커브반영값의, 아니면 민평대비의. 알람(`alarm_hits`)과 교정기(`alarm_sizing`)가 **이 값 하나**를 쓴다. 무리를 두 곳이 만들면 한쪽만 고치게 되므로 여기 싣는다 [2026-10-01]
+             */
+            pmed?: number | null;
             /**
              * Won
              * @description 문면 원 스프레드
@@ -1712,6 +1872,16 @@ export interface components {
             } | null;
             leaderboard?: components["schemas"]["Leaderboard"] | null;
             /**
+             * Alarms
+             * @description lane 이 cr 일 때. 창(60초) 안에 온 «무리 중앙보다 문턱만큼 싼» 오퍼. 대부분의 순간에 빈 목록이다 — 없는 것과 «아직 안 옴» 은 같은 뜻이다
+             */
+            alarms?: components["schemas"]["AlarmHit"][] | null;
+            /**
+             * Alarm N Bp
+             * @description lane 이 cr 일 때. 지금 걸린 문턱(bp). 화면은 이 값을 적고 스스로 정하지 않는다
+             */
+            alarm_n_bp?: number | null;
+            /**
              * Aggr
              * @description 당일 공격 방향 집계 {B: 사 간 체결, S: 판 체결}
              */
@@ -1853,6 +2023,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_alarms_api_alarms_get: {
+        parameters: {
+            query?: {
+                t?: string | null;
+                ttl?: string;
+                T?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alarms"];
                 };
             };
             /** @description Validation Error */

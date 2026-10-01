@@ -114,6 +114,26 @@ export function fmtLotBlank(a?: number | null): string {
 }
 
 /** 비율. 기본 두 자리. */
+/**
+ * 돈 한 칸 — **100억 살 때의 값**. 들어오는 것은 서버가 준 «단가 원»(액면 1만원)이고
+ * 100억 기준은 ×1e6 이다.
+ *
+ * ★왜 이 함수가 여기 있나 [2026-10-01]: 알람 배너가 이 서식을 **손으로 짰다가**
+ *   `format-single-source` 가드에 걸렸다(`toFixed`·`toLocaleString` 셋). 서식은 이
+ *   파일 하나가 진다 — 같은 양이 자리마다 다른 어휘로 적히면 한쪽만 낡는다.
+ * ★왜 bp 옆에 돈을 적나: bp 는 **짧은 잔존에서 돈이 아니다**. 잔존 0.01년의 3bp 는
+ *   100억에 3만원이고 1년이면 289만원이다(실측 1,000배). 환산은 서버가 한다.
+ */
+export function fmtWon10b(wonPer10k?: number | null): string {
+  if (wonPer10k == null) return EMDASH;
+  const v = wonPer10k * 1e6;
+  const a = Math.abs(v);
+  if (a >= 1e8) return `${fmtRatio(v / 1e8, 1)}억`;
+  if (a >= 1e4) return `${fmtCount(Math.round(v / 1e4))}만`;
+  return `${fmtCount(Math.round(v))}원`;
+}
+
+
 export function fmtRatio(v?: number | null, digits = 2): string {
   return v == null ? EMDASH : v.toFixed(digits);
 }

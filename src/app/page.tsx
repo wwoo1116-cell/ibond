@@ -21,6 +21,7 @@ import { DEFAULT_API, apiBase, getFeed, getHealth, getView, setApi, url } from '
 import type { FeedRow, TtlMode, View } from '@/lib/api';
 import { useWatch, watchKey } from '@/lib/watch';
 import { fmtCount, fmtHms } from '@/lib/format';
+import { Alarms } from '@/components/Alarms';
 import { Feed } from '@/components/Feed';
 import { Bonds } from '@/components/Bonds';
 import { Credit } from '@/components/Credit';
@@ -309,6 +310,14 @@ export default function Page() {
           설정
         </Button>
       </HStack>
+
+      {/* ★「싼 오퍼가 왔다」 — 바 **아래** 한 줄. 바 안에 넣지 않는 이유: 바는 이미
+          제목·탭·건수·🔔·점·시계·설정으로 차 있고, 목록이 거기 들어가면 그 줄이 접힌다.
+          ★쌓인 것이 없으면 컴포넌트가 `null` 을 내어 **자리를 안 먹는다** — 배치 캐논
+          ①②(페이지·판은 안 구른다)를 그대로 지킨다.
+          ★어느 탭에 있어도 듣는다 — 알람은 «크레딧 화면» 의 성질이 아니라 **책**의
+          성질이고, 그래서 가벼운 `/api/alarms`(0.06KB)를 따로 뒀다. */}
+      <Alarms />
 
       {tab === 'main' ? (
         <div className="kb-main">
