@@ -99,6 +99,7 @@ type LineShape = {
   area?: string;
   axis?: string;
   beacon?: boolean;
+  lastValue?: boolean;
 };
 
 /** 계열의 «틀» — 값은 안 본다. 이것이 같으면 계열을 **다시 안 세운다**. */
@@ -117,7 +118,8 @@ export function sameShape(
       x.area === y.area &&
       x.axis === y.axis &&
       /* 구슬도 «모양» 이다 — 빼 두면 주선이 바뀌어도 계열을 다시 안 세운다. */
-      x.beacon === y.beacon,
+      x.beacon === y.beacon &&
+      x.lastValue === y.lastValue,
   );
 }
 
@@ -130,10 +132,11 @@ export function sameLines(
 
 /** 고·저 표시점. */
 export function sameMarkers(
-  a: readonly { index: number }[] | undefined,
-  b: readonly { index: number }[] | undefined,
+  a: readonly { index: number; price?: number; text?: string }[] | undefined,
+  b: readonly { index: number; price?: number; text?: string }[] | undefined,
 ): boolean {
-  return sameEach(a, b, (x, y) => x.index === y.index);
+  /* 값 자리와 글자도 «모양» 이다 — 체결 점은 그 금리 자리에 선다(`TimeMarker.price`). */
+  return sameEach(a, b, (x, y) => x.index === y.index && x.price === y.price && x.text === y.text);
 }
 
 /** 가로 상수선 — 0선·σ 밴드. */

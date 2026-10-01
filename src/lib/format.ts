@@ -162,6 +162,29 @@ export function fmtHm(t?: number | null): string {
   return `${p2(Math.floor(t / 3600) % 24)}:${p2(Math.floor((t % 3600) / 60))}`;
 }
 
+/* ── 시세 테이프의 시각 [2026-10-01] ──────────────────────────────────────────
+ * 여러 날을 한 축에 잇는 차트는 «장중 초» 로는 날이 안 선다. 테이프의 자리는
+ * **에포크 초**이되 KST 벽시계를 UTC 로 흘린 것이다(`lib/pxTape.ts::epochOf`) —
+ * 그래서 읽을 때도 UTC 손잡이로 읽어야 벽시계가 그대로 나온다. 세 벌 다 ISO 다. */
+
+/** 테이프 자리 → `MM-DD`. 날이 바뀌는 눈금. */
+export function fmtTapeDay(t: number): string {
+  const d = new Date(t * 1000);
+  return `${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
+}
+
+/** 테이프 자리 → `HH:MM`. 하루 안의 눈금. */
+export function fmtTapeHm(t: number): string {
+  const d = new Date(t * 1000);
+  return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
+}
+
+/** 테이프 자리 → `YYYY-MM-DD HH:MM`. 크로스헤어와 리드아웃의 시각. */
+export function fmtTapeAt(t: number): string {
+  const d = new Date(t * 1000);
+  return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
+}
+
 /**
  * 잔존 — ★1년 안쪽은 «일» 로 적는다 [2026-09-23].
  *

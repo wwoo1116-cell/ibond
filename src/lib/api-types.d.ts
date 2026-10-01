@@ -110,6 +110,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/px_hist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Px Hist
+         * @description 한 종목의 «어제까지» 시세 테이프 — 분 단위 매도·매수와 그날의 전일 민평.
+         *
+         *     [OWNER 2026-10-01] 「어제자랑 연결해서 최대 1년까지」. 오늘은 `/api/view` 의 `px` 가
+         *     내고 화면이 둘을 잇는다. 책(스냅샷)을 안 읽는다 — 아침에 구운 파케이만 읽으므로
+         *     장중엔 값이 안 바뀐다. 그래서 캐시를 허락한다(`/api/view` 는 no-store).
+         *
+         *     days: 마지막 n 영업일(0 = 전부) · before: 이 날(exclusive) 앞까지 — 화면이 «오늘» 을 넘긴다.
+         */
+        get: operations["api_px_hist_api_px_hist_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -1612,6 +1638,62 @@ export interface components {
              */
             n: number;
         };
+        /**
+         * PxFill
+         * @description 오늘 이 종목의 체결 하나 — 테이프(`snap.tape`)에서 고른다. 화면은 점으로 찍는다.
+         */
+        PxFill: {
+            /** T */
+            t: number;
+            /** Y */
+            y: number;
+            /**
+             * A
+             * @description 억
+             */
+            a?: number | null;
+            /**
+             * D
+             * @description 딜러 표시명
+             */
+            d?: string | null;
+        };
+        /**
+         * PxHist
+         * @description `/api/px_hist` 의 응답 — 한 종목의 «어제까지» 분 단위 매도·매수와 그날의 전일 민평.
+         *
+         *     [OWNER 2026-10-01] 「어제자랑 연결해서 최대 1년까지」. 오늘은 `/api/view` 의 `px` 가
+         *     (10초 표본) 내고, 화면이 둘을 한 줄로 잇는다. 국고만 이력이 있다(`kbond_px_hist` 머리말).
+         */
+        PxHist: {
+            /** Code */
+            code: string;
+            /**
+             * Days
+             * @description 호가가 있던 영업일, 오름차순 'YYYY-MM-DD'. `q` 의 첫 칸이 이 순번이다
+             * @default []
+             */
+            days: string[];
+            /**
+             * Q
+             * @description [날 순번, 장중 분, 매수, 매도] — 그 분의 마지막 호가. 없는 쪽은 null
+             * @default []
+             */
+            q: (number | null)[][];
+            /**
+             * Mp
+             * @description `days` 와 같은 길이 — 그날의 전일 민평
+             * @default []
+             */
+            mp: (number | null)[];
+            /**
+             * Asof
+             * @description 마지막 날
+             */
+            asof?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /** PxPoint */
         PxPoint: {
             /** T */
@@ -1661,6 +1743,12 @@ export interface components {
              * @default []
              */
             act: components["schemas"]["ActBin"][];
+            /**
+             * Fills
+             * @description 오늘 체결 전부(시간순) — 화면이 점으로 찍는다 [OWNER 2026-10-01]
+             * @default []
+             */
+            fills: components["schemas"]["PxFill"][];
             /**
              * Note
              * @description 표본이 모자라면 그 이유
@@ -2056,6 +2144,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Alarms"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_px_hist_api_px_hist_get: {
+        parameters: {
+            query: {
+                code: string;
+                days?: number;
+                before?: string | null;
+                t?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PxHist"];
                 };
             };
             /** @description Validation Error */

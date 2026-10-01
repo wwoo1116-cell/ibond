@@ -27,6 +27,7 @@ import type {
 } from 'lightweight-charts';
 
 import { ActivityBars, type ActivityBin } from './activityBars';
+import { BandFill } from './bandFill';
 import type { AreaFill } from './dottedArea';
 import type { LwPalette } from './palette';
 import { VerticalLines } from './verticalLines';
@@ -42,7 +43,7 @@ import {
   useStable,
 } from './stable';
 import { CROSSHAIR_LABEL_MIN_W } from './metrics';
-import { useLwChart } from './useLwChart';
+import { useLwChart, type TimeAxisText } from './useLwChart';
 
 export type TimeLine = {
   id: string;
@@ -62,6 +63,23 @@ export type TimeLine = {
   format?: (v: number) => string;
   /** 커서 구슬 — **주선 하나만** 켠다(`series.ts::addLine` 의 그 주석). */
   beacon?: boolean;
+  /** 마지막 값을 축에 꼬리표로 — 시세 테이프의 «지금 매도·매수» [OWNER 2026-10-01]. */
+  lastValue?: boolean;
+};
+
+/** 두 선 사이의 띠 — 시세 테이프의 스프레드(`bandFill.ts`). 선은 `id` 로 가리킨다. */
+export type TimeBand = {
+  hi: string;
+  lo: string;
+  color: (p: LwPalette) => string;
+};
+
+/** 가로축의 글자 — 캐논은 장중 초(`useLwChart::clockTick`)인데, 여러 날을 잇는
+ *  테이프는 날과 시각을 둘 다 말해야 한다. `kind` 는 라이브러리의 눈금 무게
+ *  (0 년 · 1 월 · 2 일 · 3 시각 · 4 초). */
+export type TimeTick = {
+  mark: (t: number, kind: number) => string;
+  at: (t: number) => string;
 };
 
 /** 세로선의 결 — 색을 직접 주지 않고 **뜻**을 준다(`theme/tint.ts` 의 규율).
@@ -73,6 +91,12 @@ export type TimeMarker = {
   /** `dates` 의 순번. */
   index: number;
   color: (p: LwPalette) => string;
+  /** 주면 선 위가 아니라 **그 값 자리**에 선다 — 체결은 호가가 아니라 제 금리에 찍힌다. */
+  price?: number;
+  /** 점 옆의 글자(체결 금리). 긴 구간에서는 비운다 — 점만으로 족하다. */
+  text?: string;
+  /** 라이브러리 크기 단위. 고·저 표시점은 0.6, 체결은 1. */
+  size?: number;
 };
 
 export function TimeChart({
@@ -81,6 +105,8 @@ export function TimeChart({
   markers,
   priceLines,
   markLines,
+  band,
+  tick,
   yRange,
   margins,
   activity,
@@ -111,6 +137,10 @@ export function TimeChart({
    *  CDS `ReferenceLine dataX={…} label={…}` 의 자리. 겹침 회피(근접 마크
    *  합치기)는 **호출부가** 한다 — 라벨을 아는 쪽이 거기다. */
   markLines?: readonly { index: number; label?: string; tone?: MarkLineTone }[];
+  /** 두 선 사이의 띠 — 시세 테이프의 스프레드. 위 선의 계열에 매단다. */
+  band?: TimeBand;
+  /** 가로축 글자를 바꾼다 — 여러 날을 잇는 테이프만 쓴다. 안 주면 캐논(장중 초). */
+  tick?: TimeTick;
   /**
    * 값 축의 범위를 **밖에서** 정한다 — 자동 범위를 끈다.
    *
@@ -158,7 +188,19 @@ export function TimeChart({
 }) {
   const [el, setEl] = useState<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<number | null>(null);
-  const handle = useLwChart<Time>('time', el);
+  /* 축 글자 덮개 — **참조가 안정해야** 차트가 안 다시 만들어진다. 함수는 ref 로
+     최신 것을 읽고, 객체는 «있다/없다» 가 바뀔 때만 새로 난다. */
+  const tickRef = useRef(tick);
+  tickRef.current = tick;
+  const hasTick = !!tick;
+  const axis = useMemo<TimeAxisText | undefined>(
+    () =>
+      hasTick
+        ? { mark: (t, k) => tickRef.current!.mark(t, k), at: (t) => tickRef.current!.at(t) }
+        : undefined,
+    [hasTick],
+  );
+  const handle = useLwChart<Time>('time', el, undefined, axis);
 
   /* ── 프롭은 **내용**으로 본다 [2026-08-27] ───────────────────────────────────
      호출부는 `dates={points.map((p) => p.t)}` 처럼 매 렌더 새 배열을 줘도 된다.
@@ -178,8 +220,10 @@ export function TimeChart({
 
   /* 색·서식은 «모양» 이 아니라 안정화 대상이 아니다. 계열을 다시 세우는
      순간에는 **그때의 최신 것**이 쓰여야 하므로 ref 로 읽는다. */
-  const latest = useRef({ lines, markers, priceLines, onHoverIndex, onScaleWidth });
-  latest.current = { lines, markers, priceLines, onHoverIndex, onScaleWidth };
+  const latest = useRef({ lines, markers, priceLines, band, onHoverIndex, onScaleWidth });
+  latest.current = { lines, markers, priceLines, band, onHoverIndex, onScaleWidth };
+  /** 띠의 «틀» — 어느 두 선인가. 색은 겉모습이다. */
+  const bandKey = band ? `${band.hi}|${band.lo}` : '';
 
   /** 시각 -> 순번. 크로스헤어가 주는 것은 시각뿐이다. */
   const indexOf = useMemo(() => new Map(sTimes.map((t, i) => [String(t), i])), [sTimes]);
@@ -259,6 +303,8 @@ export function TimeChart({
      갈아입힌다. 가른 이유는 색이 바뀌었다고 계열을 부수면 크로스헤어가 끊기고
      화면이 번쩍이기 때문이다(MA 색 취향을 바꾸면 값은 그대로인데 색만 바뀐다). */
   const abars = useRef<ActivityBars<Time> | null>(null);
+  /** 띠 — 어느 계열(`at`)에 매달았는지 같이 적어 둔다(떼어 낼 때 그 계열이어야 한다). */
+  const bandRef = useRef<{ fill: BandFill<Time>; at: number } | null>(null);
 
   useEffect(() => {
     if (!handle || sTimes.length === 0) return;
@@ -279,6 +325,7 @@ export function TimeChart({
           area: ln.area,
           areaColor: src.lines[i]?.areaColor ?? ln.areaColor,
           axis: ln.axis,
+          lastValue: ln.lastValue,
           format: src.lines[i]?.format ?? ln.format,
           /* 아무도 안 켰으면 **첫 줄**이 켠 것으로 친다. 이 리포의 모든 시계열
              차트에서 첫 줄이 주선이고(`anchor` 도 그 규약을 쓴다), 그래야 아홉
@@ -300,20 +347,36 @@ export function TimeChart({
        않도록. */
     inkRef.current = sShape.map((ln, i) => (src.lines[i]?.color ?? ln.color)(palette));
 
-    /* 고·저 표시점 — CDS `Point` 자리. 주선(첫 계열)에 매단다. */
+    /* 고·저 표시점 — CDS `Point` 자리. 주선(첫 계열)에 매단다.
+       값 자리(`price`)를 주면 선이 아니라 그 금리에 선다 — 체결 점. */
     if (sMarkers?.length && placed[0]) {
       markerApi.current = createSeriesMarkers(
         placed[0].series,
         sMarkers
           .filter((m) => sTimes[m.index] != null)
-          .map((m, i) => ({
-            time: sTimes[m.index] as Time,
-            position: 'inBar' as const,
-            shape: 'circle' as const,
-            color: (src.markers?.[i]?.color ?? m.color)(palette),
-            size: 0.6,
-          })),
+          .map((m, i) => {
+            const color = (src.markers?.[i]?.color ?? m.color)(palette);
+            const base = { time: sTimes[m.index] as Time, shape: 'circle' as const, color, size: m.size ?? 0.6, text: m.text };
+            return m.price != null
+              ? { ...base, position: 'atPriceMiddle' as const, price: m.price }
+              : { ...base, position: 'inBar' as const };
+          }),
       );
+    }
+
+    /* 두 선 사이의 띠 — 위 선의 계열에 매단다. 점은 두 선의 값에서 바로 난다. */
+    if (src.band) {
+      const hi = sShape.findIndex((l) => l.id === src.band!.hi);
+      const lo = sShape.findIndex((l) => l.id === src.band!.lo);
+      if (hi >= 0 && lo >= 0 && placed[hi]) {
+        const bf = new BandFill<Time>();
+        placed[hi].series.attachPrimitive(bf);
+        bf.update(
+          sTimes.map((t, k) => ({ time: t as Time, hi: src.lines[hi]?.values[k] ?? null, lo: src.lines[lo]?.values[k] ?? null })),
+          src.band.color(palette),
+        );
+        bandRef.current = { fill: bf, at: hi };
+      }
     }
 
     /* 가로 상수선. 첫 계열에 매단다 — 값 축이 하나뿐이라 어디 붙어도 같다. */
@@ -376,9 +439,14 @@ export function TimeChart({
         placed[0].series.detachPrimitive(abars.current);
       }
       abars.current = null;
+      const bf = bandRef.current;
+      if (alive.current && bf && placed[bf.at]) {
+        placed[bf.at]!.series.detachPrimitive(bf.fill);
+      }
+      bandRef.current = null;
       if (alive.current) removeLines(chart, placed);
     };
-  }, [handle, sTimes, sShape, sMarkers, sPriceLines, sMarkLines, precision, yRange, activity]);
+  }, [handle, sTimes, sShape, sMarkers, sPriceLines, sMarkLines, precision, yRange, activity, bandKey]);
 
   /* ── 값만 갈아 끼운다 ───────────────────────────────────────────────────────
      틀이 그대로일 때 도는 이펙트다. 계열을 안 부수므로 크로스헤어가 안 끊기고
@@ -398,6 +466,19 @@ export function TimeChart({
         }),
       );
     });
+    /* 띠도 값이다 — 두 선의 값에서 다시 난다. */
+    const bf = bandRef.current;
+    const bd = latest.current.band;
+    if (bf && bd) {
+      const hi = sLines.findIndex((l) => l.id === bd.hi);
+      const lo = sLines.findIndex((l) => l.id === bd.lo);
+      if (hi >= 0 && lo >= 0) {
+        bf.fill.update(
+          sTimes.map((t, k) => ({ time: t as Time, hi: sLines[hi]!.values[k] ?? null, lo: sLines[lo]!.values[k] ?? null })),
+          bd.color(handle.palette),
+        );
+      }
+    }
   }, [handle, sTimes, sLines]);
 
   /* 활동 띠도 값이다 — 같은 이유로 따로 갱신한다. */
@@ -430,7 +511,8 @@ export function TimeChart({
       }
       if (p.area) p.area.setColor(ln.areaColor ? ln.areaColor(palette) : stroke);
     });
-  }, [handle, lines]);
+    if (bandRef.current && band) bandRef.current.fill.setColor(band.color(palette));
+  }, [handle, lines, band]);
 
   /* 짝 차트가 짚어 준 자리. 값은 주선의 그날 값을 쓴다 — 크로스헤어는 가로
      자리만 보이면 되지만 API 가 값을 요구한다. */

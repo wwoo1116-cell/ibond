@@ -15,8 +15,9 @@ import dynamic from 'next/dynamic';
 
 import { Text } from '@coinbase/cds-web/typography';
 
-import { getView } from '@/lib/api';
-import type { FeedRow, Lane, TtlMode, View } from '@/lib/api';
+import { getPxHist, getView } from '@/lib/api';
+import type { FeedRow, Lane, PxHist, TtlMode, View } from '@/lib/api';
+import { SPANS, localYmd, spanDays, type SpanKey } from '@/lib/pxTape';
 import {
   EMDASH, fmtAge, fmtBpLevel, fmtBpUnit, fmtHms, fmtLot, fmtYield,
 } from '@/lib/format';
@@ -195,6 +196,20 @@ const PxChart = dynamic(() => import('./PxChart').then((m) => m.PxChart), {
   loading: () => <div className="kb-empty">시세를 그리는 중…</div>,
 });
 
+/* 시세 테이프의 «어제까지» — 아침에 한 번 구운 값이라 장중엔 안 바뀐다. 종목·구간마다
+   한 번 받고 품는다(10분). 5초 폴에 태우지 않는 이유는 1년치가 80KB 라서다. */
+const HIST_TTL_MS = 10 * 60_000;
+const histCache = new Map<string, { at: number; p: Promise<PxHist> }>();
+function pxHistCached(code: string, days: number, before: string): Promise<PxHist> {
+  const key = `${code}|${days}|${before}`;
+  const hit = histCache.get(key);
+  if (hit && Date.now() - hit.at < HIST_TTL_MS) return hit.p;
+  const p = getPxHist(code, days, before);
+  histCache.set(key, { at: Date.now(), p });
+  p.catch(() => histCache.delete(key));
+  return p;
+}
+
 export function Bonds({ lane, ttl, onTtl, feed = [] }: {
   lane: Lane;
   ttl: TtlMode;
@@ -205,6 +220,12 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
   const [code, setCode] = useState<string | null>(null);
   const [agg, setAgg] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+  /* 시세 구간 [OWNER 2026-10-01] — 오늘이 기본. 긴 구간은 어제까지를 따로 받는다. */
+  const [span, setSpan] = useState<SpanKey>('1d');
+  const [hist, setHist] = useState<PxHist | null>(null);
+  /* ★이 PC 의 날짜다 — 아래 통안 민평 판정의 `todayYmd` 는 UTC 날짜라 09시 전엔 어제다.
+     테이프는 «오늘» 이 어느 날인지로 라이브와 이력을 가르므로 벽시계가 맞다. */
+  const todayLocal = localYmd();
 
   const pull = useCallback(async () => {
     try {
@@ -232,6 +253,21 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
     const id = setInterval(() => void pull(), 5000);
     return () => clearInterval(id);
   }, [pull]);
+
+  /* 어제까지의 테이프 — 종목·구간이 바뀔 때만. 오늘 구간은 라이브만으로 족하다.
+     못 받으면(옛 백엔드·국고 아닌 레인) 오늘만 그린다 — 화면이 빨개지지 않는다. */
+  useEffect(() => {
+    const n = spanDays(span);
+    if (!code || n === 1) {
+      setHist(null);
+      return;
+    }
+    let alive = true;
+    pxHistCached(code, n == null ? 0 : n - 1, todayLocal)
+      .then((h) => { if (alive) setHist(h); })
+      .catch(() => { if (alive) setHist(null); });
+    return () => { alive = false; };
+  }, [code, span, todayLocal]);
 
   if (err) return <div className="kb-empty">백엔드에 못 붙었습니다 — {err}</div>;
   if (!v) return <div className="kb-empty">부르는 중…</div>;
@@ -389,11 +425,29 @@ export function Bonds({ lane, ttl, onTtl, feed = [] }: {
           <div className="kb-ch">
             <Text as="span" font="label2">시세</Text>
             <Text as="span" font="legal" color="fgMuted" className="kb-ch-meta">
-              {v.px?.mp != null ? `민평 ${fmtYield(v.px.mp)} 중앙` : 'mid 이력'}
+              {v.px?.mp != null ? `민평 ${fmtYield(v.px.mp)}` : '매도·매수'}
             </Text>
+            {/* 구간 — 영업일 수로 자른다(v2 와 같은 수). 생김새는 알약(`.kb-pill`)이
+                진다 — 맥박·크레딧 카드와 같은 손잡이다. */}
+            <div className="kb-ch-ctl" role="group" aria-label="시세 구간">
+              {SPANS.map((s) => (
+                <button
+                  key={s.key}
+                  className={`kb-pill${span === s.key ? ' on' : ''}`}
+                  aria-pressed={span === s.key}
+                  onClick={() => setSpan(s.key)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="kb-cb">
-            {v.px ? <PxChart px={v.px} /> : <div className="kb-empty">종목을 고르세요</div>}
+            {v.px ? (
+              <PxChart px={v.px} hist={hist} span={span} todayYmd={todayLocal} nowSec={T} />
+            ) : (
+              <div className="kb-empty">종목을 고르세요</div>
+            )}
           </div>
         </div>
 

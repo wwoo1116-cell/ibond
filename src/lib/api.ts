@@ -126,6 +126,12 @@ export const getView = (
 /** 알람만. 어느 탭에 있어도 들을 수 있게 **가벼운 자리**를 따로 쓴다. */
 export const getAlarms = () => get<Alarms>('/api/alarms');
 
+/** 시세 테이프의 «어제까지» — 아침에 구운 파케이라 장중엔 안 바뀐다(서버가 캐시를 허락한다).
+ *  `days` 는 오늘을 뺀 영업일 수(0 = 전부), `before` 는 오늘(exclusive). [OWNER 2026-10-01] */
+export type PxHist = paths['/api/px_hist']['get']['responses'][200]['content']['application/json'];
+export const getPxHist = (code: string, days: number, before: string) =>
+  get<PxHist>('/api/px_hist', { code, days, before });
+
 export const getFeed = (since: number, limit = 3000) =>
   get<FeedPage>('/feed.json', { since, limit });
 

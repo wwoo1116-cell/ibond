@@ -47,6 +47,9 @@ export type ChartLine<H> = {
   area?: AreaFill;
   /** 면의 색. 안 주면 선 색 그대로 — `solid` 는 보통 흐린 색을 따로 준다. */
   areaColor?: (p: LwPalette) => string;
+  /** 마지막 값을 축에 꼬리표로 — 시세 테이프의 «지금 매도·매수» [OWNER 2026-10-01
+   *  「현재가 항상 우측」]. 기본은 끈다(리드아웃이 읽는다 — 아래 `lastValueVisible` 주석). */
+  lastValue?: boolean;
   axis?: LineAxis;
   /**
    * 그 축의 눈금 글자. **계열마다** 주는 이유: 값 축이 둘일 때
@@ -90,7 +93,7 @@ export function addLine<H>(
     /* 마지막값 라벨과 가격선은 이 제품의 화면 문법에 없다 — 값은 리드아웃
        스트립과 사실 스트립이 읽어 준다. */
     priceLineVisible: false,
-    lastValueVisible: false,
+    lastValueVisible: line.lastValue ?? false,
     /**
      * 커서 구슬은 **주선에만** [2026-09-21].
      *

@@ -269,10 +269,35 @@ export function creationOptions(p: LwPalette): DeepPartial<ChartOptions> {
  * 다시 만들어지지 않는다 — 재생성하면 시리즈·프리미티브가 전부 날아가고
  * 화면이 깜빡인다. 스킴 변화는 `applyOptions` 가 받는다(색은 그렇게 먹는다).
  */
+/**
+ * 시각 축의 글자를 바꾼다 — 여러 날을 잇는 시세 테이프가 쓴다 [2026-10-01].
+ * `kind` 는 라이브러리의 눈금 무게(0 년 · 1 월 · 2 일 · 3 시각 · 4 초).
+ *
+ * ★**만들 때 넣어야 한다.** 라이브러리는 눈금 글자를 무게별로 **캐시**해서, 처음 캐논
+ *   서식(`clockTick`)으로 찍힌 글자는 뒤에 `applyOptions` 로 서식을 바꿔도 안 바뀐다
+ *   (실측 2026-10-01: 한 달 테이프의 날 눈금이 전부 「08:30」 — 날이 바뀌는 자리의
+ *   장중 초다). 그래서 `uniformDistribution` 과 같은 족속으로 여기서 받는다.
+ *   **참조가 안정해야 한다** — 바뀌면 차트가 새로 만들어진다.
+ */
+export type TimeAxisText = {
+  mark: (t: number, kind: number) => string;
+  at: (t: number) => string;
+};
+
+function withAxisText(opts: DeepPartial<ChartOptions>, axis?: TimeAxisText): DeepPartial<ChartOptions> {
+  if (!axis) return opts;
+  return {
+    ...opts,
+    timeScale: { ...opts.timeScale, tickMarkFormatter: (t: unknown, k: unknown) => axis.mark(Number(t), Number(k)) },
+    localization: { ...opts.localization, timeFormatter: (t: unknown) => axis.at(Number(t)) },
+  };
+}
+
 export function useLwChart<H>(
   kind: ChartKind,
   el: HTMLElement | null,
   curve?: CurveSetup,
+  axis?: TimeAxisText,
 ): LwHandle<H> | null {
   const palette = useLwPalette(el);
   const [chart, setChart] = useState<IChartApiBase<H> | null>(null);
@@ -295,10 +320,13 @@ export function useLwChart<H>(
     const p = paletteRef.current;
     if (!el || !p) return;
     const base = creationOptions(p);
-    const canon: DeepPartial<ChartOptions> = {
-      ...base,
-      timeScale: { ...base.timeScale, uniformDistribution: uniform },
-    };
+    const canon: DeepPartial<ChartOptions> = withAxisText(
+      {
+        ...base,
+        timeScale: { ...base.timeScale, uniformDistribution: uniform },
+      },
+      axis,
+    );
     const made =
       kind === 'curve'
         ? scale
@@ -316,12 +344,13 @@ export function useLwChart<H>(
       setChart(null);
       made.remove();
     };
-  }, [el, kind, scale, uniform, ready]);
+  }, [el, kind, scale, uniform, ready, axis]);
 
   useEffect(() => {
     if (!chart || !palette) return;
-    chart.applyOptions(canonOptions(palette));
-  }, [chart, palette]);
+    /* 축 글자 덮개도 같이 — 캐논만 다시 입히면 시각 서식이 `clockTick` 으로 돌아간다. */
+    chart.applyOptions(withAxisText(canonOptions(palette), axis));
+  }, [chart, palette, axis]);
 
   /* ── 가로축의 «글자» 는 축마다 다르다 [2026-08-27] ──────────────────────────
      캐논은 세 축이 함께 쓰는 한 벌이라 여기까지는 못 정한다. 두 축이 각자
