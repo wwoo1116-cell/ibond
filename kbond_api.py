@@ -49,8 +49,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import kbond_live as KL
 import kbond_price                                          # noqa: E402
 import kbond_view as KV                                          # noqa: E402
-from kbond_schema import (Basket, CreditQuote, Dealer, Event, FeedRow,   # noqa: E402
-                          Fill, Quote, Swap, View)
+from kbond_schema import (Alarms, Basket, CreditQuote, Dealer, Event,   # noqa: E402
+                          FeedRow, Fill, Quote, Swap, View)
 
 VIEWER = Path(__file__).parent / "kbond_live.html"
 # ★[OWNER 2026-09-11] 새 화면(kbond-web)을 «같은 주소» 에 함께 낸다.
@@ -228,6 +228,33 @@ def api_view(t: str | None = None, lane: str = "ktb", ttl: str = "def",
     out = KV.view(snap, lane=lane, T=T, mode=ttl, cls=cls, rt=rt,
                   code=code, agg=agg)
     out["ver"] = ver
+    return JSONResponse(out, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/alarms", response_model=Alarms)
+def api_alarms(t: str | None = None, ttl: str = "def", T: int | None = Query(None)):
+    """「방금 온 싼 오퍼」만. **1KB 아래**라 화면이 어느 탭에 있어도 계속 들을 수 있다.
+
+    왜 `/api/view` 로 안 하는가 — `lane=cr` 응답은 오퍼 825개를 실어 **455KB** 다(실측
+    2026-10-01). 알람 하나 보려고 그걸 5초마다 받으면 [OWNER 2026-09-23 「렉이 미친듯이
+    걸림」] 을 다시 만든다. 그 교훈이 SSE 의 `lite=1` 을 만든 것과 같은 자리다.
+
+    ★수는 `kbond_view.alarm_view` **한 곳**이 낸다 — `/api/view` 의 `alarms` 와 같은
+      함수다. 두 곳이 각자 유도하면 한쪽만 고치게 된다(`verify_v4` [M2] 가 대조한다).
+    ⚠빈 목록은 「없다」가 아니라 「창 안에 안 왔다」다 — 60초 창이면 대부분의 순간에 0건이다.
+      화면은 **쌓아야** 하고, 이 응답이 비었다고 쌓인 것을 지우면 안 된다.
+    """
+    deny = _deny_if_no_token(t)
+    if deny:
+        return deny
+    snap, ver = _snapshot()
+    if not snap:
+        return JSONResponse({"error": "책이 아직 안 섰습니다"}, status_code=503)
+    if T is None:
+        now = str(snap.get("now") or "0:0:0").split(":")
+        T = int(now[0]) * 3600 + int(now[1]) * 60 + int(now[2])
+    out = {"now": snap.get("now"), "T": T, "ver": ver,
+           **KV.alarm_view(snap, T, ttl)}
     return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
 

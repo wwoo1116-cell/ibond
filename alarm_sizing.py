@@ -20,8 +20,8 @@ r"""알람 교정·사이징 — 「문턱 N bp 로 하루 몇 번 울리나」�
 ① **문턱 교정** — 무리 중앙 대비 편차 분포를 내고 문턱별 하루 환산을 표로 낸다.
    계열·등급마다 정상 민평대비가 달라 전역 bp 하나로는 한쪽에서만 울린다. 그래서
    문턱은 **무리 중앙 대비**로 건다(`buckets` 의 `bp_med`·`bpc_med` 가 이미 온다).
-   ⚠재는 자는 하나여야 한다 — 무리가 `bpc_med` 를 가지면 `bpc`, 아니면 `bpe`.
-   `peer_rank` 와 같은 규칙이다(그쪽 docstring: 「섞어서 재지 않는다」).
+   ⚠무리와 재는 자는 **서버가 정한 것을 읽는다**(`pmed`·`padj`) — 계열×등급×잔존칸,
+   전원이 커브반영을 가졌을 때만 그걸로. 여기서 다시 만들면 알람과 다른 것을 센다.
 
 ② **1등 교체가 진짜인가** — 교체를 «도착»과 «TTL 만료»로 가른다. 새 1등이 직전보다
    **덜 싸면** 아무것도 안 온 것이다(직전 1등이 늙어 죽고 더 나쁜 것이 왕관을 물려받음).
@@ -132,31 +132,12 @@ def to_won(dev_bp, ttm):
     return None if not r else dev_bp / r
 
 
-def _bucket_of(o: dict, buckets: list) -> dict | None:
-    """오퍼가 속한 무리 — 계열×등급×잔존칸. `kbond_view` 의 좁은 무리와 같은 키."""
-    ttm = o.get("ttm")
-    if ttm is None:
-        return None
-    for x in buckets:
-        lo, hi = x.get("ttm_lo"), x.get("ttm_hi")
-        if (x.get("cls") == o.get("cls") and x.get("rt") == o.get("rt")
-                and lo is not None and hi is not None and lo <= ttm < hi):
-            return x
-    return None
-
-
-def deviation(o: dict, b: dict) -> tuple[float, bool] | None:
-    """(무리 중앙 대비 편차, 커브반영으로 쟀나). 싸다 = 양수.
-
-    ★재는 자가 하나여야 한다 — 무리가 `bpc_med` 를 가졌고 이 오퍼도 `bpc` 가 있으면
-      커브반영으로, 아니면 둘 다 민평대비로. 섞어서 재지 않는다.
-    """
-    adj = o.get("bpc") is not None and b.get("bpc_med") is not None
-    v = o.get("bpc") if adj else o.get("bpe")
-    m = b.get("bpc_med") if adj else b.get("bp_med")
-    if v is None or m is None:
-        return None
-    return v - m, adj
+#: 무리를 여기서 다시 만들지 않는다 — `_bucket_of`/`deviation` 이 있었는데 **지웠다**.
+#: ★왜 [2026-10-01]: 그 둘은 `buckets`(계열×등급 · 잔존 **통째**)로 무리를 다시 세우고
+#:   있었고, 알람도 그랬다. [OWNER] 「잔존 칸을 넣는다」로 알람이 `peer_rank` 의 무리
+#:   (계열×등급×잔존칸) 하나를 쓰게 되자 **교정기가 다른 무리를 재게 됐다** — 서버가
+#:   이미 `pmed`(그 무리의 중앙값)와 `padj`(재는 자)를 실어 보내므로 그걸 읽는다.
+#:   잡아 준 것은 `test_교정기와_알람이_같은_것을_센다` 다(그 대조 문을 세워 둔 덕).
 
 
 def _pop(d: dict, T=None) -> list[dict]:
@@ -173,20 +154,20 @@ def _pop(d: dict, T=None) -> list[dict]:
       `time.time()` 으로 떨어졌고, 그러면 나이가 17억 초가 되어 **하루 종일 0행**을
       적는다. 축이 없으면 조용히 다른 축을 쓰는 대신 **없다고 말한다**.
     """
-    bks = d.get("buckets") or []
     T = d.get("T") if T is None else T
     out = []
     for o in d.get("offers") or []:
         if o.get("s") not in (None, "S") or o.get("atmp") or o.get("lvl") == "est":
             continue
-        if o.get("bpe") is None or o.get("ttm") is None:
+        if o.get("ttm") is None:
             continue
-        b = _bucket_of(o, bks)
-        if not b or (b.get("n") or 0) < PEER_MIN:
+        # ★무리는 서버가 말한다 — `pmed` 는 `peer_rank` 가 낸 그 무리의 중앙값이고
+        #   `padj` 는 그 무리에서 쓴 자다. 여기서 다시 고르지 않는다.
+        m, adj = o.get("pmed"), bool(o.get("padj"))
+        val = o.get("bpc") if adj else o.get("bpe")
+        if m is None or val is None:
             continue
-        r = deviation(o, b)
-        if not r:
-            continue
+        r = (val - m, adj)
         t = o.get("t")
         out.append({
             # ★`alarm_hits` 의 열쇠와 같다 — 한 도착을 여러 폴에서 봐도 한 번으로 접는다.

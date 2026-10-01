@@ -72,6 +72,10 @@ class CreditQuote(BaseModel):
     pn: int | None = Field(None, description="그 무리에서 값을 부른 오퍼 수. 넷 미만이면 순위를 안 낸다")
     pk: str | None = Field(None, description="무리 이름 — «계열 등급 잔존칸», 넷이 안 되면 등급을 품어 «계열 잔존칸»")
     padj: bool | None = Field(None, description="그 무리를 커브 반영값으로 줄 세웠나(전원이 가졌을 때만)")
+    pmed: float | None = Field(
+        None, description="그 무리의 중앙값 — `padj` 가 참이면 커브반영값의, 아니면 민평대비의. "
+                          "알람(`alarm_hits`)과 교정기(`alarm_sizing`)가 **이 값 하나**를 쓴다. "
+                          "무리를 두 곳이 만들면 한쪽만 고치게 되므로 여기 싣는다 [2026-10-01]")
     won: float | None = Field(None, description="문면 원 스프레드")
     ytm: float | None = None
     y: float | None = Field(None, description="ytm 과 같다(피드 호환)")
@@ -560,6 +564,49 @@ class BookInfo(BaseModel):
     p_b_by_imb: dict[str, ImbCell] = Field({}, description="직전 불균형 구간(오퍼 우세·균형·비드 우세)별 사 감 비율")
 
 
+class AlarmHit(BaseModel):
+    """「방금 온 싼 오퍼」 한 건. `kbond_view.alarm_hits` 가 낸다.
+
+    ★**모집단은 «거르기 전 크레딧 책»** 이다 — 화면이 어떤 pill·등급을 보고 있어도 같은
+      답이 온다. 필터에 따라 울리거나 안 울리면 그건 알람이 아니다.
+    ★**상태가 없다** — 호가의 도착 시각으로 나이를 재서 판정하므로 같은 입력에 같은 답이다.
+      그래서 **같은 도착이 창(60초) 동안 여러 번 실려 온다**(5초 폴이면 최대 12번).
+      소비자가 `key` 로 접는다.
+    """
+    key: str = Field(description="한 도착을 가리키는 열쇠 «딜러|종목|도착초». 이것으로 접는다")
+    n: str | None = Field(None, description="종목/발행체 표시명")
+    d: str | None = Field(None, description="딜러 표시명")
+    cls: str | None = Field(None, description="종별 — 위험순")
+    rt: str | None = Field(None, description="신용등급")
+    ttm: float | None = Field(None, description="잔존(년)")
+    a: float | None = Field(None, description="수량(억)")
+    age: float | None = Field(None, description="나이(초) = 책의 T − 호가 도착 시각. 창은 60초(1분 벼랑)")
+    val: float | None = Field(None, description="이 오퍼의 값 — 무리가 커브반영을 가졌으면 bpc, 아니면 bpe")
+    med: float | None = Field(None, description="그 무리의 중앙값(같은 자로 잰 것)")
+    dev: float | None = Field(None, description="무리 중앙 대비 편차(bp). 싸다 = 양수. 이것이 문턱을 넘었다")
+    adj: bool | None = Field(None, description="커브 반영값으로 쟀나(아니면 민평대비). 무리 안에서 자는 하나다")
+    pk: str | None = Field(None, description="무리 이름")
+    pr: int | None = Field(None, description="그 무리 안 순위")
+    pn: int | None = Field(None, description="그 무리에서 값을 부른 오퍼 수")
+    est: bool | None = Field(None, description="무리의 등급이 문면이 아니라 집계에서 온 것 — 화면이 그 사실을 적는다")
+
+
+class Alarms(BaseModel):
+    """`/api/alarms` 의 응답 — 알람만 내는 가벼운 자리.
+
+    왜 따로 있는가: `/api/view?lane=cr` 은 오퍼 825개를 실어 **455KB** 다(실측). 알람만
+    보려고 그걸 5초마다 받으면 2026-09-23 의 「렉이 미친듯이 걸림」을 다시 만든다.
+    이 응답은 **1KB 아래**라 화면이 어느 탭에 있어도 계속 들을 수 있다.
+    ★`/api/view` 의 `alarms` 와 **같은 함수**(`kbond_view.alarm_view`)가 낸다 —
+      두 곳이 각자 유도하면 한쪽만 고치게 된다. `verify_v4` [M2] 가 둘을 대조한다.
+    """
+    now: str | None = None
+    T: int
+    ver: int | None = None
+    alarms: list[AlarmHit] = Field([], description="창 안에 온 것. **대부분의 순간에 비어 있다**(실측)")
+    alarm_n_bp: float = Field(description="지금 걸린 문턱(bp) — 무리 중앙 대비. 화면이 이 값을 적고 스스로 정하지 않는다")
+
+
 class View(BaseModel):
     """`/api/view` 의 응답. 화면은 이걸 그대로 그린다."""
     now: str | None = None
@@ -596,5 +643,14 @@ class View(BaseModel):
     event_counts: dict[str, int] | None = None
     curve_today: dict[str, list[CurveTodayRow]] | None = None
     leaderboard: Leaderboard | None = None
+    # ── 「방금 온 싼 오퍼」 알람 [OWNER 2026-09-30] ─────────────────────────
+    # ★lane 이 cr 이면 **고른 pill 과 무관하게** 실린다(국고·통안 pill 에서도). 2026-10-01
+    #   까지는 GOV 분기가 안 넣어 그 화면에서만 조용히 침묵했다 — 「필터에 따라 알람이
+    #   갈리면 안 된다」는 이 설계의 규율이라, 없는 것이 아니라 결함이었다.
+    alarms: list[AlarmHit] | None = Field(
+        None, description="lane 이 cr 일 때. 창(60초) 안에 온 «무리 중앙보다 문턱만큼 싼» 오퍼. "
+                          "대부분의 순간에 빈 목록이다 — 없는 것과 «아직 안 옴» 은 같은 뜻이다")
+    alarm_n_bp: float | None = Field(
+        None, description="lane 이 cr 일 때. 지금 걸린 문턱(bp). 화면은 이 값을 적고 스스로 정하지 않는다")
     aggr: dict[str, int] | None = Field(None, description="당일 공격 방향 집계 {B: 사 간 체결, S: 판 체결}")
     book_info: BookInfo | None = Field(None, description="lane 이 dyn 일 때. 책이 말하는 것(+++)")

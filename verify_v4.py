@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -775,6 +776,61 @@ def main() -> int:
     print(f"[I5] 최우선에서 맞은 체결의 유효 = 호가/2 — {n5 - len(bad5)}/{n5}")
     if bad5:
         fails.append(f"I5 항등식 어긋남 {len(bad5)}건: {[(e['code'], e['y'], e['eff'], e['qs']) for e in bad5[:3]]}")
+
+    # ── [M] 스키마 대조 — «적어 둔 계약» 과 «실제로 나가는 것» (2026-10-01) ──────
+    # ★왜 여기 있는가: `kbond_schema` 머리말이 「응답이 모델과 어긋나면 그 자리에서
+    #   안다」고 적어 두었는데 **그게 사실이 아니었다.** 라우트가 `JSONResponse` 를
+    #   직접 돌려주면 FastAPI 는 `response_model` 검증·직렬화를 **건너뛴다**. 그래서
+    #   알람 두 열쇠(`alarms`·`alarm_n_bp`)가 **한 달 가까이 계약 밖으로** 나가고 있었고,
+    #   화면이 타입으로 읽을 수 없었다(타입은 OpenAPI 에서 기계로 뽑으니까).
+    #   시험도 타입도 못 잡는다 — 잡을 수 있는 자리는 «산 응답을 모델에 넣어 보는» 여기다.
+    import kbond_schema as SCH
+    import pydantic
+    for lane, cls_, model in (("ktb", None, SCH.View), ("cr", None, SCH.View),
+                              ("cr", "국고", SCH.View), ("cr", "은행채", SCH.View),
+                              ("dyn", None, SCH.View)):
+        q = f"lane={lane}" + (f"&cls={urllib.parse.quote(cls_)}" if cls_ else "")
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/view?{q}", timeout=30) as r:
+            payload = json.load(r)
+        extra = [k for k in payload if k not in model.model_fields]
+        if extra:
+            fails.append(f"M 스키마에 없는 열쇠가 나가고 있다 ({q}): {extra}")
+        try:
+            model.model_validate(payload)
+        except pydantic.ValidationError as e:                      # noqa: PERF203
+            fails.append(f"M 모델 검증 실패 ({q}): {str(e)[:300]}")
+    print(f"[M] 스키마 대조 — /api/view 다섯 조합이 `View` 와 맞는다(여분 열쇠 0 · 검증 통과)")
+
+    # ── [M2] 알람을 두 곳이 같게 내는가 ─────────────────────────────────────
+    # 배너는 가벼운 `/api/alarms` 를 듣고 크레딧 화면은 `/api/view` 에 실린 것을 쓴다.
+    # 같은 수를 두 곳이 내면 한쪽만 고치게 되므로 **한 함수**(`KV.alarm_view`)로 모았고,
+    # 그 사실을 여기서 박는다. ★그리고 «국고 pill 에서도 실리는가» 를 같이 본다 —
+    # 2026-10-01 까지 GOV 분기가 안 넣어 그 화면에서만 조용히 침묵했다.
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/alarms", timeout=30) as r:
+        al = json.load(r)
+    SCH.Alarms.model_validate(al)
+    keys_light = {a["key"] for a in (al.get("alarms") or [])}
+    seen_pills = {}
+    for cls_ in (None, "국고", "통안", "은행채", "회사채"):
+        q = "lane=cr" + (f"&cls={urllib.parse.quote(cls_)}" if cls_ else "")
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/view?{q}", timeout=30) as r:
+            v = json.load(r)
+        if v.get("alarms") is None:
+            fails.append(f"M2 «{cls_ or '전체'}» pill 에 alarms 가 안 실린다 — 필터에 따라 알람이 갈린다")
+            continue
+        if v.get("alarm_n_bp") != al.get("alarm_n_bp"):
+            fails.append(f"M2 문턱이 두 곳에서 다르다: view {v.get('alarm_n_bp')} != alarms {al.get('alarm_n_bp')}")
+        seen_pills[cls_ or "전체"] = {a["key"] for a in v["alarms"]}
+    for name, ks in seen_pills.items():
+        if ks != keys_light:
+            fails.append(f"M2 «{name}» pill 의 알람이 /api/alarms 와 다르다: {sorted(ks ^ keys_light)[:4]}")
+    # ⚠**빈 집합끼리의 «같다» 는 아무것도 증명하지 않는다.** 60초 창이면 대부분의 순간에
+    #   0건이라(실측) 이 대조가 거짓 초록이 되기 쉽다 — 그래서 그 사실을 **적는다**.
+    #   뜻있는 비어 있지 않은 대조는 `test_교정기와_알람이_같은_것을_센다`(둘을 세어 맞춘다)와
+    #   `test_알람과_화면_배지가_같은_무리를_말한다` 가 진다.
+    trivial = " ⚠**0건이라 trivial** — 실질 대조는 pytest 가 진다" if not keys_light else ""
+    print(f"[M2] 알람 한 벌 — /api/alarms {len(keys_light)}건 · pill {len(seen_pills)}곳이 전부 같은 열쇠 "
+          f"· 문턱 {al.get('alarm_n_bp')}bp{trivial}")
 
     print("\n" + "=" * 60)
     if fails:

@@ -598,6 +598,11 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
             out["grade_curve"] = None
             out["offers"] = gov_sel(snap, cls, T, mode, rt)
             out["needs"] = []
+            # ★[2026-10-01] 알람은 «크레딧 책» 의 성질이라 국고·통안 pill 에서도 낸다.
+            #   여기 없으면 그 화면에서 배너가 영원히 비어 있고, 「안 왔다」와 「못 받았다」가
+            #   구분되지 않는다 — 이 설계의 규율(「필터에 따라 알람이 갈리면 안 된다」)에
+            #   어긋난 자리였다. 값은 국고 경로 10ms 위에 크레딧 모집단 한 번이 더 얹힌다.
+            out.update(alarm_view(snap, T, mode))
         else:
             # 커브 이동은 **한 번만** 세운다 — 버킷·커브·오퍼 셋이 같은 닻을 써야
             # 한 화면이 두 수를 말하지 않는다.
@@ -614,8 +619,8 @@ def view(snap, lane="ktb", T=None, mode="def", cls=None, rt=None,
             out["offers"] = cr_sel(snap, T, mode, cls, rt, cv, rows=allr)
             out["needs"] = cr_needs(snap, T, mode, cls, rt)
             # 「방금 온 싼 오퍼」 — 화면이 배너로 쓴다. 없으면 빈 목록이다.
-            out["alarms"] = alarm_hits(allr, out["buckets"], T)
-            out["alarm_n_bp"] = ALARM_N_BP
+            # 이미 세운 모집단·무리를 넘겨 **두 번 계산하지 않는다**.
+            out.update(alarm_view(snap, T, mode, rows=allr))
     elif lane == "dyn":
         out["pulse"] = pulse_stats(snap, T)
         out["events"] = snap.get("events") or []
@@ -884,7 +889,15 @@ def peer_rank(rows):
         adj = all(x.get("bpc") is not None for x in g)
         key = (lambda x: x["bpc"]) if adj else (lambda x: x["bpe"])
         order = sorted(g, key=key, reverse=True)          # 싼 것(=금리 높은 것)부터
-        out[id(e)] = {"pr": order.index(e) + 1, "pn": len(g), "pk": lab, "padj": adj}
+        # ★[2026-10-01] 무리의 **중앙값**도 여기서 낸다 — 알람이 쓴다.
+        #   왜 여기인가: 알람이 자기 무리를 따로 만들면 화면의 「무리 n개 중 k위」 배지와
+        #   알람이 **다른 무리를 말한다.** 실제로 그랬다 — 알람은 `cr_buckets`(계열×등급,
+        #   잔존 **통째**)를 무리로 썼고 그래서 잔존 0.08년을 8.65년이 섞인 중앙과 비교했다.
+        #   [OWNER 2026-10-01] 「잔존 칸을 넣는다」 → `peer_rank` 와 **같은 무리 하나**로 모았다.
+        #   ⚠`buckets` 는 **표시 집계**이고 무리 키가 아니다 — 09-30 에 적은 「`pk` 는 표시
+        #     라벨이고 무리 키가 아니다」와 같은 병이 한 층 위에서 난 것이었다.
+        out[id(e)] = {"pr": order.index(e) + 1, "pn": len(g), "pk": lab, "padj": adj,
+                      "pmed": med([key(x) for x in g])}
     return out
 
 
@@ -923,7 +936,7 @@ ALARM_N_BP = 3.0
 ALARM_MAX_AGE = 60
 
 
-def alarm_hits(rows, buckets, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
+def alarm_hits(rows, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
     """«방금 온 · 무리 중앙보다 n_bp 이상 싼» 오퍼 — 순수 함수, 상태 없음.
 
     ## 왜 이 꼴인가 [설계 정본 `PROMPT_next_2026-09-30-alarm.md`]
@@ -937,9 +950,22 @@ def alarm_hits(rows, buckets, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
     스냅샷과 비교하지 않고 **나이**(T − t)로 판정한다. 그래서 이 함수는 같은 입력에
     같은 답을 낸다.
 
-    ★**재는 자가 하나여야 한다** — 무리가 `bpc_med` 를 가졌고 이 오퍼도 `bpc` 가
-    있으면 커브반영으로, 아니면 둘 다 민평대비로 잰다. `peer_rank` 의 규칙과 같다
-    (그쪽 docstring: 「섞어서 재지 않는다」).
+    ★★**무리는 `peer_rank` 의 것 하나뿐이다** — 계열×등급×**잔존칸**(넷 미만이면 등급을
+    품어 계열×잔존칸). [OWNER 2026-10-01 「잔존 칸을 넣는다」]
+
+    2026-10-01 까지 이 함수는 `cr_buckets`(계열×등급, 잔존이 **통째**)를 무리로 썼다.
+    그래서 ⓐ잔존 0.08년을 8.65년이 섞인 중앙과 비교했고(실측 «무위험 미상» 무리),
+    ⓑ화면의 「무리 n개 중 k위」 배지와 알람이 **서로 다른 무리**를 말했고,
+    ⓒ`lo <= ttm < hi` 로 무리를 찾느라 **그 무리에서 잔존이 가장 긴 오퍼는 영원히
+    못 울렸다**(실측 8/256건 · 그중 하나가 `bpe +17.1` 짜리였다), ⓓ잔존이 하나뿐인
+    무리 셋은 아예 못 울렸다. 리플레이 09-03 에서 판정이 **8건 갈렸다**(둘 다 8 ·
+    구현만 6 · 설계만 2). 지금은 무리가 하나라 그 넷이 전부 사라졌다.
+    ⚠**`buckets` 는 표시 집계이고 무리 키가 아니다** — 09-30 에 적은 「`pk` 는 표시
+      라벨이고 무리 키가 아니다」와 **같은 병이 한 층 위에서** 난 것이었다.
+
+    ★**재는 자가 하나여야 한다** — 무리 전원이 커브반영값을 가졌으면 그걸로, 하나라도
+    없으면 전원 민평대비로. `peer_rank` 가 그렇게 정하고(`padj`) 중앙값(`pmed`)도 **같은
+    자로** 낸다. 여기서 다시 고르지 않는다.
 
     ⚠**모집단은 `cr_ranked` 의 것**이어야 한다(거르기 전). 화면 필터를 태운 목록을
     넣으면 같은 오퍼가 필터에 따라 울리거나 안 울린다.
@@ -948,7 +974,7 @@ def alarm_hits(rows, buckets, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
       · 비드(`s != "S"`)               — 살 것을 찾는 화면이다
       · 「민평에」(`atmp`)              — 부른 값이 없다. 무리의 3분의 2가 여기 있다
       · 레벨이 가정(`lvl == "est"`)    — 0.5 가정 위에서는 안 울린다
-      · 무리가 작다(`n < PEER_MIN`)    — 중앙값이 뜻이 없다(그때는 `*_med` 가 None 이다)
+      · 무리가 없다(`pmed` 없음)       — `peer_rank` 가 넷 미만이라 아무 말도 안 한 것
       · 중앙값이 없다                  — 뺄 수 없으면 «—» 라는 이 레인 규율
     """
     out = []
@@ -962,21 +988,14 @@ def alarm_hits(rows, buckets, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
         age = T - t
         if age < 0 or age > max_age:
             continue
-        b = None
-        for x in buckets or ():
-            lo, hi = x.get("ttm_lo"), x.get("ttm_hi")
-            if (x.get("cls") == o.get("cls") and x.get("rt") == o.get("rt")
-                    and lo is not None and hi is not None and lo <= ttm < hi):
-                b = x
-                break
-        if b is None or (b.get("n") or 0) < PEER_MIN:
-            continue
-        adj = o.get("bpc") is not None and b.get("bpc_med") is not None
+        m = o.get("pmed")
+        if m is None:
+            continue                       # `peer_rank` 가 무리를 못 세운 것
+        adj = bool(o.get("padj"))
         val = o.get("bpc") if adj else o.get("bpe")
-        med = b.get("bpc_med") if adj else b.get("bp_med")
-        if val is None or med is None:
+        if val is None:
             continue
-        dev = val - med
+        dev = val - m
         if dev < n_bp:
             continue
         out.append({
@@ -985,14 +1004,34 @@ def alarm_hits(rows, buckets, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
             "key": f"{o.get('d')}|{o.get('n')}|{t}",
             "n": o.get("n"), "d": o.get("d"), "cls": o.get("cls"), "rt": o.get("rt"),
             "ttm": ttm, "a": o.get("a"), "age": age,
-            "val": round(val, 2), "med": round(med, 2), "dev": round(dev, 2),
+            "val": round(val, 2), "med": round(m, 2), "dev": round(dev, 2),
             "adj": adj,                     # 커브반영으로 쟀나(아니면 민평대비)
             "pk": o.get("pk"), "pr": o.get("pr"), "pn": o.get("pn"),
-            # 무리의 등급이 문면이 아니라 집계에서 온 것 — 배너가 그 사실을 적는다.
-            "est": bool(b.get("est")),
+            # ★이 오퍼의 등급이 문면이 아니라 집계에서 온 것 — 배너가 그 사실을 적는다.
+            #   («무리의» 등급이 아니다: 넓은 무리는 등급을 품어 하나로 말할 수 없다.)
+            "est": o.get("rt_src") == "집계",
         })
     # 싼 것부터. 같으면 새것부터.
     return sorted(out, key=lambda x: (-x["dev"], x["age"]))
+
+
+def alarm_view(snap, T, mode="def", *, rows=None):
+    """「방금 온 싼 오퍼」 응답 조각 — **`/api/view` 와 `/api/alarms` 가 나눠 쓰는 한 곳**.
+
+    ★왜 함수인가: 같은 수를 두 곳이 유도하면 한쪽만 고치게 된다(이 리포가 반복해서
+      찾은 병). 화면 배너는 가벼운 라우트로 듣고, 크레딧 화면은 `/api/view` 에 실려
+      오는 것을 쓴다 — **둘이 다른 답을 내면 안 된다.** `verify_v4` [M2] 가 대조한다.
+
+    ★**모집단은 늘 «거르기 전 크레딧 책»** 이다. `rows`·`buckets` 를 주면 조립부가 이미
+      세운 것을 재사용하고(두 번 계산 안 함), 안 주면 여기서 세운다. 어느 쪽이든 **답은
+      같다** — 화면이 국고 pill 을 보고 있든 은행채 AAA 를 보고 있든 마찬가지다.
+
+    ⚠빈 목록은 「없다」가 아니라 「창 안에 안 왔다」다. 60초 창이면 **대부분의 순간에
+      0건**이다(실측) — 그래서 화면은 쌓아야 하고, 이 응답만 보고 지우면 안 된다.
+    """
+    if rows is None:
+        rows = cr_ranked(snap, T, mode, curve_move(snap, T, mode))
+    return {"alarms": alarm_hits(rows, T), "alarm_n_bp": ALARM_N_BP}
 
 
 def cr_sel(snap, T, mode="def", cls=None, rt=None, cv=None, rows=None):
@@ -1247,5 +1286,13 @@ def grade_curve(snap, cls=None, rt=None):
     pts = curves.get(g) if g else None
     if not pts:
         return None
-    return {"group": g, "date": mtx.get("date"), "label": mtx.get("label"),
+    # ★[2026-10-01] `label` 에 **사전을 통째로** 담고 있었다 — `mtx["label"]` 은
+    #   «그룹코드 → 표시명» 12칸 사전(`kbond_live.MTX_LABEL`)이다. 스키마는 이 자리를
+    #   `str` 로 적어 두었고(한 커브의 이름), 아무도 그 사전을 안 쓰고 있었다. 그래서
+    #   새 화면은 이름 대신 코드(«BD»)를 그린다 — 이름이 바로 옆에 있는데도.
+    #   잡아 준 것은 시험도 타입도 아닌 `verify_v4` [M] 스키마 대조다(그날 새로 세웠다).
+    #   ⚠`snap["mtx"]["label"]` 은 **사전 그대로 둔다** — 옛 화면이 `mtx.label[grp]` 로
+    #     쓴다(`kbond_live.html:1563`). 고치는 것은 이 뷰가 내는 한 커브의 이름뿐이다.
+    return {"group": g, "date": mtx.get("date"),
+            "label": (mtx.get("label") or {}).get(g),
             "pts": [{"ttm": p[0], "y": p[1]} for p in pts]}
