@@ -81,6 +81,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alarms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Alarms
+         * @description 「방금 온 싼 오퍼」만. **1KB 아래**라 화면이 어느 탭에 있어도 계속 들을 수 있다.
+         *
+         *     왜 `/api/view` 로 안 하는가 — `lane=cr` 응답은 오퍼 825개를 실어 **455KB** 다(실측
+         *     2026-10-01). 알람 하나 보려고 그걸 5초마다 받으면 [OWNER 2026-09-23 「렉이 미친듯이
+         *     걸림」] 을 다시 만든다. 그 교훈이 SSE 의 `lite=1` 을 만든 것과 같은 자리다.
+         *
+         *     ★수는 `kbond_view.alarm_view` **한 곳**이 낸다 — `/api/view` 의 `alarms` 와 같은
+         *       함수다. 두 곳이 각자 유도하면 한쪽만 고치게 된다(`verify_v4` [M2] 가 대조한다).
+         *     ⚠빈 목록은 「없다」가 아니라 「창 안에 안 왔다」다 — 60초 창이면 대부분의 순간에 0건이다.
+         *       화면은 **쌓아야** 하고, 이 응답이 비었다고 쌓인 것을 지우면 안 된다.
+         */
+        get: operations["api_alarms_api_alarms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/px_hist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Api Px Hist
+         * @description 한 종목의 «어제까지» 시세 테이프 — 분 단위 매도·매수와 그날의 전일 민평.
+         *
+         *     [OWNER 2026-10-01] 「어제자랑 연결해서 최대 1년까지」. 오늘은 `/api/view` 의 `px` 가
+         *     내고 화면이 둘을 잇는다. 책(스냅샷)을 안 읽는다 — 아침에 구운 파케이만 읽으므로
+         *     장중엔 값이 안 바뀐다. 그래서 캐시를 허락한다(`/api/view` 는 no-store).
+         *
+         *     days: 마지막 n 영업일(0 = 전부) · before: 이 날(exclusive) 앞까지 — 화면이 «오늘» 을 넘긴다.
+         */
+        get: operations["api_px_hist_api_px_hist_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -91,6 +146,12 @@ export interface paths {
         /**
          * Events
          * @description SSE. 책이 바뀔 때만 민다. 15초 조용하면 하트비트(끊김 오인 방지).
+         *
+         *     ★`lite=1` 이면 «화면이 실제로 읽는 것» 만 민다 — now·n_msg·n_seq·feed.
+         *       [OWNER 2026-09-23 「렉이 미친듯이 걸림」] 책이 1.2MB 인데 매초 통째로
+         *       밀고 있었고, 새 화면이 그 프레임에서 쓰는 건 feed 와 n_msg 둘뿐이었다.
+         *       나머지를 매초 JSON.parse 하고 버리던 것이 렉이었다.
+         *       ⚠기본(lite=0)은 그대로 둔다 — 옛 화면(/)은 프레임 전체를 읽는다.
          */
         get: operations["events_events_get"];
         put?: never;
@@ -141,6 +202,132 @@ export interface components {
              * @default 0
              */
             tot: number;
+        };
+        /**
+         * AlarmHit
+         * @description 「방금 온 싼 오퍼」 한 건. `kbond_view.alarm_hits` 가 낸다.
+         *
+         *     ★**모집단은 «거르기 전 크레딧 책»** 이다 — 화면이 어떤 pill·등급을 보고 있어도 같은
+         *       답이 온다. 필터에 따라 울리거나 안 울리면 그건 알람이 아니다.
+         *     ★**상태가 없다** — 호가의 도착 시각으로 나이를 재서 판정하므로 같은 입력에 같은 답이다.
+         *       그래서 **같은 도착이 창(60초) 동안 여러 번 실려 온다**(5초 폴이면 최대 12번).
+         *       소비자가 `key` 로 접는다.
+         */
+        AlarmHit: {
+            /**
+             * Key
+             * @description 한 도착을 가리키는 열쇠 «딜러|종목|도착초». 이것으로 접는다
+             */
+            key: string;
+            /**
+             * N
+             * @description 종목/발행체 표시명
+             */
+            n?: string | null;
+            /**
+             * D
+             * @description 딜러 표시명
+             */
+            d?: string | null;
+            /**
+             * Cls
+             * @description 종별 — 위험순
+             */
+            cls?: string | null;
+            /**
+             * Rt
+             * @description 신용등급
+             */
+            rt?: string | null;
+            /**
+             * Ttm
+             * @description 잔존(년)
+             */
+            ttm?: number | null;
+            /**
+             * A
+             * @description 수량(억)
+             */
+            a?: number | null;
+            /**
+             * Age
+             * @description 나이(초) = 책의 T − 호가 도착 시각. 창은 60초(1분 벼랑)
+             */
+            age?: number | null;
+            /**
+             * Val
+             * @description 이 오퍼의 값 — 무리가 커브반영을 가졌으면 bpc, 아니면 bpe
+             */
+            val?: number | null;
+            /**
+             * Med
+             * @description 그 무리의 중앙값(같은 자로 잰 것)
+             */
+            med?: number | null;
+            /**
+             * Dev
+             * @description 무리 중앙 대비 편차(bp). 싸다 = 양수. 이것이 문턱을 넘었다
+             */
+            dev?: number | null;
+            /**
+             * Won
+             * @description 그 편차가 **단가 몇 원인가**(액면 1만원). 100억 기준은 ×1e6. ★bp 는 짧은 잔존에서 돈이 아니다 — 잔존 0.01년의 3bp 는 100억에 3만원이고 1년이면 289만원이다(1,000배). 환산표는 끝전 환산이 쓰는 그 한 벌(`enrich_kbond_quotes.won_to_bp`)이고, 못 꽂혔으면 `None` 이다 (0 이 아니다 — 「못 쟀다」와 「0원」은 다른 말이다)
+             */
+            won?: number | null;
+            /**
+             * Adj
+             * @description 커브 반영값으로 쟀나(아니면 민평대비). 무리 안에서 자는 하나다
+             */
+            adj?: boolean | null;
+            /**
+             * Pk
+             * @description 무리 이름
+             */
+            pk?: string | null;
+            /**
+             * Pr
+             * @description 그 무리 안 순위
+             */
+            pr?: number | null;
+            /**
+             * Pn
+             * @description 그 무리에서 값을 부른 오퍼 수
+             */
+            pn?: number | null;
+            /**
+             * Est
+             * @description 무리의 등급이 문면이 아니라 집계에서 온 것 — 화면이 그 사실을 적는다
+             */
+            est?: boolean | null;
+        };
+        /**
+         * Alarms
+         * @description `/api/alarms` 의 응답 — 알람만 내는 가벼운 자리.
+         *
+         *     왜 따로 있는가: `/api/view?lane=cr` 은 오퍼 825개를 실어 **455KB** 다(실측). 알람만
+         *     보려고 그걸 5초마다 받으면 2026-09-23 의 「렉이 미친듯이 걸림」을 다시 만든다.
+         *     이 응답은 **1KB 아래**라 화면이 어느 탭에 있어도 계속 들을 수 있다.
+         *     ★`/api/view` 의 `alarms` 와 **같은 함수**(`kbond_view.alarm_view`)가 낸다 —
+         *       두 곳이 각자 유도하면 한쪽만 고치게 된다. `verify_v4` [M2] 가 둘을 대조한다.
+         */
+        Alarms: {
+            /** Now */
+            now?: string | null;
+            /** T */
+            T: number;
+            /** Ver */
+            ver?: number | null;
+            /**
+             * Alarms
+             * @description 창 안에 온 것. **대부분의 순간에 비어 있다**(실측)
+             * @default []
+             */
+            alarms: components["schemas"]["AlarmHit"][];
+            /**
+             * Alarm N Bp
+             * @description 지금 걸린 문턱(bp) — 무리 중앙 대비. 화면이 이 값을 적고 스스로 정하지 않는다
+             */
+            alarm_n_bp: number;
         };
         /**
          * Axis
@@ -280,6 +467,69 @@ export interface components {
             } | null;
         };
         /**
+         * BookInfo
+         * @description 책이 말하는 것 — 오늘 귀속 체결에서 잰 셋(국고·통안). 값은 엔진이 체결 순간에 재 둔 것.
+         *     국고 전 이력 실측은 RESULT_book_dynamics_2026-09-15.md.
+         */
+        BookInfo: {
+            /**
+             * N
+             * @description 귀속된 체결 수
+             * @default 0
+             */
+            n: number;
+            /**
+             * N Eff
+             * @default 0
+             */
+            n_eff: number;
+            /**
+             * Eff Med
+             * @description 유효 반스프레드 중앙 bp
+             */
+            eff_med?: number | null;
+            /**
+             * N Qs
+             * @default 0
+             */
+            n_qs: number;
+            /**
+             * Qs Half Med
+             * @description 체결 시점 호가 반스프레드 중앙 bp
+             */
+            qs_half_med?: number | null;
+            /**
+             * N Ab
+             * @default 0
+             */
+            n_ab: number;
+            /**
+             * At Best Pct
+             * @description 최우선 레벨에서 난 비율 %
+             */
+            at_best_pct?: number | null;
+            /**
+             * N Imb
+             * @description 불균형을 잰 체결 — 문면에 종목이 있는 것(csrc=stated)만
+             * @default 0
+             */
+            n_imb: number;
+            /**
+             * N Imb Prev
+             * @description 불균형은 있으나 맨 ㅎㅈ 를 직전 호가에 붙인 것(csrc=prev) — 연구가 못 잰 모집단이라 뺀 수
+             * @default 0
+             */
+            n_imb_prev: number;
+            /**
+             * P B By Imb
+             * @description 직전 불균형 구간(오퍼 우세·균형·비드 우세)별 사 감 비율
+             * @default {}
+             */
+            p_b_by_imb: {
+                [key: string]: components["schemas"]["ImbCell"];
+            };
+        };
+        /**
          * ClsPill
          * @description 분류 줄의 한 칸. 순서가 곧 «구성» 이다 — 국고·통안 다음 위험순 계열 여덟.
          *     [OWNER 2026-09-11] 히트맵 행과 같은 축으로 세웠다.
@@ -345,6 +595,11 @@ export interface components {
             mb: number;
             /** Bp Med */
             bp_med?: number | null;
+            /**
+             * Bpc Med
+             * @description 커브 반영 민평대비 중앙값. 뺄 수 있었던 오퍼가 절반이 안 되면 None
+             */
+            bpc_med?: number | null;
             /** Ytm Med */
             ytm_med?: number | null;
             /** Ttm Lo */
@@ -391,6 +646,41 @@ export interface components {
              * @description 하류가 하나로 쓰는 민평 대비 bp
              */
             bpe?: number | null;
+            /**
+             * Bpc
+             * @description 커브 반영 민평대비 = bpe − 같은 잔존 국고 커브의 오늘 이동. 닻이 둘 미만이면 None 이다(0 이 아니다)
+             */
+            bpc?: number | null;
+            /**
+             * Cmv
+             * @description 그 잔존에서 «뺀 양»(bp) — 화면이 되짚게 한다
+             */
+            cmv?: number | null;
+            /**
+             * Pr
+             * @description 같은 무리 안 순위. 1 = 가장 싸다(금리가 가장 높다)
+             */
+            pr?: number | null;
+            /**
+             * Pn
+             * @description 그 무리에서 값을 부른 오퍼 수. 넷 미만이면 순위를 안 낸다
+             */
+            pn?: number | null;
+            /**
+             * Pk
+             * @description 무리 이름 — «계열 등급 잔존칸», 넷이 안 되면 등급을 품어 «계열 잔존칸»
+             */
+            pk?: string | null;
+            /**
+             * Padj
+             * @description 그 무리를 커브 반영값으로 줄 세웠나(전원이 가졌을 때만)
+             */
+            padj?: boolean | null;
+            /**
+             * Pmed
+             * @description 그 무리의 중앙값 — `padj` 가 참이면 커브반영값의, 아니면 민평대비의. 알람(`alarm_hits`)과 교정기(`alarm_sizing`)가 **이 값 하나**를 쓴다. 무리를 두 곳이 만들면 한쪽만 고치게 되므로 여기 싣는다 [2026-10-01]
+             */
+            pmed?: number | null;
             /**
              * Won
              * @description 문면 원 스프레드
@@ -483,6 +773,74 @@ export interface components {
              */
             mp_n: number;
         };
+        /**
+         * CurveAnchor
+         * @description 커브 이동의 닻 한 칸 — 그 만기 칸 국고 종목들의 «오늘 mid − 전일 민평» 중앙값.
+         *
+         *     칸은 민평 기준선과 같다(2년 미만 0.25년 · 그 위 0.5년). 한 칸에 여럿이고 그중
+         *     10분 안쪽이 있으면 **그것들만** 쓴다 — 두 시간 묵은 닻이 커브를 붙잡지 않게.
+         */
+        CurveAnchor: {
+            /**
+             * Ttm
+             * @description 칸 중심(년)
+             */
+            ttm: number;
+            /**
+             * Bp
+             * @description 그 칸의 이동(bp)
+             */
+            bp: number;
+            /**
+             * N
+             * @description 이 칸을 세운 종목 수
+             */
+            n: number;
+            /**
+             * Age
+             * @description 가장 신선한 닻의 나이(초). 0 = 지금 양면이 서 있다
+             */
+            age?: number | null;
+            /**
+             * Cs
+             * @description 이 칸을 세운 종목(회차) — 손으로 되짚으라고 싣는다
+             */
+            cs: string[];
+        };
+        /**
+         * CurveMove
+         * @description 오늘 국고 커브가 잔존별로 얼마나 움직였나 [OWNER 2026-09-28].
+         *
+         *     크레딧의 «민평대비» 에서 이것을 빼면 «시장이 움직인 만큼» 이 아니라
+         *     «이 종목이 싸졌다» 만 남는다. 통과 계수 β 0.823 · R² 0.643(원장 138,032 종목일).
+         *     β 를 곱하지 않고 통째로 뺀다 — 남는 오차가 0.57 대 0.55bp 로 사실상 같고,
+         *     통째로 뺀 값은 오너가 닻을 보고 손으로 되짚을 수 있다.
+         */
+        CurveMove: {
+            /** Pts */
+            pts: components["schemas"]["CurveAnchor"][];
+            /** N */
+            n: number;
+            /**
+             * Ok
+             * @description 닻이 둘 이상인가. False 면 화면은 이 칸을 비운다
+             */
+            ok: boolean;
+            /** Lo */
+            lo?: number | null;
+            /** Hi */
+            hi?: number | null;
+            /**
+             * Med
+             * @description 닻 칸들의 중앙 이동(bp) — 머리줄에 적는 수
+             */
+            med?: number | null;
+            /**
+             * Age Max
+             * @description 가장 낡은 닻의 나이(초)
+             */
+            age_max?: number | null;
+        };
         /** CurveOffer */
         CurveOffer: {
             /** N */
@@ -493,6 +851,11 @@ export interface components {
             ytm?: number | null;
             /** Bpe */
             bpe?: number | null;
+            /**
+             * Bpc
+             * @description 커브 반영 민평대비
+             */
+            bpc?: number | null;
             /** A */
             a?: number | null;
             /**
@@ -590,6 +953,11 @@ export interface components {
              * @default
              */
             nd: string;
+            /**
+             * Imb
+             * @description 지금 불균형 (비드 딜러 − 오퍼 딜러)/합. 양면일 때만(+++)
+             */
+            imb?: number | null;
         };
         /**
          * DealerCard
@@ -729,6 +1097,56 @@ export interface components {
             y?: number | null;
             /** Bp */
             bp?: number | null;
+            /**
+             * Mp
+             * @description 어제자 민평 — 국고·통안은 DB 전일 민평, 크레딧·국주·MBS 는 문면에 적힌 민평
+             */
+            mp?: number | null;
+            /**
+             * Px
+             * @description 단가 — 액면 10,000원당. 관행적 복할인(국고·외평 06M · 통안 03M)
+             */
+            px?: number | null;
+            /**
+             * Pxs
+             * @description 단가의 결제일 규약 — 'T'(당일) 또는 'T+1'(익일). 휴일표가 없어 지금은 T
+             */
+            pxs?: string | null;
+            /**
+             * Pxb
+             * @description 단가의 기준 — 'q'(이 행의 할인조정) 또는 'mp'(값이 없어 전일 민평으로 냄)
+             */
+            pxb?: string | null;
+            /**
+             * Mat
+             * @description 만기일 YYYY-MM-DD — 종목의 속성이라 값이 없는 행에도 선다
+             */
+            mat?: string | null;
+            /**
+             * Ttm
+             * @description 잔존 연수 — 결제일 기준
+             */
+            ttm?: number | null;
+            /**
+             * Pxa
+             * @description 1이면 쿠폰을 «전일 민평과 같다»고 가정해 낸 단가 — 절대 수준은 믿지 말 것(수정가액은 쓸 만하다)
+             */
+            pxa?: number | null;
+            /**
+             * Won
+             * @description 수정가액 — 전일 민평 대비 «원». +원 = 단가 비쌈 = 금리 낮음
+             */
+            won?: number | null;
+            /**
+             * Chk
+             * @description 검산 O/X — 이 행의 «단가를 믿어도 되나». 못 재면 비운다
+             */
+            chk?: string | null;
+            /**
+             * Chkw
+             * @description X 인 이유(만기 임박·민평이 오늘 것이 아님·단가가 상식 밖)
+             */
+            chkw?: string | null;
             /** A */
             a?: number | null;
             /** Asrc */
@@ -739,16 +1157,24 @@ export interface components {
             csrc?: ("stated" | "level" | "prev") | null;
             /** Lvl */
             lvl?: ("quoted" | "conv" | "est") | null;
-            /** D */
+            /**
+             * P
+             * @description 브로커 이름 — 메신저 대화명(이름 가림이 켜져 있으면 P### 라벨)
+             */
+            p?: string | null;
+            /**
+             * D
+             * @description 데스크 표시명 «유진증권 CM팀» (가림이면 H##-#)
+             */
             d?: string | null;
             /**
              * Bk
-             * @description 딜러 키(가림 뒤 라벨)
+             * @description 딜러 키 — 전화 정규화 값이라 전화 가림에 묶인다(K###)
              */
             bk?: string | null;
             /**
              * H
-             * @description 하우스(가림 뒤 라벨)
+             * @description 하우스 «유진» (가림이면 H##)
              */
             h?: string | null;
             /** Raw */
@@ -824,6 +1250,19 @@ export interface components {
              */
             est: number;
         };
+        /** ImbCell */
+        ImbCell: {
+            /**
+             * N
+             * @default 0
+             */
+            n: number;
+            /**
+             * Pb
+             * @description 그 구간에서 «사 감»(오퍼가 맞음) 비율 %
+             */
+            pB?: number | null;
+        };
         /** LeaderRow */
         LeaderRow: {
             /** K */
@@ -862,6 +1301,12 @@ export interface components {
              * @default 0
              */
             ab: number;
+            /**
+             * F
+             * @description 오늘 귀속된 체결 — 맞은 호가의 주인으로 센다(+++)
+             * @default 0
+             */
+            f: number;
             /** First */
             first?: number | null;
             /** Last */
@@ -905,6 +1350,12 @@ export interface components {
             spread_bp?: number | null;
             /** Mid */
             mid?: number | null;
+            /**
+             * Lock
+             * @description 락 — 같은 레벨에 오퍼와 비드가 함께 서 있다(스프레드 0). 걷지 않고 양면을 세운다 [OWNER 2026-09-15]. 체결의 23.5%가 이 자리에서 난다
+             * @default false
+             */
+            lock: boolean;
         };
         /**
          * ObLadder
@@ -953,7 +1404,11 @@ export interface components {
              *     }
              */
             sum: components["schemas"]["ObSum"];
-            /** @default {} */
+            /**
+             * @default {
+             *       "lock": false
+             *     }
+             */
             best: components["schemas"]["ObBest"];
         };
         /** ObLevel */
@@ -1183,6 +1638,62 @@ export interface components {
              */
             n: number;
         };
+        /**
+         * PxFill
+         * @description 오늘 이 종목의 체결 하나 — 테이프(`snap.tape`)에서 고른다. 화면은 점으로 찍는다.
+         */
+        PxFill: {
+            /** T */
+            t: number;
+            /** Y */
+            y: number;
+            /**
+             * A
+             * @description 억
+             */
+            a?: number | null;
+            /**
+             * D
+             * @description 딜러 표시명
+             */
+            d?: string | null;
+        };
+        /**
+         * PxHist
+         * @description `/api/px_hist` 의 응답 — 한 종목의 «어제까지» 분 단위 매도·매수와 그날의 전일 민평.
+         *
+         *     [OWNER 2026-10-01] 「어제자랑 연결해서 최대 1년까지」. 오늘은 `/api/view` 의 `px` 가
+         *     (10초 표본) 내고, 화면이 둘을 한 줄로 잇는다. 국고만 이력이 있다(`kbond_px_hist` 머리말).
+         */
+        PxHist: {
+            /** Code */
+            code: string;
+            /**
+             * Days
+             * @description 호가가 있던 영업일, 오름차순 'YYYY-MM-DD'. `q` 의 첫 칸이 이 순번이다
+             * @default []
+             */
+            days: string[];
+            /**
+             * Q
+             * @description [날 순번, 장중 분, 매수, 매도] — 그 분의 마지막 호가. 없는 쪽은 null
+             * @default []
+             */
+            q: (number | null)[][];
+            /**
+             * Mp
+             * @description `days` 와 같은 길이 — 그날의 전일 민평
+             * @default []
+             */
+            mp: (number | null)[];
+            /**
+             * Asof
+             * @description 마지막 날
+             */
+            asof?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /** PxPoint */
         PxPoint: {
             /** T */
@@ -1232,6 +1743,12 @@ export interface components {
              * @default []
              */
             act: components["schemas"]["ActBin"][];
+            /**
+             * Fills
+             * @description 오늘 체결 전부(시간순) — 화면이 점으로 찍는다 [OWNER 2026-10-01]
+             * @default []
+             */
+            fills: components["schemas"]["PxFill"][];
             /**
              * Note
              * @description 표본이 모자라면 그 이유
@@ -1366,6 +1883,15 @@ export interface components {
              * @enum {string}
              */
             ttl_mode: "def" | "half" | "inf";
+            /**
+             * Age Steps
+             * @description 바램 문턱(초) [신선, 익음]. 화면은 이 값을 쓰고 스스로 정하지 않는다. 근거 = 최우선 나이별 «그 레벨에서 체결» 비율 ~1분 90.6% · 1~5분 61.2% · 5~15분 29.6%
+             * @default [
+             *       60,
+             *       300
+             *     ]
+             */
+            age_steps: number[];
             /** Ver */
             ver?: number | null;
             /** Counts */
@@ -1394,6 +1920,8 @@ export interface components {
              */
             buckets?: components["schemas"]["CreditBucket"][] | null;
             curve?: components["schemas"]["Curve"] | null;
+            /** @description lane 이 cr 이고 국고·통안이 아닐 때. 국고 화면에는 없다 — 닻이 자기 자신이라 순환이다 */
+            curve_move?: components["schemas"]["CurveMove"] | null;
             /**
              * Mtx Group
              * @description credit_matrix 의 bond_type(등급 커브)
@@ -1432,12 +1960,24 @@ export interface components {
             } | null;
             leaderboard?: components["schemas"]["Leaderboard"] | null;
             /**
+             * Alarms
+             * @description lane 이 cr 일 때. 창(60초) 안에 온 «무리 중앙보다 문턱만큼 싼» 오퍼. 대부분의 순간에 빈 목록이다 — 없는 것과 «아직 안 옴» 은 같은 뜻이다
+             */
+            alarms?: components["schemas"]["AlarmHit"][] | null;
+            /**
+             * Alarm N Bp
+             * @description lane 이 cr 일 때. 지금 걸린 문턱(bp). 화면은 이 값을 적고 스스로 정하지 않는다
+             */
+            alarm_n_bp?: number | null;
+            /**
              * Aggr
              * @description 당일 공격 방향 집계 {B: 사 간 체결, S: 판 체결}
              */
             aggr?: {
                 [key: string]: number;
             } | null;
+            /** @description lane 이 dyn 일 때. 책이 말하는 것(+++) */
+            book_info?: components["schemas"]["BookInfo"] | null;
         };
     };
     responses: never;
@@ -1584,10 +2124,78 @@ export interface operations {
             };
         };
     };
+    api_alarms_api_alarms_get: {
+        parameters: {
+            query?: {
+                t?: string | null;
+                ttl?: string;
+                T?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alarms"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_px_hist_api_px_hist_get: {
+        parameters: {
+            query: {
+                code: string;
+                days?: number;
+                before?: string | null;
+                t?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PxHist"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     events_events_get: {
         parameters: {
             query?: {
                 t?: string | null;
+                lite?: number;
             };
             header?: never;
             path?: never;

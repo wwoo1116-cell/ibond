@@ -293,6 +293,9 @@ def main() -> int:
         say("  KIS 예상종가 커브 (kbond_kis)")
         import kbond_kis
         kbond_kis.main()
+        say("  시세 테이프 — 국고 분 단위 매도·매수 (kbond_px_hist)")
+        import kbond_px_hist
+        kbond_px_hist.main()
 
     say(f"  완료 {time.time() - t0:,.0f}초")
     return 0

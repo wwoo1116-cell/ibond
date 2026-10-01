@@ -517,6 +517,14 @@ class ActBin(BaseModel):
     tot: int = Field(0, description="척도용 합계")
 
 
+class PxFill(BaseModel):
+    """오늘 이 종목의 체결 하나 — 테이프(`snap.tape`)에서 고른다. 화면은 점으로 찍는다."""
+    t: int
+    y: float
+    a: float | None = Field(None, description="억")
+    d: str | None = Field(None, description="딜러 표시명")
+
+
 class PxSeries(BaseModel):
     """시세 이력. 세로 범위는 규칙이라 서버가 낸다(민평 대칭)."""
     code: str
@@ -528,7 +536,22 @@ class PxSeries(BaseModel):
     bin: int = 600
     pts: list[PxPoint] = []
     act: list[ActBin] = []
+    fills: list[PxFill] = Field([], description="오늘 체결 전부(시간순) — 화면이 점으로 찍는다 [OWNER 2026-10-01]")
     note: str | None = Field(None, description="표본이 모자라면 그 이유")
+
+
+class PxHist(BaseModel):
+    """`/api/px_hist` 의 응답 — 한 종목의 «어제까지» 분 단위 매도·매수와 그날의 전일 민평.
+
+    [OWNER 2026-10-01] 「어제자랑 연결해서 최대 1년까지」. 오늘은 `/api/view` 의 `px` 가
+    (10초 표본) 내고, 화면이 둘을 한 줄로 잇는다. 국고만 이력이 있다(`kbond_px_hist` 머리말).
+    """
+    code: str
+    days: list[str] = Field([], description="호가가 있던 영업일, 오름차순 'YYYY-MM-DD'. `q` 의 첫 칸이 이 순번이다")
+    q: list[list[float | None]] = Field([], description="[날 순번, 장중 분, 매수, 매도] — 그 분의 마지막 호가. 없는 쪽은 null")
+    mp: list[float | None] = Field([], description="`days` 와 같은 길이 — 그날의 전일 민평")
+    asof: str | None = Field(None, description="마지막 날")
+    note: str | None = None
 
 
 class GradePoint(BaseModel):

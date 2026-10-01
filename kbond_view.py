@@ -1305,8 +1305,24 @@ def px_series(snap, lane, code, T, mode="def"):
                  "a": (p[2] if len(p) > 3 else None),
                  "b": (p[3] if len(p) > 3 else None)} for p in h],
         "act": act_out,
+        "fills": px_fills(snap, lane, code, T),
         "note": None,
     }
+
+
+def px_fills(snap, lane, code, T):
+    """오늘 이 종목의 체결 전부, 시간순 — 화면이 시세 위에 점으로 찍는다 [OWNER 2026-10-01].
+
+    출처는 `snap.tape`(구조화 체결, 최신순·800건 상한)이다. `kfills` 는 종목당 **마지막
+    하나**만 들고 있어서 점을 찍기엔 모자란다. 값 없는 순수 확정(`y` 없음)은 자리가
+    없으므로 뺀다.
+    """
+    out = [{"t": e["t"], "y": e["y"], "a": e.get("a"), "d": e.get("d")}
+           for e in (snap.get("tape") or [])
+           if e.get("lane") == lane and e.get("code") == code
+           and e.get("y") is not None and e["t"] <= T]
+    out.sort(key=lambda e: e["t"])
+    return out
 
 
 # ── 등급 커브 ──────────────────────────────────────────────────────────────

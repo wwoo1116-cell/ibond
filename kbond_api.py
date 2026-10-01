@@ -49,8 +49,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 import kbond_live as KL
 import kbond_price                                          # noqa: E402
 import kbond_view as KV                                          # noqa: E402
+import kbond_px_hist as KPH                                      # noqa: E402
 from kbond_schema import (Alarms, Basket, CreditQuote, Dealer, Event,   # noqa: E402
-                          FeedRow, Fill, Quote, Swap, View)
+                          FeedRow, Fill, PxHist, Quote, Swap, View)
 
 # ★원↔bp 환산을 뷰에 **꽂는다** — `kbond_view` 는 임포트가 없는 순수 모듈이라
 #   표를 직접 못 읽는다(`KV.BP_PER_WON_OF` 머리). 표는 끝전 환산이 쓰는 그 한 벌
@@ -268,6 +269,24 @@ def api_alarms(t: str | None = None, ttl: str = "def", T: int | None = Query(Non
     out = {"now": snap.get("now"), "T": T, "ver": ver,
            **KV.alarm_view(snap, T, ttl)}
     return JSONResponse(out, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/px_hist", response_model=PxHist)
+def api_px_hist(code: str, days: int = 22, before: str | None = None,
+                t: str | None = None):
+    """한 종목의 «어제까지» 시세 테이프 — 분 단위 매도·매수와 그날의 전일 민평.
+
+    [OWNER 2026-10-01] 「어제자랑 연결해서 최대 1년까지」. 오늘은 `/api/view` 의 `px` 가
+    내고 화면이 둘을 잇는다. 책(스냅샷)을 안 읽는다 — 아침에 구운 파케이만 읽으므로
+    장중엔 값이 안 바뀐다. 그래서 캐시를 허락한다(`/api/view` 는 no-store).
+
+    days: 마지막 n 영업일(0 = 전부) · before: 이 날(exclusive) 앞까지 — 화면이 «오늘» 을 넘긴다.
+    """
+    deny = _deny_if_no_token(t)
+    if deny:
+        return deny
+    out = KPH.hist(code, days=max(0, days), before=before)
+    return JSONResponse(out, headers={"Cache-Control": "private, max-age=300"})
 
 
 @app.get("/events")
