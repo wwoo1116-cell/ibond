@@ -52,6 +52,18 @@ import kbond_view as KV                                          # noqa: E402
 from kbond_schema import (Alarms, Basket, CreditQuote, Dealer, Event,   # noqa: E402
                           FeedRow, Fill, Quote, Swap, View)
 
+# ★원↔bp 환산을 뷰에 **꽂는다** — `kbond_view` 는 임포트가 없는 순수 모듈이라
+#   표를 직접 못 읽는다(`KV.BP_PER_WON_OF` 머리). 표는 끝전 환산이 쓰는 그 한 벌
+#   (`enrich_kbond_quotes.won_to_bp`)이고, 여기서 «잔존에서 1원이 몇 bp 인가» 꼴로
+#   감싼다. 알람이 「그 bp 는 100억에 얼마인가」를 같이 싣는 데 쓴다.
+def _bp_per_won(ttm: float):
+    import numpy as _np
+    v = KL.won_to_bp(_np.array([1.0]), _np.array([float(ttm)]))[0]
+    return None if not _np.isfinite(v) else abs(float(v))
+
+
+KV.BP_PER_WON_OF = _bp_per_won
+
 VIEWER = Path(__file__).parent / "kbond_live.html"
 # ★[OWNER 2026-09-11] 새 화면(kbond-web)을 «같은 주소» 에 함께 낸다.
 #   /       옛 화면(그대로)        ·  /app   새 화면

@@ -1002,6 +1002,11 @@ def alarm_hits(rows, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
             # 소비자가 같은 도착에 두 번 울리지 않게 하는 열쇠 — 5초 폴이면 한 도착이
             # 최대 12번 보인다. (딜러, 종목, 도착초) 로 안정적이다.
             "key": f"{o.get('d')}|{o.get('n')}|{t}",
+            # ★**돈으로 얼마인가** — bp 는 짧은 잔존에서 돈이 아니다 [2026-10-01].
+            #   잔존 0.01년의 3bp 는 100억에 3만원이고 1년이면 289만원이다(1,000배).
+            #   화면이 이 수를 보고 문턱을 정할 수 있어야 하므로 서버가 환산해 싣는다 —
+            #   ⚠**환산표를 화면에 베끼지 않는다**(`enrich_kbond_quotes.won_to_bp` 한 벌).
+            "won": dev_won(dev, ttm),
             "n": o.get("n"), "d": o.get("d"), "cls": o.get("cls"), "rt": o.get("rt"),
             "ttm": ttm, "a": o.get("a"), "age": age,
             "val": round(val, 2), "med": round(m, 2), "dev": round(dev, 2),
@@ -1013,6 +1018,39 @@ def alarm_hits(rows, T, *, n_bp=ALARM_N_BP, max_age=ALARM_MAX_AGE):
         })
     # 싼 것부터. 같으면 새것부터.
     return sorted(out, key=lambda x: (-x["dev"], x["age"]))
+
+
+#: 원↔bp 환산을 **꽂는 자리**. `kbond_api` 가 기동 때 `kbond_live.won_to_bp` 로 채운다.
+#:
+#: ★왜 훅인가: 이 모듈은 **임포트가 하나도 없다**(`from __future__` 뿐). 그 성질 덕에
+#:   시험이 서버를 안 띄우고 `kbond_view` 만 들고 돌고, 순환 임포트도 없다
+#:   (`kbond_api` 가 `kbond_live` 와 이것을 둘 다 임포트한다). 환산표를 쓰려고
+#:   `numpy`·`kbond_live` 를 끌어들이면 그 둘을 다 깬다 — 그래서 값을 꽂는다.
+#: ★**안 꽂히면 `won` 은 `None`** 이다. 0 이 아니다 — 「못 쟀다」와 「0원이다」는 다른 말이다.
+#: 받는 꼴: `bp_per_won(ttm) -> float | None` (잔존에서 **1원이 몇 bp 인가**).
+BP_PER_WON_OF = None
+
+
+def dev_won(dev_bp, ttm):
+    """무리 중앙 대비 편차(bp) -> **단가 원**(액면 1만원). 100억 기준은 ×1e6.
+
+    ★환산표는 `enrich_kbond_quotes.won_to_bp` **한 벌**이다 — 끝전 환산(`frac_bp`)이
+      쓰는 그 실측표고, 여기서는 `BP_PER_WON_OF` 로 꽂아 받는다.
+    ★왜 서버가 내나: 화면이 베끼면 표가 TS 에도 생긴다. 그리고 이 수가 열린 결정 ②
+      (「잔존 하한이냐 돈 문턱이냐」)를 **화면에서** 볼 수 있게 하는 자리다 — 잔존
+      0.01년의 3bp 는 100억에 3만원이고 1년이면 289만원이다(실측 1,000배 차).
+    """
+    f = BP_PER_WON_OF
+    if f is None or ttm is None or ttm <= 0:
+        return None
+    try:
+        r = f(float(ttm))
+    except Exception:                                   # noqa: BLE001
+        return None
+    if r is None:
+        return None
+    r = abs(float(r))
+    return None if r == 0 or r != r else round(dev_bp / r, 2)
 
 
 def alarm_view(snap, T, mode="def", *, rows=None):

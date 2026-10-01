@@ -584,6 +584,12 @@ class AlarmHit(BaseModel):
     val: float | None = Field(None, description="이 오퍼의 값 — 무리가 커브반영을 가졌으면 bpc, 아니면 bpe")
     med: float | None = Field(None, description="그 무리의 중앙값(같은 자로 잰 것)")
     dev: float | None = Field(None, description="무리 중앙 대비 편차(bp). 싸다 = 양수. 이것이 문턱을 넘었다")
+    won: float | None = Field(
+        None, description="그 편차가 **단가 몇 원인가**(액면 1만원). 100억 기준은 ×1e6. "
+                          "★bp 는 짧은 잔존에서 돈이 아니다 — 잔존 0.01년의 3bp 는 100억에 "
+                          "3만원이고 1년이면 289만원이다(1,000배). 환산표는 끝전 환산이 쓰는 "
+                          "그 한 벌(`enrich_kbond_quotes.won_to_bp`)이고, 못 꽂혔으면 `None` 이다 "
+                          "(0 이 아니다 — 「못 쟀다」와 「0원」은 다른 말이다)")
     adj: bool | None = Field(None, description="커브 반영값으로 쟀나(아니면 민평대비). 무리 안에서 자는 하나다")
     pk: str | None = Field(None, description="무리 이름")
     pr: int | None = Field(None, description="그 무리 안 순위")
